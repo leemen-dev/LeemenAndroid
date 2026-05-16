@@ -103,6 +103,17 @@ android {
         minSdkVersion 21
         targetSdkVersion 35
 
+        // Telegram API credentials — read from local.properties (not committed).
+        // Get yours at https://my.telegram.org/apps
+        def telegramApiId = getProps("TELEGRAM_API_ID")
+        def telegramApiHash = getProps("TELEGRAM_API_HASH")
+        if (!telegramApiId || telegramApiId == "REPLACE_WITH_YOUR_API_ID" ||
+            !telegramApiHash || telegramApiHash == "REPLACE_WITH_YOUR_API_HASH") {
+            throw new GradleException("Set TELEGRAM_API_ID and TELEGRAM_API_HASH in local.properties (get them at https://my.telegram.org/apps)")
+        }
+        buildConfigField "int", "TELEGRAM_API_ID", telegramApiId
+        buildConfigField "String", "TELEGRAM_API_HASH", "\"" + telegramApiHash + "\""
+
         vectorDrawables.generatedDensities = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi']
 
         multiDexEnabled true
