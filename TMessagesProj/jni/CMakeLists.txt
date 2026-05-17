@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10.2)
 
 set(CMAKE_CXX_FLAGS "-std=c++14 -DANDROID -g")
-set(CMAKE_C_FLAGS "-w -std=c11 -DANDROID -D_LARGEFILE_SOURCE=1 -g")
+set(CMAKE_C_FLAGS "-w -std=c11 -DANDROID -D_LARGEFILE_SOURCE=1 -g -Wno-error=implicit-function-declaration")
 set(CMAKE_ASM_FLAGS "${CFLAGS} -x assembler-with-cpp")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffunction-sections -fdata-sections")
@@ -263,21 +263,8 @@ target_include_directories(rlottie PUBLIC
         rlottie/src/vector/freetype
         rlottie/src/vector/stb)
 
-if (${ANDROID_ABI} STREQUAL "armeabi-v7a")
-    target_compile_options(rlottie PUBLIC
-            -fno-integrated-as)
-    target_compile_definitions(rlottie PUBLIC
-            USE_ARM_NEON)
-    target_sources(rlottie PRIVATE
-            rlottie/src/vector/pixman/pixman-arm-neon-asm.S)
-elseif(${ANDROID_ABI} STREQUAL "arm64-v8a")
-    target_compile_options(rlottie PUBLIC
-            -fno-integrated-as)
-    target_compile_definitions(rlottie PUBLIC
-            USE_ARM_NEON __ARM64_NEON__)
-    target_sources(rlottie PRIVATE
-            rlottie/src/vector/pixman/pixman-arma64-neon-asm.S)
-endif()
+# rlottie NEON fast path disabled — pixman .S needs GNU as (NDK r23+ ships none),
+# and clang integrated-as can't parse pixman's macros. C fallback used on all ABIs.
 
 
 #flac

@@ -869,7 +869,8 @@ void VSpanData::updateSpanFunc()
     }
 }
 
-#if !defined(__ARM_NEON__) && !defined(__ARM64_NEON__)
+// pixman ARM NEON asm disabled; always use C fallbacks
+#if 1
 
 void memfill32(uint32_t *dest, uint32_t value, int length)
 {
@@ -915,7 +916,7 @@ void vInitDrawhelperFunctions()
 {
     vInitBlendFunctions();
 
-#if defined(__ARM_NEON__) || defined(__ARM64_NEON__)
+#if 0
     // update fast path for NEON
     extern void comp_func_solid_SourceOver_neon(
         uint32_t * dest, int length, uint32_t color, uint32_t const_alpha);

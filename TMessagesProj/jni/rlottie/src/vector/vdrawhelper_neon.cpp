@@ -1,4 +1,5 @@
-#if defined(__ARM_NEON__) || defined(__ARM64_NEON__)
+// pixman ARM NEON asm disabled; see CMakeLists.txt for context
+#if 0
 
 #include "vdrawhelper.h"
 
