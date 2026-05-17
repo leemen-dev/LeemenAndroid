@@ -705,9 +705,7 @@ JNIEXPORT jbyteArray Java_org_telegram_messenger_MediaController_getWaveform(JNI
 JNIEXPORT void JNICALL Java_org_telegram_ui_Stories_recorder_FfmpegAudioWaveformLoader_init(JNIEnv *env, jobject obj, jstring pathJStr, jint count) {
     const char *path = (*env)->GetStringUTFChars(env, pathJStr, 0);
 
-    // Initialize FFmpeg components
-    av_register_all();
-
+    // (av_register_all removed in FFmpeg 5; codecs auto-register since 4.0)
     AVFormatContext *formatContext = avformat_alloc_context();
     if (!formatContext) {
         // Handle error
@@ -728,7 +726,7 @@ JNIEXPORT void JNICALL Java_org_telegram_ui_Stories_recorder_FfmpegAudioWaveform
         return;
     }
 
-    AVCodec *codec = NULL;
+    const AVCodec *codec = NULL;
     int audioStreamIndex = av_find_best_stream(formatContext, AVMEDIA_TYPE_AUDIO, -1, -1, &codec, 0);
     if (audioStreamIndex < 0) {
         LOGD("av_find_best_stream error %s", av_err2str(audioStreamIndex));
@@ -761,7 +759,7 @@ JNIEXPORT void JNICALL Java_org_telegram_ui_Stories_recorder_FfmpegAudioWaveform
     int skip = 4;
     int barWidth = (int) round((double) duration_in_seconds * sampleRate / count / (1 + skip)); // Assuming you have 'duration' and 'count' defined somewhere
 
-    int channels = codecContext->channels;
+    int channels = codecContext->ch_layout.nb_channels;
 
     short peak = 0;
     int currentCount = 0;

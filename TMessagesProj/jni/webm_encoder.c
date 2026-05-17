@@ -151,7 +151,7 @@ JNIEXPORT jboolean JNICALL Java_org_telegram_messenger_video_WebmEncoder_writeFr
 
     int ret;
     AVPacket pkt;
-    av_init_packet(&pkt);
+    memset(&pkt, 0, sizeof(pkt));
     pkt.data = NULL;
     pkt.size = 0;
 
@@ -210,7 +210,7 @@ JNIEXPORT void JNICALL Java_org_telegram_messenger_video_WebmEncoder_stop(
         LOGE("vp9: failed to avcodec_send_frame %d", ret);
     }
     AVPacket pkt;
-    av_init_packet(&pkt);
+    memset(&pkt, 0, sizeof(pkt));
     pkt.data = NULL;
     pkt.size = 0;
 

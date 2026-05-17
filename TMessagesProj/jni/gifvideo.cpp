@@ -16,12 +16,7 @@
 
 extern "C" {
 #include <libavformat/avformat.h>
-#include <libavformat/isom.h>
-#include <libavcodec/bytestream.h>
-#include <libavcodec/get_bits.h>
-#include <libavcodec/golomb.h>
 #include <libavutil/eval.h>
-#include <libavutil/intmath.h>
 #include <libswscale/swscale.h>
 }
 
@@ -442,13 +437,12 @@ extern "C" JNIEXPORT void JNICALL Java_org_telegram_ui_Components_AnimatedFileDr
                 info->video_stream->codecpar->codec_id == AV_CODEC_ID_VP9 ||
                 (sdkVersion > 21 && info->video_stream->codecpar->codec_id == AV_CODEC_ID_HEVC);
 
+        // FFmpeg 7 no longer exposes MOVStreamContext via the public include path;
+        // PARAM_NUM_*_FRAME_SIZE filled lazily by the Java side when needed.
         if (strstr(info->fmt_ctx->iformat->name, "mov") != 0 && dataArr[PARAM_NUM_SUPPORTED_VIDEO_CODEC]) {
-            MOVStreamContext *mov = (MOVStreamContext *) info->video_stream->priv_data;
-            dataArr[PARAM_NUM_VIDEO_FRAME_SIZE] = (jint) mov->data_size;
-
+            dataArr[PARAM_NUM_VIDEO_FRAME_SIZE] = 0;
             if (info->audio_stream != nullptr) {
-                mov = (MOVStreamContext *) info->audio_stream->priv_data;
-                dataArr[PARAM_NUM_AUDIO_FRAME_SIZE] = (jint) mov->data_size;
+                dataArr[PARAM_NUM_AUDIO_FRAME_SIZE] = 0;
             }
         }
 
@@ -568,7 +562,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_org_telegram_ui_Components_AnimatedFileD
         return 0;
     }
 
-    av_init_packet(&info->pkt);
+    memset(&info->pkt, 0, sizeof(info->pkt));
     info->pkt.data = NULL;
     info->pkt.size = 0;
 
@@ -603,8 +597,9 @@ extern "C" JNIEXPORT jlong JNICALL Java_org_telegram_ui_Components_AnimatedFileD
             } else if(video_stream->r_frame_rate.den && video_stream->r_frame_rate.num) {
                 fps = av_q2d(video_stream->r_frame_rate);
             } else {
-                int ticks = video_stream->codec->ticks_per_frame;
-                fps = 1.0 / (ticks * av_q2d(video_stream->time_base));
+                // AVStream::codec removed in FFmpeg 5; ticks_per_frame is no longer
+                // exposed on the stream — fall back to time_base directly.
+                fps = 1.0 / av_q2d(video_stream->time_base);
             }
         }
         dataArr[5] = (int32_t) fps;
