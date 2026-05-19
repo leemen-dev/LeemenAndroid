@@ -1127,10 +1127,26 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     private static final float BADGE_DRAWABLE_SIZE = 16;
     private static final float BADGE_DRAWABLE_OFFSET = (BADGE_SIZE - BADGE_DRAWABLE_SIZE) / 2f;
 
+    private void applyPrivateSpaceMaskBeforeBuild() {
+        if (currentDialogId == 0) return;
+        org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+        if (ssc.isActive() || !ssc.isInSecondSpace(currentDialogId)) {
+            return;
+        }
+        // Off-mode rendering of a chat that lives in private space: strip leakable bits.
+        draftMessage = null;
+        unreadCount = 0;
+        markUnread = false;
+        mentionCount = 0;
+        org.telegram.messenger.MessageObject exposed = ssc.getLastExposedMessageCached(currentDialogId);
+        message = exposed;
+    }
+
     public void buildLayout() {
         if (isTransitionSupport) {
             return;
         }
+        applyPrivateSpaceMaskBeforeBuild();
         if (isDialogCell) {
             boolean needUpdate = updateHelper.update();
             if (!needUpdate && currentDialogFolderId == 0 && encryptedChat == null) {

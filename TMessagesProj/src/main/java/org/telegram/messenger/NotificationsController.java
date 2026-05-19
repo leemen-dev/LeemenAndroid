@@ -1352,6 +1352,12 @@ public class NotificationsController extends BaseController {
     }
 
     private void appendMessage(MessageObject messageObject) {
+        if (messageObject != null) {
+            SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+            if (!ssc.isActive() && ssc.isInSecondSpace(messageObject.getDialogId())) {
+                return;
+            }
+        }
         for (int i = 0; i < pushMessages.size(); i++) {
             if (
                 pushMessages.get(i).getId() == messageObject.getId() &&

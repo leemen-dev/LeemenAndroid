@@ -115,6 +115,7 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
@@ -356,6 +357,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         private int dialogsType;
         private int archivePullViewState;
         private FlickerLoadingView progressView;
+        private View privateSpaceEmptyView;
         private int lastItemsCount;
         private DialogsItemAnimator dialogsItemAnimator;
         private RecyclerItemsEnterAnimator recyclerItemsEnterAnimator;
@@ -488,6 +490,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private DownloadProgressIcon downloadProgressIcon;
     private boolean downloadsItemVisible;
     public ActionBarMenuItem searchItem;
+    private ActionBarMenuItem privateSpaceExitItem;
+    private static final int PRIVATE_SPACE_EXIT_ID = 1001;
     private ActionBarMenuItem optionsItem;
     private ActionBarMenuItem speedItem;
     public static boolean switchingTheme;
@@ -632,6 +636,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private boolean searching;
     private boolean searchWas;
     private boolean onlySelect;
+    private boolean includePrivateSpace;
     private boolean canSelectTopics;
     private String searchString;
     private String initialSearchString;
@@ -2767,6 +2772,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
         if (arguments != null) {
             onlySelect = arguments.getBoolean("onlySelect", false);
+            includePrivateSpace = arguments.getBoolean("includePrivateSpace", false);
             canSelectTopics = arguments.getBoolean("canSelectTopics", false);
             cantSendToChannels = arguments.getBoolean("cantSendToChannels", false);
             initialDialogsType = arguments.getInt("dialogsType", DIALOGS_TYPE_DEFAULT);
@@ -2818,6 +2824,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             currentConnectionState = getConnectionsManager().getConnectionState();
 
             getNotificationCenter().addObserver(this, NotificationCenter.dialogsNeedReload);
+            getNotificationCenter().addObserver(this, NotificationCenter.secondSpaceModeChanged);
             NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.emojiLoaded);
             if (!onlySelect) {
                 NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.closeSearchByActiveAction);
@@ -2989,6 +2996,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         super.onFragmentDestroy();
         if (searchString == null) {
             getNotificationCenter().removeObserver(this, NotificationCenter.dialogsNeedReload);
+            getNotificationCenter().removeObserver(this, NotificationCenter.secondSpaceModeChanged);
             NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.emojiLoaded);
             if (!onlySelect) {
                 NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.closeSearchByActiveAction);
@@ -3208,6 +3216,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             searchItem.setVisibility(View.GONE);
         }
         searchItem.setVisibility(View.GONE);
+
+        if (!onlySelect && folderId == 0) {
+            privateSpaceExitItem = menu.addItem(PRIVATE_SPACE_EXIT_ID, R.drawable.msg_close);
+            privateSpaceExitItem.setContentDescription(LocaleController.getString(R.string.PrivateSpaceExit));
+            updatePrivateSpaceExitVisibility();
+        }
 
         if (!onlySelect && searchString == null && folderId == 0) {
             doneItem = new ActionBarMenuItem(context, null, getThemedColor(Theme.key_actionBarDefaultSelector), getThemedColor(Theme.key_actionBarDefaultIcon), true);
@@ -3821,6 +3835,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     searchViewPager.onActionBarItemClick(id);
                     return;
                 }
+                if (id == PRIVATE_SPACE_EXIT_ID) {
+                    SecondSpaceController.getInstance(currentAccount).setActive(false);
+                    return;
+                }
                 if (id == -1) {
                     if (rightSlidingDialogContainer != null && rightSlidingDialogContainer.hasFragment()) {
                         if (actionBar.isActionModeShowed()) {
@@ -4024,6 +4042,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             viewPage.progressView.setViewType(FlickerLoadingView.DIALOG_CELL_TYPE);
             viewPage.progressView.setVisibility(View.GONE);
             viewPage.addView(viewPage.progressView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
+
+            viewPage.privateSpaceEmptyView = createPrivateSpaceEmptyView(context);
+            viewPage.addView(viewPage.privateSpaceEmptyView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
 
             viewPage.listView = new DialogsRecyclerView(context, viewPage);
             viewPage.listView.addEdgeEffectListener(() -> viewPage.listView.postOnAnimation(this::blur3_InvalidateBlur));
@@ -10265,10 +10286,65 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         updateFloatingButtonOffset();
     }
 
+    private void updatePrivateSpaceExitVisibility() {
+        if (privateSpaceExitItem == null) {
+            return;
+        }
+        boolean active = SecondSpaceController.getInstance(currentAccount).isActive();
+        privateSpaceExitItem.setVisibility(active ? View.VISIBLE : View.GONE);
+    }
+
+    private View createPrivateSpaceEmptyView(android.content.Context context) {
+        android.widget.LinearLayout container = new android.widget.LinearLayout(context);
+        container.setOrientation(android.widget.LinearLayout.VERTICAL);
+        container.setGravity(Gravity.CENTER);
+        container.setPadding(AndroidUtilities.dp(40), 0, AndroidUtilities.dp(40), 0);
+
+        android.widget.TextView title = new android.widget.TextView(context);
+        title.setText(LocaleController.getString(R.string.PrivateSpaceEmpty));
+        title.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 16);
+        title.setTextColor(Theme.getColor(Theme.key_chats_message));
+        title.setGravity(Gravity.CENTER);
+        container.addView(title);
+
+        android.widget.TextView btn = new android.widget.TextView(context);
+        btn.setText(LocaleController.getString(R.string.PrivateSpaceEmptyOpenSettings));
+        btn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 14);
+        btn.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
+        btn.setTypeface(AndroidUtilities.bold());
+        btn.setGravity(Gravity.CENTER);
+        btn.setPadding(0, AndroidUtilities.dp(16), 0, 0);
+        btn.setOnClickListener(v -> presentFragment(new SecondSpaceSettingsActivity()));
+        container.addView(btn);
+
+        container.setVisibility(View.GONE);
+        return container;
+    }
+
+    private void updatePrivateSpaceEmptyView() {
+        if (viewPages == null) {
+            return;
+        }
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        boolean show = !onlySelect && ssc.isActive() && ssc.getDialogIds().isEmpty();
+        for (int a = 0; a < viewPages.length; a++) {
+            ViewPage vp = viewPages[a];
+            if (vp != null && vp.privateSpaceEmptyView != null) {
+                vp.privateSpaceEmptyView.setVisibility(show ? View.VISIBLE : View.GONE);
+            }
+        }
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.secondSpaceModeChanged) {
+            updatePrivateSpaceExitVisibility();
+            updatePrivateSpaceEmptyView();
+            return;
+        }
         if (id == NotificationCenter.dialogsNeedReload) {
+            updatePrivateSpaceEmptyView();
             if (viewPages == null || dialogsListFrozen) {
                 return;
             }
@@ -10718,9 +10794,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
         MessagesController messagesController = AccountInstance.getInstance(currentAccount).getMessagesController();
         if (dialogsType == DIALOGS_TYPE_DEFAULT) {
-            return messagesController.getDialogs(folderId);
+            return applyPrivateSpaceFilter(messagesController.getDialogs(folderId), currentAccount);
         } else if (dialogsType == DIALOGS_TYPE_WIDGET || dialogsType == DIALOGS_TYPE_IMPORT_HISTORY) {
-            return messagesController.dialogsServerOnly;
+            return applyPrivateSpaceFilter(messagesController.dialogsServerOnly, currentAccount);
         } else if (dialogsType == DIALOGS_TYPE_ADD_USERS_TO) {
             ArrayList<TLRPC.Dialog> dialogs = new ArrayList<>(messagesController.dialogsCanAddUsers.size() + messagesController.dialogsMyChannels.size() + messagesController.dialogsMyGroups.size() + 2);
             if (messagesController.dialogsMyChannels.size() > 0 && allowChannels) {
@@ -10748,25 +10824,25 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             }
             return dialogs;
         } else if (dialogsType == DIALOGS_TYPE_FORWARD) {
-            return messagesController.dialogsForward;
+            return applyPrivateSpaceFilter(messagesController.dialogsForward, currentAccount);
         } else if (dialogsType == DIALOGS_TYPE_USERS_ONLY || dialogsType == DIALOGS_TYPE_IMPORT_HISTORY_USERS) {
-            return messagesController.dialogsUsersOnly;
+            return applyPrivateSpaceFilter(messagesController.dialogsUsersOnly, currentAccount);
         } else if (dialogsType == DIALOGS_TYPE_CHANNELS_ONLY) {
-            return messagesController.dialogsChannelsOnly;
+            return applyPrivateSpaceFilter(messagesController.dialogsChannelsOnly, currentAccount);
         } else if (dialogsType == DIALOGS_TYPE_GROUPS_ONLY || dialogsType == DIALOGS_TYPE_IMPORT_HISTORY_GROUPS) {
-            return messagesController.dialogsGroupsOnly;
+            return applyPrivateSpaceFilter(messagesController.dialogsGroupsOnly, currentAccount);
         } else if (dialogsType == 7 || dialogsType == 8) {
             MessagesController.DialogFilter dialogFilter = messagesController.selectedDialogFilter[dialogsType == 7 ? 0 : 1];
             if (dialogFilter == null) {
-                return messagesController.getDialogs(folderId);
+                return applyPrivateSpaceFilter(messagesController.getDialogs(folderId), currentAccount);
             } else {
                 if (initialDialogsType == DIALOGS_TYPE_FORWARD) {
-                    return dialogFilter.dialogsForward;
+                    return applyPrivateSpaceFilter(dialogFilter.dialogsForward, currentAccount);
                 }
-                return dialogFilter.dialogs;
+                return applyPrivateSpaceFilter(dialogFilter.dialogs, currentAccount);
             }
         } else if (dialogsType == DIALOGS_TYPE_BLOCK) {
-            return messagesController.dialogsForBlock;
+            return applyPrivateSpaceFilter(messagesController.dialogsForBlock, currentAccount);
         } else if (dialogsType == DIALOGS_TYPE_BOT_SHARE || dialogsType == DIALOGS_TYPE_BOT_SELECT_VERIFY || dialogsType == DIALOGS_TYPE_START_ATTACH_BOT) {
             if (botShareDialogs != null) {
                 return botShareDialogs;
@@ -10853,6 +10929,33 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             return dialogs;
         }
         return new ArrayList<>();
+    }
+
+    @NonNull
+    private ArrayList<TLRPC.Dialog> applyPrivateSpaceFilter(ArrayList<TLRPC.Dialog> raw, int currentAccount) {
+        if (raw == null) {
+            return new ArrayList<>();
+        }
+        if (includePrivateSpace) {
+            return raw;
+        }
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        // Asymmetric filter (per plan): active mode shows everything (private + regular);
+        // off mode hides private chats unless they have exposed messages.
+        if (ssc.isActive() || ssc.getDialogIds().isEmpty()) {
+            return raw;
+        }
+        ArrayList<TLRPC.Dialog> filtered = new ArrayList<>(raw.size());
+        for (int i = 0; i < raw.size(); i++) {
+            TLRPC.Dialog d = raw.get(i);
+            if (d == null) {
+                continue;
+            }
+            if (!ssc.isInSecondSpace(d.id) || ssc.hasExposedMessages(d.id)) {
+                filtered.add(d);
+            }
+        }
+        return filtered;
     }
 
     private boolean meetRequestPeerRequirements(TLRPC.User user) {

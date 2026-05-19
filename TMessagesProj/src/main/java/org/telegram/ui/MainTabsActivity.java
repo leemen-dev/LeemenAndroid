@@ -259,6 +259,12 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             openAccountSelector(v);
             return true;
         });
+        // Long-press the Chats tab: toggle private space mode (deniable entry/exit).
+        tabs[INDEX_CHATS].setOnLongClickListener(v -> {
+            org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+            ssc.setActive(!ssc.isActive());
+            return true;
+        });
 
         for (int index = 0; index < tabs.length; index++) {
             final GlassTabView view = tabs[index];

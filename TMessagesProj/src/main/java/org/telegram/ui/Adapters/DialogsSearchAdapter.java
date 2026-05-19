@@ -40,6 +40,7 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
+import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.R;
@@ -443,8 +444,14 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                     TLRPC.User user = res.users.get(a);
                     usersMap.put(user.id, user);
                 }
+                SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                boolean ssActive = ssc.isActive();
                 for (int a = 0; a < res.messages.size(); a++) {
                     TLRPC.Message message = res.messages.get(a);
+                    long msgDialogId = MessageObject.getDialogId(message);
+                    if (!ssActive && ssc.isInSecondSpace(msgDialogId) && !ssc.isMessageExposed(msgDialogId, message.id)) {
+                        continue;
+                    }
                     MessageObject messageObject = new MessageObject(currentAccount, message, usersMap, chatsMap, false, true);
                     messageObjects.add(messageObject);
                     messageObject.setQuery(query);
@@ -588,8 +595,14 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                     TLRPC.User user = res.users.get(a);
                     usersMap.put(user.id, user);
                 }
+                SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                boolean ssActive = ssc.isActive();
                 for (int a = 0; a < res.messages.size(); a++) {
                     TLRPC.Message message = res.messages.get(a);
+                    long dialogId = MessageObject.getDialogId(message);
+                    if (!ssActive && ssc.isInSecondSpace(dialogId) && !ssc.isMessageExposed(dialogId, message.id)) {
+                        continue;
+                    }
                     MessageObject messageObject = new MessageObject(currentAccount, message, usersMap, chatsMap, false, true);
                     messageObjects.add(messageObject);
                     messageObject.setQuery(query);
@@ -2330,11 +2343,16 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
     public void filterRecent(String query) {
         filteredRecentQuery = query;
         filtered2RecentSearchObjects.clear();
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        boolean ssActive = ssc.isActive();
         if (TextUtils.isEmpty(query)) {
             filteredRecentSearchObjects.clear();
             final int count = recentSearchObjects.size();
             for (int i = 0; i < count; ++i) {
                 if (delegate != null && delegate.getSearchForumDialogId() == recentSearchObjects.get(i).did || !filter(recentSearchObjects.get(i).object)) {
+                    continue;
+                }
+                if (!ssActive && ssc.isInSecondSpace(recentSearchObjects.get(i).did) && !ssc.hasExposedMessages(recentSearchObjects.get(i).did)) {
                     continue;
                 }
                 filteredRecentSearchObjects.add(recentSearchObjects.get(i));
@@ -2349,6 +2367,9 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 continue;
             }
             if (delegate != null && delegate.getSearchForumDialogId() == obj.did || !filter(recentSearchObjects.get(i).object)) {
+                continue;
+            }
+            if (!ssActive && ssc.isInSecondSpace(obj.did) && !ssc.hasExposedMessages(obj.did)) {
                 continue;
             }
             String title = null, username = null;
