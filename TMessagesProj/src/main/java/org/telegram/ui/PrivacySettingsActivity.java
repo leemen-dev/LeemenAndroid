@@ -43,7 +43,6 @@ import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
-import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -124,7 +123,6 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
     private int sessionsRow;
     @Keep
     private int passcodeRow;
-    private int privateSpaceRow;
     @Keep
     private int autoDeleteMesages;
     @Keep
@@ -317,14 +315,6 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
             if (position == autoDeleteMesages) {
                 if (getUserConfig().getGlobalTTl() >= 0) {
                     presentFragment(new AutoDeleteMessagesActivity());
-                }
-            } else if (position == privateSpaceRow) {
-                SecondSpaceController.getInstance(currentAccount).setActive(true);
-                java.util.List<org.telegram.ui.ActionBar.BaseFragment> stack = new java.util.ArrayList<>(getParentLayout().getFragmentStack());
-                for (int i = stack.size() - 1; i >= 0; i--) {
-                    org.telegram.ui.ActionBar.BaseFragment f = stack.get(i);
-                    if (f instanceof DialogsActivity) break;
-                    f.removeSelfFromStack();
                 }
             } else if (position == blockedRow) {
                 presentFragment(new PrivacyUsersActivity());
@@ -719,11 +709,6 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         passwordRow = rowCount++;
         autoDeleteMesages = rowCount++;
         passcodeRow = rowCount++;
-        if (SecondSpaceController.getInstance(currentAccount).isEntryButtonVisible()) {
-            privateSpaceRow = rowCount++;
-        } else {
-            privateSpaceRow = -1;
-        }
         if (getMessagesController().config.settingsDisplayPasskeys.get() && Build.VERSION.SDK_INT >= 28 && BuildVars.SUPPORTS_PASSKEYS) {
             passkeysRow = rowCount++;
         }
@@ -1381,10 +1366,6 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                             icon = R.drawable.msg2_secret;
                         }
                         textCell2.setTextAndValueAndIcon(getString(R.string.Passcode), value, true, icon, true);
-                    } else if (position == privateSpaceRow) {
-                        textCell2.setPrioritizeTitleOverValue(false);
-                        textCell2.setColors(-1, Theme.key_windowBackgroundWhiteBlueText4);
-                        textCell2.setText(getString(R.string.PrivateSpaceEnter), true);
                     } else if (position == blockedRow) {
                         int totalCount = getMessagesController().totalBlockedCount;
                         if (totalCount == 0) {
@@ -1416,7 +1397,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                 return 3;
             } else if (position == botsAndWebsitesShadowRow) {
                 return 4;
-            } else if (position == autoDeleteMesages || position == sessionsRow || position == emailLoginRow || position == passwordRow || position == passkeysRow || position == passcodeRow || position == blockedRow || position == privateSpaceRow) {
+            } else if (position == autoDeleteMesages || position == sessionsRow || position == emailLoginRow || position == passwordRow || position == passkeysRow || position == passcodeRow || position == blockedRow) {
                 return 5;
             }
             return 0;

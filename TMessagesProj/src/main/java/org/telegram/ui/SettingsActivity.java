@@ -687,9 +687,13 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         }
 
         items.add(SettingCell.Factory.of(1, IconBackgroundColors.BLUE.top, IconBackgroundColors.BLUE.bottom, R.drawable.settings_account, getString(R.string.SettingsAccount), getString(R.string.SettingsAccountInfo)));
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        if (!ssc.isActive() && ssc.isEntryButtonVisible()) {
+            items.add(SettingCell.Factory.of(101, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.msg2_secret, getString(R.string.PrivateSpaceEnter), ""));
+        }
         items.add(SettingCell.Factory.of(2, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.settings_chat, getString(R.string.SettingsChat), getString(R.string.SettingsChatInfo)));
         items.add(SettingCell.Factory.of(3, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.settings_privacy, getString(R.string.SettingsPrivacySecurity), getString(R.string.SettingsPrivacySecurityInfo)));
-        if (SecondSpaceController.getInstance(currentAccount).isActive()) {
+        if (ssc.isActive()) {
             items.add(SettingCell.Factory.of(100, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.msg2_secret, getString(R.string.PrivateSpaceSettings), ""));
         }
         items.add(SettingCell.Factory.of(5, IconBackgroundColors.RED.top, IconBackgroundColors.RED.bottom, R.drawable.settings_sounds, getString(R.string.SettingsNotifications), getString(R.string.SettingsNotificationsInfo)));
@@ -806,6 +810,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 break;
             case 100:
                 presentFragment(new SecondSpaceSettingsActivity());
+                break;
+            case 101:
+                SecondSpaceController.getInstance(currentAccount).setActive(true);
+                finishFragment();
                 break;
             case 5:
                 presentFragment(new NotificationsSettingsActivity());
