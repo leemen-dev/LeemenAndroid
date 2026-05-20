@@ -2345,6 +2345,7 @@
     <string name="PrivateSpaceSelectChats">Select chats</string>
     <string name="PrivateSpaceEnter">Enter Private Space</string>
     <string name="PrivateSpaceExit">Exit Private Space</string>
+    <string name="PrivateSpaceExitTab">Exit</string>
     <string name="PrivateSpacePendingDesc_one">You have %1$d new message in this chat from outside private space. What do you want to do with it?</string>
     <string name="PrivateSpacePendingDesc_few">You have %1$d new messages in this chat from outside private space. What do you want to do with them?</string>
     <string name="PrivateSpacePendingDesc_many">You have %1$d new messages in this chat from outside private space. What do you want to do with them?</string>
