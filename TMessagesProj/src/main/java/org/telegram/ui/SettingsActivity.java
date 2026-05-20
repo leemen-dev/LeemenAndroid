@@ -813,7 +813,14 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 break;
             case 101:
                 SecondSpaceController.getInstance(currentAccount).setActive(true);
-                finishFragment();
+                if (getParentLayout() != null) {
+                    for (org.telegram.ui.ActionBar.BaseFragment f : getParentLayout().getFragmentStack()) {
+                        if (f instanceof MainTabsActivity) {
+                            ((MainTabsActivity) f).switchToChatsTab();
+                            break;
+                        }
+                    }
+                }
                 break;
             case 5:
                 presentFragment(new NotificationsSettingsActivity());

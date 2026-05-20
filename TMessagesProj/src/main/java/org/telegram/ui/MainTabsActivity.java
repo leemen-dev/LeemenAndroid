@@ -83,6 +83,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     private static final int INDEX_SETTINGS = 2;
     private static final int INDEX_CALLS = 3;
     private static final int INDEX_PROFILE = 4;
+    private static final int INDEX_PRIVATE_SPACE_EXIT = 5;
 
     private static int indexToPosition(int index) {
         return index > 2 ? index - 1 : index;
@@ -249,12 +250,13 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         tabsView.setClipChildren(false);
         tabsView.setPadding(dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4));
 
-        tabs = new GlassTabView[5];
+        tabs = new GlassTabView[6];
         tabs[INDEX_CHATS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CHATS, R.string.MainTabsChats);
         tabs[INDEX_CONTACTS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CONTACTS, R.string.MainTabsContacts);
         tabs[INDEX_SETTINGS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.SETTINGS, R.string.Settings);
         tabs[INDEX_CALLS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CALLS, R.string.MainTabsCalls);
         tabs[INDEX_PROFILE] = GlassTabView.createAvatar(context, resourceProvider, currentAccount, R.string.MainTabsProfile);
+        tabs[INDEX_PRIVATE_SPACE_EXIT] = GlassTabView.createStaticIconTab(context, resourceProvider, R.drawable.msg_close, R.string.PrivateSpaceExitTab);
         tabs[INDEX_PROFILE].setOnLongClickListener(v -> {
             openAccountSelector(v);
             return true;
@@ -265,32 +267,38 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             ssc.setActive(!ssc.isActive());
             return true;
         });
+        tabs[INDEX_PRIVATE_SPACE_EXIT].setOnClickListener(v -> {
+            org.telegram.messenger.SecondSpaceController.getInstance(currentAccount).setActive(false);
+        });
 
         for (int index = 0; index < tabs.length; index++) {
             final GlassTabView view = tabs[index];
 
-            final int position = indexToPosition(index);
-            tabs[index].setOnClickListener(v -> {
-                if (viewPager.isManualScrolling() || viewPager.isTouch()) {
-                    return;
-                }
-
-                if (viewPager.getCurrentPosition() == position) {
-                    final BaseFragment fragment = getCurrentVisibleFragment();
-                    if (fragment instanceof MainTabsActivity.TabFragmentDelegate) {
-                        ((MainTabsActivity.TabFragmentDelegate) fragment).onParentScrollToTop();
+            if (index != INDEX_PRIVATE_SPACE_EXIT) {
+                final int position = indexToPosition(index);
+                tabs[index].setOnClickListener(v -> {
+                    if (viewPager.isManualScrolling() || viewPager.isTouch()) {
+                        return;
                     }
-                    return;
-                }
 
-                selectTab(position, true);
-                viewPager.scrollToPosition(position);
-            });
+                    if (viewPager.getCurrentPosition() == position) {
+                        final BaseFragment fragment = getCurrentVisibleFragment();
+                        if (fragment instanceof MainTabsActivity.TabFragmentDelegate) {
+                            ((MainTabsActivity.TabFragmentDelegate) fragment).onParentScrollToTop();
+                        }
+                        return;
+                    }
+
+                    selectTab(position, true);
+                    viewPager.scrollToPosition(position);
+                });
+            }
 
             tabsView.addView(tabs[index]);
             tabsView.setViewVisible(view, true, false);
         }
         checkUi_callTabVisible(getUserConfig().showCallsTab, false);
+        updatePrivateSpaceExitTabVisibility(false);
 
         selectTab(viewPager.getCurrentPosition(), false);
 
@@ -740,6 +748,26 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             }
         } else if (id == NotificationCenter.contactsPermissionBadgeCheck) {
             checkContactsTabBadge();
+        } else if (id == NotificationCenter.secondSpaceModeChanged) {
+            updatePrivateSpaceExitTabVisibility(true);
+        }
+    }
+
+    private void updatePrivateSpaceExitTabVisibility(boolean animated) {
+        if (tabsView == null || tabs == null || tabs[INDEX_PRIVATE_SPACE_EXIT] == null) {
+            return;
+        }
+        boolean active = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount).isActive();
+        tabsView.setViewVisible(tabs[INDEX_PRIVATE_SPACE_EXIT], active, animated);
+    }
+
+    public void switchToChatsTab() {
+        if (viewPager == null) {
+            return;
+        }
+        if (viewPager.getCurrentPosition() != POSITION_CHATS) {
+            viewPager.scrollToPosition(POSITION_CHATS);
+            selectTab(POSITION_CHATS, true);
         }
     }
 
@@ -753,6 +781,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.callTabsVisibleToggled);
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.mainUserInfoChanged);
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.contactsPermissionBadgeCheck);
+        NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.secondSpaceModeChanged);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.appUpdateAvailable);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.appUpdateLoading);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.needSetDayNightTheme);
@@ -770,6 +799,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.callTabsVisibleToggled);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.mainUserInfoChanged);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.contactsPermissionBadgeCheck);
+        NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.secondSpaceModeChanged);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.appUpdateAvailable);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.appUpdateLoading);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.needSetDayNightTheme);
