@@ -1906,6 +1906,10 @@ public class ChatActivity extends BaseFragment implements
 
         @Override
         public void onMessageSend(CharSequence message, boolean notify, int scheduleDate, int scheduleRepeatPeriod, long payStars) {
+            SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+            if (!ssc.isActive() && ssc.isInSecondSpace(dialog_id)) {
+                ssc.markPendingOffModeWork(dialog_id);
+            }
             if (chatListItemAnimator != null) {
                 chatActivityEnterViewAnimateFromTop = chatActivityEnterView.getBackgroundTop();
                 if (chatActivityEnterViewAnimateFromTop != 0) {
@@ -20073,11 +20077,43 @@ public class ChatActivity extends BaseFragment implements
         return filtered;
     }
 
+    /**
+     * Trigger condition: user is in ACTIVE mode and entering a private-space chat where they
+     * had previously sent (and not yet decided about) messages while in OFF mode. The dialog
+     * asks whether those out-of-mode messages should stay hidden or be exposed.
+     *
+     * When entering a hidden chat in OFF mode (passive read), no dialog is shown — the chat
+     * just appears silently filtered. Only off-mode-initiated WORK (user sent something)
+     * triggers the decision prompt on next active-mode entry.
+     */
     private void maybeShowPrivateSpaceDecisionDialog() {
-        if (privateSpaceDecisionShown || privateSpacePendingMessageIds.isEmpty() || getParentActivity() == null) {
+        if (privateSpaceDecisionShown || getParentActivity() == null) {
             return;
         }
-        if (!isSecondSpaceContentSuppressed()) {
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        if (!ssc.isActive() || !ssc.isInSecondSpace(dialog_id) || !ssc.hasPendingOffModeWork(dialog_id)) {
+            return;
+        }
+        // Build pending list from currently-loaded messages: anything not yet decided/exposed.
+        privateSpacePendingMessageIds.clear();
+        privateSpacePendingMessages.clear();
+        privateSpacePendingMaxId = 0;
+        int lastDecided = ssc.getLastDecidedMessageId(dialog_id);
+        for (int i = 0, N = messages.size(); i < N; i++) {
+            MessageObject mo = messages.get(i);
+            if (mo == null) continue;
+            int mid = mo.getId();
+            if (mid <= lastDecided) continue;
+            if (ssc.isMessageExposed(dialog_id, mid)) continue;
+            privateSpacePendingMessageIds.add(mid);
+            privateSpacePendingMessages.add(mo);
+            if (mid > privateSpacePendingMaxId) {
+                privateSpacePendingMaxId = mid;
+            }
+        }
+        if (privateSpacePendingMessageIds.isEmpty()) {
+            // Nothing actionable — clear the flag so we don't keep checking.
+            ssc.clearPendingOffModeWork(dialog_id);
             return;
         }
         privateSpaceDecisionShown = true;
@@ -20089,19 +20125,22 @@ public class ChatActivity extends BaseFragment implements
         builder.setTitle(LocaleController.getString(R.string.PrivateSpaceTitle));
         builder.setMessage(LocaleController.formatPluralString("PrivateSpacePendingDesc", count));
         builder.setPositiveButton(LocaleController.getString(R.string.PrivateSpacePendingHide), (d, w) -> {
-            SecondSpaceController.getInstance(currentAccount).setLastDecidedMessageId(dialog_id, upTo);
+            SecondSpaceController c = SecondSpaceController.getInstance(currentAccount);
+            c.setLastDecidedMessageId(dialog_id, upTo);
+            c.clearPendingOffModeWork(dialog_id);
             privateSpacePendingMessageIds.clear();
             privateSpacePendingMessages.clear();
         });
         builder.setNegativeButton(LocaleController.getString(R.string.PrivateSpacePendingShow), (d, w) -> {
-            SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+            SecondSpaceController c = SecondSpaceController.getInstance(currentAccount);
             for (int i = 0; i < idSnapshot.size(); i++) {
-                int id = idSnapshot.get(i);
-                ssc.exposeMessage(dialog_id, id);
+                int mid = idSnapshot.get(i);
+                c.exposeMessage(dialog_id, mid);
                 MessageObject mo = i < msgSnapshot.size() ? msgSnapshot.get(i) : null;
-                if (mo != null) ssc.cacheLastExposedMessage(dialog_id, mo);
+                if (mo != null) c.cacheLastExposedMessage(dialog_id, mo);
             }
-            ssc.setLastDecidedMessageId(dialog_id, upTo);
+            c.setLastDecidedMessageId(dialog_id, upTo);
+            c.clearPendingOffModeWork(dialog_id);
             privateSpacePendingMessageIds.clear();
             privateSpacePendingMessages.clear();
         });
@@ -20156,6 +20195,7 @@ public class ChatActivity extends BaseFragment implements
                 }
             }
             ssc.setLastDecidedMessageId(dialog_id, upTo);
+            ssc.clearPendingOffModeWork(dialog_id);
             privateSpacePendingMessageIds.clear();
             privateSpacePendingMessages.clear();
         });
@@ -20171,8 +20211,9 @@ public class ChatActivity extends BaseFragment implements
                 return;
             }
             if (isSecondSpaceContentSuppressed()) {
+                // OFF mode + hidden chat: filter messages to exposed-only, no decision dialog.
                 privateSpacePendingMessageIds.clear();
-            privateSpacePendingMessages.clear();
+                privateSpacePendingMessages.clear();
                 privateSpacePendingMaxId = 0;
                 @SuppressWarnings("unchecked")
                 ArrayList<MessageObject> filtered = filterToExposedSecondSpace((ArrayList<MessageObject>) args[2]);
@@ -20180,6 +20221,8 @@ public class ChatActivity extends BaseFragment implements
                 args[1] = filtered.size();
                 args[6] = 0;
                 args[13] = 0;
+            } else {
+                // ACTIVE mode entry into a hidden chat: if off-mode work is pending, prompt.
                 AndroidUtilities.runOnUIThread(this::maybeShowPrivateSpaceDecisionDialog);
             }
             int queryLoadIndex = (Integer) args[11];
@@ -21631,8 +21674,9 @@ public class ChatActivity extends BaseFragment implements
             ArrayList<MessageObject> arr = (ArrayList<MessageObject>) args[1];
             if (isInsideContainer) return;
             if (did == dialog_id && isSecondSpaceContentSuppressed()) {
+                // OFF mode + hidden chat: keep messages filtered to exposed-only. No decision
+                // dialog mid-stream — the prompt only appears on chat entry in ACTIVE mode.
                 ArrayList<MessageObject> filtered = filterToExposedSecondSpace(arr);
-                AndroidUtilities.runOnUIThread(this::maybeShowPrivateSpaceDecisionDialog);
                 if (filtered.isEmpty()) {
                     return;
                 }

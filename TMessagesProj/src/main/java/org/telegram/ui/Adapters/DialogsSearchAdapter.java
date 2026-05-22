@@ -252,7 +252,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
         public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
             HintDialogCell cell = (HintDialogCell) holder.itemView;
 
-            TLRPC.TL_topPeer peer = MediaDataController.getInstance(currentAccount).hints.get(position);
+            TLRPC.TL_topPeer peer = getVisibleHintsForAccount(currentAccount).get(position);
             TLRPC.Dialog dialog = new TLRPC.TL_dialog();
             TLRPC.Chat chat = null;
             TLRPC.User user = null;
@@ -279,8 +279,35 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
 
         @Override
         public int getItemCount() {
-            return MediaDataController.getInstance(currentAccount).hints.size();
+            return getVisibleHintsForAccount(currentAccount).size();
         }
+    }
+
+    private java.util.List<TLRPC.TL_topPeer> getVisibleHints() {
+        return getVisibleHintsForAccount(currentAccount);
+    }
+
+    static java.util.List<TLRPC.TL_topPeer> getVisibleHintsForAccount(int account) {
+        java.util.List<TLRPC.TL_topPeer> all = MediaDataController.getInstance(account).hints;
+        org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(account);
+        if (ssc.isActive() || ssc.getDialogIds().isEmpty()) {
+            return all;
+        }
+        java.util.ArrayList<TLRPC.TL_topPeer> filtered = new java.util.ArrayList<>(all.size());
+        for (int i = 0, N = all.size(); i < N; i++) {
+            TLRPC.TL_topPeer peer = all.get(i);
+            if (peer == null || peer.peer == null) {
+                continue;
+            }
+            long did = peer.peer.user_id != 0 ? peer.peer.user_id
+                    : peer.peer.channel_id != 0 ? -peer.peer.channel_id
+                    : peer.peer.chat_id != 0 ? -peer.peer.chat_id : 0;
+            if (did != 0 && ssc.isInSecondSpace(did)) {
+                continue;
+            }
+            filtered.add(peer);
+        }
+        return filtered;
     }
 
     private boolean filter(Object obj) {
@@ -1730,7 +1757,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
     }
 
     private boolean hasHints() {
-        return !searchWas && !MediaDataController.getInstance(currentAccount).hints.isEmpty() && (dialogsType != DialogsActivity.DIALOGS_TYPE_START_ATTACH_BOT || dialogsActivity.allowUsers);
+        return !searchWas && !getVisibleHints().isEmpty() && (dialogsType != DialogsActivity.DIALOGS_TYPE_START_ATTACH_BOT || dialogsActivity.allowUsers);
     }
 
     private int messagesSectionPosition = -1;

@@ -20,6 +20,7 @@ public class SecondSpaceController extends BaseController {
     private static final String PREF_EXPOSED = "second_space_exposed";
     private static final String PREF_LAST_DECIDED = "second_space_last_decided";
     private static final String PREF_SHOW_ENTRY_BUTTON = "second_space_show_entry_button";
+    private static final String PREF_PENDING_OFF_MODE = "second_space_pending_off_mode";
 
     private static final SecondSpaceController[] Instance = new SecondSpaceController[UserConfig.MAX_ACCOUNT_COUNT];
     private static final Object[] lockObjects = new Object[UserConfig.MAX_ACCOUNT_COUNT];
@@ -47,6 +48,7 @@ public class SecondSpaceController extends BaseController {
     private final Map<Long, Set<Integer>> exposedMessages = new HashMap<>();
     private final Map<Long, Integer> lastDecidedMessageId = new HashMap<>();
     private final Map<Long, MessageObject> lastExposedMessageCache = new HashMap<>();
+    private final Set<Long> pendingOffModeWork = new HashSet<>();
     private boolean active;
 
     private boolean entryButtonVisible;
@@ -60,6 +62,15 @@ public class SecondSpaceController extends BaseController {
         loadDialogIds(prefs.getString(PREF_DIALOG_IDS, ""));
         loadExposed(prefs.getString(PREF_EXPOSED, ""));
         loadLastDecided(prefs.getString(PREF_LAST_DECIDED, ""));
+        String pendingCsv = prefs.getString(PREF_PENDING_OFF_MODE, "");
+        if (!TextUtils.isEmpty(pendingCsv)) {
+            for (String s : pendingCsv.split(",")) {
+                try {
+                    pendingOffModeWork.add(Long.parseLong(s));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
     }
 
     private void loadDialogIds(String csv) {
@@ -226,6 +237,39 @@ public class SecondSpaceController extends BaseController {
             persistExposed();
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
+    }
+
+    // --- Pending off-mode work (per chat flag) ---
+    //
+    // Set when user sends a message in a private-space chat while OFF mode is on
+    // (i.e. via search-by-name). On the next entry of the same chat in ACTIVE mode,
+    // the decision dialog "what to do with these messages" should fire.
+
+    public boolean hasPendingOffModeWork(long dialogId) {
+        return pendingOffModeWork.contains(dialogId);
+    }
+
+    public void markPendingOffModeWork(long dialogId) {
+        if (pendingOffModeWork.add(dialogId)) {
+            persistPendingOffModeWork();
+        }
+    }
+
+    public void clearPendingOffModeWork(long dialogId) {
+        if (pendingOffModeWork.remove(dialogId)) {
+            persistPendingOffModeWork();
+        }
+    }
+
+    private void persistPendingOffModeWork() {
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (Long id : pendingOffModeWork) {
+            if (!first) sb.append(',');
+            sb.append(id);
+            first = false;
+        }
+        getMessagesController().getMainSettings().edit().putString(PREF_PENDING_OFF_MODE, sb.toString()).apply();
     }
 
     // --- Decision marker (banner trigger) ---

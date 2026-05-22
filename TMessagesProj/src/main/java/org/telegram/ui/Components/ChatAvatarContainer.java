@@ -1053,6 +1053,14 @@ public class ChatAvatarContainer extends FrameLayout implements NotificationCent
 
         subtitleIsThinkingBot = false;
         CharSequence printString = MessagesController.getInstance(currentAccount).getPrintingString(parentFragment.getDialogId(), parentFragment.getThreadId(), false);
+        // Suppress "typing..." indicator for private-space chats when not in active mode —
+        // the other side typing should not leak through the deniable surface.
+        if (printString != null) {
+            org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+            if (!ssc.isActive() && ssc.isInSecondSpace(parentFragment.getDialogId())) {
+                printString = null;
+            }
+        }
         if (printString == null && UserObject.isBotForum(user)) {
             //if (BotForumHelper.getInstance(currentAccount).isThinking(user.id, (int) parentFragment.getTopicId())) {
             //    printString = "thinking";
