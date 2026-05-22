@@ -3033,6 +3033,26 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         checkTtl();
     }
 
+    private int computeFolderUnreadCount() {
+        org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+        int storageCount = org.telegram.messenger.MessagesStorage.getInstance(currentAccount).getArchiveUnreadCount();
+        if (ssc.isActive() || ssc.getDialogIds().isEmpty()) {
+            return storageCount;
+        }
+        // In off mode, archive folder cell at root must not leak unread of hidden chats.
+        int subtract = 0;
+        ArrayList<TLRPC.Dialog> archive = MessagesController.getInstance(currentAccount).dialogsByFolder.get(currentDialogFolderId);
+        if (archive != null) {
+            for (int i = 0, N = archive.size(); i < N; i++) {
+                TLRPC.Dialog d = archive.get(i);
+                if (d != null && ssc.isInSecondSpace(d.id) && !ssc.hasExposedMessages(d.id)) {
+                    subtract += d.unread_count;
+                }
+            }
+        }
+        return Math.max(0, storageCount - subtract);
+    }
+
     private MessageObject findFolderTopMessage() {
         if (parentFragment == null) {
             return null;
@@ -3120,7 +3140,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                             hasUnmutedTopics = counts[3] != 0;
                             pollVotesMentionCount = counts[4];
                         } else if (dialog instanceof TLRPC.TL_dialogFolder) {
-                            unreadCount = MessagesStorage.getInstance(currentAccount).getArchiveUnreadCount();
+                            unreadCount = computeFolderUnreadCount();
                             mentionCount = 0;
                             reactionMentionCount = 0;
                             pollVotesMentionCount = 0;
@@ -3293,7 +3313,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                             hasUnmutedTopics = counts[3] != 0;
                             newPollVotesCount = counts[4];
                         } else if (dialog instanceof TLRPC.TL_dialogFolder) {
-                            newCount = MessagesStorage.getInstance(currentAccount).getArchiveUnreadCount();
+                            newCount = computeFolderUnreadCount();
                             newMentionCount = 0;
                         } else if (dialog != null) {
                             newCount = dialog.unread_count;

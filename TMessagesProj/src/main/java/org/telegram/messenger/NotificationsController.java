@@ -1058,8 +1058,15 @@ public class NotificationsController extends BaseController {
             int popup = 0;
             boolean hasScheduled = false;
 
+            SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
             for (int a = 0; a < messageObjects.size(); a++) {
                 MessageObject messageObject = messageObjects.get(a);
+                if (messageObject != null && !ssc.isActive() && ssc.isInSecondSpace(messageObject.getDialogId())) {
+                    if (BuildVars.LOGS_ENABLED) {
+                        FileLog.d("skipped message because dialog is in private space and mode is off");
+                    }
+                    continue;
+                }
                 if (messageObject.messageOwner != null && (messageObject.isImportedForward() ||
                         messageObject.messageOwner.action instanceof TLRPC.TL_messageActionSetMessagesTTL ||
                         messageObject.messageOwner.silent && (messageObject.messageOwner.action instanceof TLRPC.TL_messageActionContactSignUp || messageObject.messageOwner.action instanceof TLRPC.TL_messageActionUserJoined)) ||
@@ -1515,6 +1522,7 @@ public class NotificationsController extends BaseController {
             SharedPreferences preferences = getAccountInstance().getNotificationsSettings();
             LongSparseArray<Boolean> settingsCache = new LongSparseArray<>();
 
+            SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
             if (messages != null) {
                 for (int a = 0; a < messages.size(); a++) {
                     TLRPC.Message message = messages.get(a);
@@ -1524,6 +1532,9 @@ public class NotificationsController extends BaseController {
                     if (message.fwd_from != null && message.fwd_from.imported ||
                             message.action instanceof TLRPC.TL_messageActionSetMessagesTTL ||
                             message.silent && (message.action instanceof TLRPC.TL_messageActionContactSignUp || message.action instanceof TLRPC.TL_messageActionUserJoined)) {
+                        continue;
+                    }
+                    if (!ssc.isActive() && ssc.isInSecondSpace(MessageObject.getDialogId(message))) {
                         continue;
                     }
                     long did;

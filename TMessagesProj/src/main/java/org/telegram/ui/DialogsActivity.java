@@ -10341,6 +10341,17 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (id == NotificationCenter.secondSpaceModeChanged) {
             updatePrivateSpaceExitVisibility();
             updatePrivateSpaceEmptyView();
+            // Force adapter rebuild: applyPrivateSpaceFilter now returns a different set,
+            // but the underlying MessagesController dialogs are unchanged, so the adapter's
+            // own isDataSetChanged() returns false and reloadViewPageDialogs would no-op.
+            if (viewPages != null && !dialogsListFrozen) {
+                for (int i = 0; i < viewPages.length; i++) {
+                    ViewPage vp = viewPages[i];
+                    if (vp != null && vp.dialogsAdapter != null) {
+                        vp.dialogsAdapter.notifyDataSetChanged();
+                    }
+                }
+            }
             return;
         }
         if (id == NotificationCenter.dialogsNeedReload) {
@@ -10943,6 +10954,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         // Asymmetric filter (per plan): active mode shows everything (private + regular);
         // off mode hides private chats unless they have exposed messages.
         if (ssc.isActive() || ssc.getDialogIds().isEmpty()) {
+            return raw;
+        }
+        // Inside the archive view (this fragment is archive itself) hidden chats stay visible,
+        // DialogCell.applyPrivateSpaceMaskBeforeBuild strips their preview/counter/badges.
+        if (folderId == 1) {
             return raw;
         }
         ArrayList<TLRPC.Dialog> filtered = new ArrayList<>(raw.size());
