@@ -1049,9 +1049,14 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         final MessagesController messagesController = MessagesController.getInstance(currentAccount);
         ArrayList<TLRPC.Dialog> dialogs = messagesController.getDialogs(currentDialogFolderId);
         currentDialogFolderDialogsCount = dialogs.size();
+        org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+        boolean hidePrivate = !ssc.isActive();
         SpannableStringBuilder builder = new SpannableStringBuilder();
         for (int a = 0, N = dialogs.size(); a < N; a++) {
             TLRPC.Dialog dialog = dialogs.get(a);
+            if (dialog != null && hidePrivate && ssc.isInSecondSpace(dialog.id) && !ssc.hasExposedMessages(dialog.id)) {
+                continue;
+            }
             TLRPC.User currentUser = null;
             TLRPC.Chat currentChat = null;
             if (messagesController.isHiddenByUndo(dialog.id)) {
@@ -1133,11 +1138,16 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         if (ssc.isActive() || !ssc.isInSecondSpace(currentDialogId)) {
             return;
         }
-        // Off-mode rendering of a chat that lives in private space: strip leakable bits.
+        // Off-mode rendering of a chat that lives in private space: strip every visual cue
+        // that would betray unread activity in the cell (badges, bold-name span source, etc).
         draftMessage = null;
         unreadCount = 0;
         markUnread = false;
         mentionCount = 0;
+        reactionMentionCount = 0;
+        pollVotesMentionCount = 0;
+        hasUnmutedTopics = false;
+        lastUnreadState = false;
         org.telegram.messenger.MessageObject exposed = ssc.getLastExposedMessageCached(currentDialogId);
         message = exposed;
     }
@@ -1191,6 +1201,12 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         CharSequence buttonString = null;
         if (!isForumCell() && (isDialogCell || isTopic)) {
             printingString = MessagesController.getInstance(currentAccount).getPrintingString(currentDialogId, getTopicId(), true);
+            if (printingString != null) {
+                org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+                if (!ssc.isActive() && ssc.isInSecondSpace(currentDialogId)) {
+                    printingString = null;
+                }
+            }
         }
         currentMessagePaint = Theme.dialogs_messagePaint[paintIndex];
         boolean checkMessage = true;
