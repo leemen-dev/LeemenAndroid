@@ -31,6 +31,11 @@ public final class PrivateSpacePinDialog {
             if (onSuccess != null) onSuccess.run();
             return;
         }
+        if (ssc.isPinPromptSkippable()) {
+            // Recent successful PIN entry is still within the user-configured timeout window.
+            if (onSuccess != null) onSuccess.run();
+            return;
+        }
         AlertDialog.Builder builder = baseBuilder(context, R.string.PrivateSpacePinEnterTitle);
         EditText field = newPinField(context);
         TextView error = new TextView(context);
@@ -44,6 +49,7 @@ public final class PrivateSpacePinDialog {
         Runnable submit = () -> {
             String pin = field.getText().toString();
             if (ssc.verifyPassword(pin)) {
+                ssc.recordPinVerified();
                 if (alertRef[0] != null) alertRef[0].dismiss();
                 if (onSuccess != null) onSuccess.run();
             } else {

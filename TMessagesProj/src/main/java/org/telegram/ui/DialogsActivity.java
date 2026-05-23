@@ -10356,6 +10356,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             actionBar.closeSearchField(true);
         }
         ssc.markShortcutTested();
+        ssc.recordPinVerified();
         ssc.setActive(true);
         return true;
     }
@@ -10388,6 +10389,14 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         vp.dialogsAdapter.notifyDataSetChanged();
                     }
                 }
+            }
+            // Refresh search results too — recents/hints filters depend on mode, and cells
+            // already rendered in active mode (with counter) stay visible after exit unless
+            // explicitly re-bound. Forces ProfileSearchCell + hint chips to re-read state.
+            if (searchViewPager != null && searchViewPager.dialogsSearchAdapter != null) {
+                searchViewPager.dialogsSearchAdapter.notifyDataSetChanged();
+                // filterRecent is mode-aware (filters out private-only entries in off mode).
+                searchViewPager.dialogsSearchAdapter.filterRecent(null);
             }
             return;
         }

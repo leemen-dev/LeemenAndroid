@@ -61,6 +61,7 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     private int switchInfoRow;
     private int passwordShadowRow;
     private int passwordRow;
+    private int passwordTimeoutRow;
     private int passwordInfoRow;
     private int sequenceShadowRow;
     private int sequenceRow;
@@ -121,6 +122,8 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                 onEntryButtonSwitchClick((TextCheckCell) view);
             } else if (position == passwordRow) {
                 onPasswordRowClick();
+            } else if (position == passwordTimeoutRow) {
+                showPinTimeoutPicker();
             } else if (position == sequenceRow) {
                 presentFragment(new PrivateSpaceTabSequenceActivity());
             } else if (position == pinInSearchRow) {
@@ -203,6 +206,36 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         }
     }
 
+    private void showPinTimeoutPicker() {
+        if (getParentActivity() == null) return;
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        int[] minuteValues = {0, 1, 5, 15, 60, 240};
+        CharSequence[] labels = new CharSequence[minuteValues.length];
+        for (int i = 0; i < minuteValues.length; i++) {
+            labels[i] = minuteValues[i] == 0
+                    ? LocaleController.getString(R.string.PrivateSpacePinTimeoutOff)
+                    : LocaleController.formatString(R.string.PrivateSpacePinTimeoutMinutes, minuteValues[i]);
+        }
+        int current = ssc.getPinTimeoutMinutes();
+        int currentIdx = 0;
+        for (int i = 0; i < minuteValues.length; i++) {
+            if (minuteValues[i] == current) { currentIdx = i; break; }
+        }
+        // Indicate current selection by prefixing with a checkmark in the label.
+        CharSequence[] decorated = new CharSequence[labels.length];
+        for (int i = 0; i < labels.length; i++) {
+            decorated[i] = (i == currentIdx ? "✓ " : "    ") + labels[i];
+        }
+        AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
+        b.setTitle(LocaleController.getString(R.string.PrivateSpacePinTimeoutTitle));
+        b.setItems(decorated, (d, which) -> {
+            ssc.setPinTimeoutMinutes(minuteValues[which]);
+            if (adapter != null) adapter.notifyDataSetChanged();
+        });
+        b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        b.show();
+    }
+
     private void onPinInSearchSwitchClick(TextCheckCell cell) {
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
         if (!ssc.hasPassword()) {
@@ -264,6 +297,11 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         switchInfoRow = rowCount++;
         passwordShadowRow = rowCount++;
         passwordRow = rowCount++;
+        if (SecondSpaceController.getInstance(currentAccount).hasPassword()) {
+            passwordTimeoutRow = rowCount++;
+        } else {
+            passwordTimeoutRow = -1;
+        }
         passwordInfoRow = rowCount++;
         sequenceShadowRow = rowCount++;
         sequenceRow = rowCount++;
@@ -420,7 +458,13 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                         cell.setTextAndValue(
                                 LocaleController.getString(R.string.PrivateSpacePinTitle),
                                 LocaleController.getString(on ? R.string.PrivateSpacePinOn : R.string.PrivateSpacePinOff),
-                                false);
+                                ssc.hasPassword());
+                    } else if (position == passwordTimeoutRow) {
+                        int m = ssc.getPinTimeoutMinutes();
+                        String value = m == 0
+                                ? LocaleController.getString(R.string.PrivateSpacePinTimeoutOff)
+                                : LocaleController.formatString(R.string.PrivateSpacePinTimeoutMinutes, m);
+                        cell.setTextAndValue(LocaleController.getString(R.string.PrivateSpacePinTimeoutTitle), value, false);
                     } else if (position == sequenceRow) {
                         int n = ssc.getTabSequence().size();
                         String value = n == 0
@@ -444,6 +488,7 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             if (position == switchInfoRow) return VIEW_INFO;
             if (position == passwordShadowRow) return VIEW_SHADOW;
             if (position == passwordRow) return VIEW_VALUE;
+            if (position == passwordTimeoutRow) return VIEW_VALUE;
             if (position == passwordInfoRow) return VIEW_INFO;
             if (position == sequenceShadowRow) return VIEW_SHADOW;
             if (position == sequenceRow) return VIEW_VALUE;
