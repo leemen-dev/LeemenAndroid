@@ -62,6 +62,11 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     private int passwordShadowRow;
     private int passwordRow;
     private int passwordInfoRow;
+    private int sequenceShadowRow;
+    private int sequenceRow;
+    private int sequenceInfoRow;
+    private int pinInSearchRow;
+    private int pinInSearchInfoRow;
 
     @Override
     public boolean onFragmentCreate() {
@@ -116,6 +121,10 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                 onEntryButtonSwitchClick((TextCheckCell) view);
             } else if (position == passwordRow) {
                 onPasswordRowClick();
+            } else if (position == sequenceRow) {
+                presentFragment(new PrivateSpaceTabSequenceActivity());
+            } else if (position == pinInSearchRow) {
+                onPinInSearchSwitchClick((TextCheckCell) view);
             } else if (position >= chatsStartRow && position < chatsEndRow) {
                 long dialogId = hiddenIds.get(position - chatsStartRow);
                 confirmRemove(dialogId);
@@ -176,6 +185,9 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             b.setMessage(LocaleController.getString(R.string.PrivateSpacePinRemoveConfirm));
             b.setPositiveButton(LocaleController.getString(R.string.Remove), (d, w) -> {
                 PrivateSpacePinDialog.showRemove(getParentActivity(), currentAccount, () -> {
+                    // PIN removal disables pin-in-search and rebalances row layout.
+                    SecondSpaceController.getInstance(currentAccount).setPinInSearchEnabled(false);
+                    updateRows();
                     if (adapter != null) adapter.notifyDataSetChanged();
                 });
             });
@@ -185,9 +197,20 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             alert.redPositive();
         } else {
             PrivateSpacePinDialog.showSet(getParentActivity(), currentAccount, () -> {
+                updateRows();
                 if (adapter != null) adapter.notifyDataSetChanged();
             });
         }
+    }
+
+    private void onPinInSearchSwitchClick(TextCheckCell cell) {
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        if (!ssc.hasPassword()) {
+            return;
+        }
+        boolean newValue = !ssc.isPinInSearchEnabled();
+        ssc.setPinInSearchEnabled(newValue);
+        cell.setChecked(newValue);
     }
 
     private void onEntryButtonSwitchClick(TextCheckCell cell) {
@@ -198,9 +221,12 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         if (ok) {
             cell.setChecked(newValue);
         } else if (getParentActivity() != null) {
+            int msgRes = !ssc.hasConfiguredShortcut()
+                    ? R.string.PrivateSpaceShowEntryButtonBlockedNoShortcut
+                    : R.string.PrivateSpaceShowEntryButtonBlockedUntested;
             new AlertDialog.Builder(getParentActivity())
                     .setTitle(LocaleController.getString(R.string.PrivateSpaceTitle))
-                    .setMessage(LocaleController.getString(R.string.PrivateSpaceShowEntryButtonBlocked))
+                    .setMessage(LocaleController.getString(msgRes))
                     .setPositiveButton(LocaleController.getString(R.string.OK), null)
                     .show();
         }
@@ -239,6 +265,16 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         passwordShadowRow = rowCount++;
         passwordRow = rowCount++;
         passwordInfoRow = rowCount++;
+        sequenceShadowRow = rowCount++;
+        sequenceRow = rowCount++;
+        sequenceInfoRow = rowCount++;
+        if (SecondSpaceController.getInstance(currentAccount).hasPassword()) {
+            pinInSearchRow = rowCount++;
+            pinInSearchInfoRow = rowCount++;
+        } else {
+            pinInSearchRow = -1;
+            pinInSearchInfoRow = -1;
+        }
     }
 
     private class ListAdapter extends RecyclerListView.SelectionAdapter {
@@ -348,6 +384,10 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceShowEntryButtonInfo));
                     } else if (position == passwordInfoRow) {
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpacePinInfo));
+                    } else if (position == sequenceInfoRow) {
+                        privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceSequenceInfo));
+                    } else if (position == pinInSearchInfoRow) {
+                        privacyCell.setText(LocaleController.getString(R.string.PrivateSpacePinInSearchInfo));
                     }
                     break;
                 }
@@ -364,17 +404,30 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                 }
                 case VIEW_SWITCH: {
                     TextCheckCell cell = (TextCheckCell) holder.itemView;
-                    boolean checked = SecondSpaceController.getInstance(currentAccount).isEntryButtonVisible();
-                    cell.setTextAndCheck(LocaleController.getString(R.string.PrivateSpaceShowEntryButton), checked, false);
+                    SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                    if (position == switchRow) {
+                        cell.setTextAndCheck(LocaleController.getString(R.string.PrivateSpaceShowEntryButton), ssc.isEntryButtonVisible(), false);
+                    } else if (position == pinInSearchRow) {
+                        cell.setTextAndCheck(LocaleController.getString(R.string.PrivateSpacePinInSearch), ssc.isPinInSearchEnabled(), false);
+                    }
                     break;
                 }
                 case VIEW_VALUE: {
                     org.telegram.ui.Cells.TextSettingsCell cell = (org.telegram.ui.Cells.TextSettingsCell) holder.itemView;
-                    boolean on = SecondSpaceController.getInstance(currentAccount).hasPassword();
-                    cell.setTextAndValue(
-                            LocaleController.getString(R.string.PrivateSpacePinTitle),
-                            LocaleController.getString(on ? R.string.PrivateSpacePinOn : R.string.PrivateSpacePinOff),
-                            false);
+                    SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                    if (position == passwordRow) {
+                        boolean on = ssc.hasPassword();
+                        cell.setTextAndValue(
+                                LocaleController.getString(R.string.PrivateSpacePinTitle),
+                                LocaleController.getString(on ? R.string.PrivateSpacePinOn : R.string.PrivateSpacePinOff),
+                                false);
+                    } else if (position == sequenceRow) {
+                        int n = ssc.getTabSequence().size();
+                        String value = n == 0
+                                ? LocaleController.getString(R.string.PrivateSpaceSequenceRowOff)
+                                : LocaleController.formatString(R.string.PrivateSpaceSequenceRowOn, n);
+                        cell.setTextAndValue(LocaleController.getString(R.string.PrivateSpaceSequenceTitle), value, false);
+                    }
                     break;
                 }
             }
@@ -392,6 +445,11 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             if (position == passwordShadowRow) return VIEW_SHADOW;
             if (position == passwordRow) return VIEW_VALUE;
             if (position == passwordInfoRow) return VIEW_INFO;
+            if (position == sequenceShadowRow) return VIEW_SHADOW;
+            if (position == sequenceRow) return VIEW_VALUE;
+            if (position == sequenceInfoRow) return VIEW_INFO;
+            if (position == pinInSearchRow) return VIEW_SWITCH;
+            if (position == pinInSearchInfoRow) return VIEW_INFO;
             return VIEW_SHADOW;
         }
 
@@ -404,6 +462,7 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     @Override
     public void onResume() {
         super.onResume();
+        // reloadHiddenIds invokes updateRows + notifyDataSetChanged — also refreshes sequence/PIN labels.
         reloadHiddenIds();
     }
 }

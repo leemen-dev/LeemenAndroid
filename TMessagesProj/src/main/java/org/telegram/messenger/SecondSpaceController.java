@@ -23,6 +23,20 @@ public class SecondSpaceController extends BaseController {
     private static final String PREF_PENDING_OFF_MODE = "second_space_pending_off_mode";
     private static final String PREF_PRIVATE_SEARCHES = "second_space_private_searches";
     private static final String PREF_PASSWORD_HASH = "second_space_password_hash";
+    private static final String PREF_TAB_SEQUENCE = "second_space_tab_sequence";
+    private static final String PREF_PIN_IN_SEARCH = "second_space_pin_in_search";
+    private static final String PREF_SHORTCUT_TESTED = "second_space_shortcut_tested";
+
+    /** A single step in the tab-tap gesture sequence. */
+    public static final class TabStep {
+        public final int tabIndex;
+        public final boolean longPress;
+
+        public TabStep(int tabIndex, boolean longPress) {
+            this.tabIndex = tabIndex;
+            this.longPress = longPress;
+        }
+    }
 
     private static final SecondSpaceController[] Instance = new SecondSpaceController[UserConfig.MAX_ACCOUNT_COUNT];
     private static final Object[] lockObjects = new Object[UserConfig.MAX_ACCOUNT_COUNT];
@@ -53,6 +67,9 @@ public class SecondSpaceController extends BaseController {
     private final Set<Long> pendingOffModeWork = new HashSet<>();
     private final Set<Long> privateSearchDialogs = new HashSet<>();
     private String passwordHash;
+    private final java.util.List<TabStep> tabSequence = new java.util.ArrayList<>();
+    private boolean pinInSearchEnabled;
+    private boolean shortcutTested;
     private boolean active;
 
     private boolean entryButtonVisible;
@@ -85,6 +102,71 @@ public class SecondSpaceController extends BaseController {
             }
         }
         passwordHash = prefs.getString(PREF_PASSWORD_HASH, "");
+        loadTabSequence(prefs.getString(PREF_TAB_SEQUENCE, ""));
+        pinInSearchEnabled = prefs.getBoolean(PREF_PIN_IN_SEARCH, false);
+        shortcutTested = prefs.getBoolean(PREF_SHORTCUT_TESTED, false);
+    }
+
+    private void loadTabSequence(String json) {
+        tabSequence.clear();
+        if (TextUtils.isEmpty(json)) return;
+        try {
+            JSONArray arr = new JSONArray(json);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject obj = arr.getJSONObject(i);
+                tabSequence.add(new TabStep(obj.getInt("t"), obj.getBoolean("l")));
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    public java.util.List<TabStep> getTabSequence() {
+        return Collections.unmodifiableList(tabSequence);
+    }
+
+    public void setTabSequence(java.util.List<TabStep> steps) {
+        tabSequence.clear();
+        if (steps != null) tabSequence.addAll(steps);
+        try {
+            JSONArray arr = new JSONArray();
+            for (TabStep s : tabSequence) {
+                JSONObject o = new JSONObject();
+                o.put("t", s.tabIndex);
+                o.put("l", s.longPress);
+                arr.put(o);
+            }
+            getMessagesController().getMainSettings().edit().putString(PREF_TAB_SEQUENCE, arr.toString()).apply();
+        } catch (Exception ignored) {
+        }
+    }
+
+    public boolean isPinInSearchEnabled() {
+        return pinInSearchEnabled;
+    }
+
+    public void setPinInSearchEnabled(boolean value) {
+        pinInSearchEnabled = value;
+        getMessagesController().getMainSettings().edit().putBoolean(PREF_PIN_IN_SEARCH, value).apply();
+    }
+
+    /**
+     * True once the user has successfully entered Private Space via a configured shortcut
+     * (tap-sequence or PIN-in-search) at least once. Used to keep the explicit Settings
+     * entry button visible as a fallback until the shortcut is verified working.
+     */
+    public boolean isShortcutTested() {
+        return shortcutTested;
+    }
+
+    public void markShortcutTested() {
+        if (!shortcutTested) {
+            shortcutTested = true;
+            getMessagesController().getMainSettings().edit().putBoolean(PREF_SHORTCUT_TESTED, true).apply();
+        }
+    }
+
+    public boolean hasConfiguredShortcut() {
+        return !tabSequence.isEmpty() || pinInSearchEnabled;
     }
 
     // --- Password (PIN) ---
@@ -221,16 +303,18 @@ public class SecondSpaceController extends BaseController {
     }
 
     /**
-     * Toggle visibility of the "Перейти во второе пространство" button in Privacy settings.
-     * Invariant (v01): hiding the button is only allowed when an alternative enter shortcut
-     * (gesture / code word) is configured. Since gestures are not implemented yet, this
-     * always returns false when value=false. Returns true on successful change.
+     * Toggle visibility of the explicit «Enter Private Space» button in main Settings.
+     * Invariants:
+     *   - Hide allowed only when a shortcut (tap-sequence or PIN-in-search) is configured
+     *     AND the user has successfully entered Private Space via that shortcut at least once.
+     *   - Until tested, the button stays visible as a fallback even if the user toggles it off.
+     * Returns true on successful state change, false if invariant blocks.
      */
     public boolean setEntryButtonVisible(boolean value) {
         if (entryButtonVisible == value) {
             return true;
         }
-        if (!value && !hasEnterShortcutConfigured()) {
+        if (!value && !canHideEntryButton()) {
             return false;
         }
         entryButtonVisible = value;
@@ -239,12 +323,19 @@ public class SecondSpaceController extends BaseController {
         return true;
     }
 
-    /**
-     * Always true: long-press on the Chats bottom-tab toggles private space mode (built-in gesture).
-     * Allows hiding the Privacy entry button without losing access.
-     */
+    public boolean canHideEntryButton() {
+        return hasConfiguredShortcut() && shortcutTested;
+    }
+
+    /** Effective visibility, taking the «testing required» override into account. */
+    public boolean isEntryButtonEffectivelyVisible() {
+        // Force visible whenever the user can't legitimately hide it.
+        return entryButtonVisible || !canHideEntryButton();
+    }
+
+    /** Deprecated alias — kept for the older Settings UI path that still calls it. */
     public boolean hasEnterShortcutConfigured() {
-        return true;
+        return hasConfiguredShortcut();
     }
 
     // --- Per-message exposure ---

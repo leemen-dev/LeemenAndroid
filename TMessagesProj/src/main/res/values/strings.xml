@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="AppName">Telegram</string>
-    <string name="AppNameBeta">Telegram Beta</string>
+    <string name="AppName">Leemen Beta</string>
+    <string name="AppNameBeta">Leemen Beta</string>
     <string name="LanguageName">English</string>
     <string name="English">English</string>
     <string name="LanguageNameInEnglish">English</string>
@@ -2359,6 +2359,19 @@
     <string name="PrivateSpacePinTooShort">PIN must be at least %1$d digits.</string>
     <string name="PrivateSpacePinRemoveConfirm">Remove the PIN? Private Space will no longer require a password.</string>
     <string name="PrivateSpaceIntroDescription">Hidden chats stay invisible from the main chat list, search recommendations, notifications, and widgets when Private Space is off. Open settings to add chats now.</string>
+    <string name="PrivateSpaceSequenceTitle">Tap sequence</string>
+    <string name="PrivateSpaceSequenceRowOff">Off</string>
+    <string name="PrivateSpaceSequenceRowOn">%1$d step(s)</string>
+    <string name="PrivateSpaceSequenceInfo">Perform this sequence of bottom tab actions to open Private Space. Each step must follow within 3 seconds of the previous one.</string>
+    <string name="PrivateSpaceSequenceAddStep">Add step</string>
+    <string name="PrivateSpaceSequenceClear">Clear sequence</string>
+    <string name="PrivateSpaceSequencePickTab">Pick a tab</string>
+    <string name="PrivateSpaceSequencePickAction">Pick an action</string>
+    <string name="PrivateSpaceSequenceTap">Tap</string>
+    <string name="PrivateSpaceSequenceLongPress">Long press</string>
+    <string name="PrivateSpaceSequenceRemoveStep">Remove this step from the sequence?</string>
+    <string name="PrivateSpacePinInSearch">PIN in search field</string>
+    <string name="PrivateSpacePinInSearchInfo">When on, typing the PIN into the chat search field opens Private Space.</string>
     <string name="PrivateSpaceEnter">Enter Private Space</string>
     <string name="PrivateSpaceExit">Exit Private Space</string>
     <string name="PrivateSpaceExitTab">Exit</string>
@@ -2375,6 +2388,9 @@
     <string name="PrivateSpaceShowEntryButton">Show entry button in Privacy settings</string>
     <string name="PrivateSpaceShowEntryButtonInfo">When off, enter Private Space by long-pressing the Chats tab at the bottom.</string>
     <string name="PrivateSpaceShowEntryButtonBlocked">Set up an enter shortcut before hiding this button — otherwise you will lose access.</string>
+    <string name="PrivateSpaceShowEntryButtonBlockedNoShortcut">Configure a tap sequence or enable PIN-in-search first — otherwise you will lose access to Private Space.</string>
+    <string name="PrivateSpaceShowEntryButtonBlockedUntested">Open Private Space using your shortcut at least once. Once confirmed working, you can hide this button.</string>
+    <string name="PrivateSpaceSequenceTooShort">A sequence must contain at least one long press, or be at least 3 short taps.</string>
     <string name="PrivateSpaceEmpty">No chats in Private Space yet. Open settings to add them.</string>
     <string name="PrivateSpaceEmptyOpenSettings">Open settings</string>
     <string name="BlockUserMultiTitle">Block User</string>

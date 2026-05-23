@@ -3373,6 +3373,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             @Override
             public void onTextChanged(EditText editText) {
                 String text = editText.getText().toString();
+                if (maybeEnterPrivateSpaceViaSearchPin(text, editText)) {
+                    return;
+                }
                 if (!text.isEmpty() || (searchViewPager != null && searchViewPager.dialogsSearchAdapter != null && searchViewPager.dialogsSearchAdapter.hasRecentSearch()) || searchFiltersWasShowed || hasStories) {
                     searchWas = true;
                     if (!searchIsShowed) {
@@ -10324,6 +10327,37 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             privateSpaceIntroPopupShown = true;
             showPrivateSpaceIntroPopup();
         }
+    }
+
+    /**
+     * If PIN-in-search is enabled and the typed text equals the configured PIN, swallow the
+     * input, clear the field, dismiss search, and trigger Private Space entry. Returns true
+     * when the input was consumed.
+     */
+    private boolean maybeEnterPrivateSpaceViaSearchPin(String text, EditText editText) {
+        if (text == null || text.length() < 4 || text.length() > 6) {
+            return false;
+        }
+        // Numeric only — short-circuit anything that isn't pure digits.
+        for (int i = 0; i < text.length(); i++) {
+            if (!Character.isDigit(text.charAt(i))) {
+                return false;
+            }
+        }
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        if (!ssc.isPinInSearchEnabled() || !ssc.hasPassword() || ssc.isActive()) {
+            return false;
+        }
+        if (!ssc.verifyPassword(text)) {
+            return false;
+        }
+        editText.setText("");
+        if (searchIsShowed) {
+            actionBar.closeSearchField(true);
+        }
+        ssc.markShortcutTested();
+        ssc.setActive(true);
+        return true;
     }
 
     private void showPrivateSpaceIntroPopup() {

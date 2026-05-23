@@ -1137,7 +1137,10 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             return;
         }
         // Off-mode rendering of a chat that lives in private space: strip every visual cue
-        // that would betray unread activity in the cell (badges, bold-name span source, etc).
+        // that could betray activity. Mask is intentionally over-aggressive because
+        // `update()` re-assigns several of these fields BEFORE buildLayout runs (line ~3145
+        // sets `message` from `dialogMessage.get`; line ~3172 sets `lastMessageDate` from
+        // dialog directly). buildLayout calls this method first, so we re-override here.
         draftMessage = null;
         unreadCount = 0;
         markUnread = false;
@@ -1148,6 +1151,16 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         lastUnreadState = false;
         org.telegram.messenger.MessageObject exposed = ssc.getLastExposedMessageCached(currentDialogId);
         message = exposed;
+        // Date column must not leak the real top-message timestamp.
+        if (exposed != null) {
+            lastMessageDate = exposed.messageOwner.date;
+            currentEditDate = exposed.messageOwner.edit_date;
+        } else {
+            lastMessageDate = 0;
+            currentEditDate = 0;
+        }
+        // Suppress story ring / unread story indicator on avatar.
+        storyParams.forceState = org.telegram.ui.Stories.StoriesUtilities.STATE_EMPTY;
     }
 
     public void buildLayout() {
@@ -5956,6 +5969,14 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     }
 
     public MessageObject getMessage() {
+        // Hidden chat rendered off-mode: never expose the real top message to external callers
+        // (e.g. FilteredSearchView click handlers, which would otherwise leak through).
+        if (currentDialogId != 0) {
+            org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+            if (!ssc.isActive() && ssc.isInSecondSpace(currentDialogId)) {
+                return ssc.getLastExposedMessageCached(currentDialogId);
+            }
+        }
         return message;
     }
 

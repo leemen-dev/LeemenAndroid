@@ -688,7 +688,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
         items.add(SettingCell.Factory.of(1, IconBackgroundColors.BLUE.top, IconBackgroundColors.BLUE.bottom, R.drawable.settings_account, getString(R.string.SettingsAccount), getString(R.string.SettingsAccountInfo)));
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        if (!ssc.isActive() && ssc.isEntryButtonVisible()) {
+        if (!ssc.isActive() && ssc.isEntryButtonEffectivelyVisible()) {
             items.add(SettingCell.Factory.of(101, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.msg2_secret, getString(R.string.PrivateSpaceEnter), ""));
         }
         items.add(SettingCell.Factory.of(2, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.settings_chat, getString(R.string.SettingsChat), getString(R.string.SettingsChatInfo)));
