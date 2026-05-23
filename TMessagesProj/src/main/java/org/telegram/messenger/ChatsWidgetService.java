@@ -395,6 +395,18 @@ class ChatsRemoteViewsFactory implements RemoteViewsService.RemoteViewsFactory {
         accountInstance.getMessagesStorage().getWidgetDialogs(appWidgetId, 0, dids, dialogs, messages, users, chats);
         accountInstance.getMessagesController().putUsers(users, true);
         accountInstance.getMessagesController().putChats(chats, true);
+        // Always strip private-space chats from home-screen widgets — these are visible
+        // outside the app and have no notion of active/off mode.
+        SecondSpaceController ssc = SecondSpaceController.getInstance(accountInstance.getCurrentAccount());
+        if (!ssc.getDialogIds().isEmpty()) {
+            for (int i = dids.size() - 1; i >= 0; i--) {
+                if (ssc.isInSecondSpace(dids.get(i))) {
+                    dialogs.remove(dids.get(i));
+                    messages.remove(dids.get(i));
+                    dids.remove(i);
+                }
+            }
+        }
         messageObjects.clear();
         for (int a = 0, N = messages.size(); a < N; a++) {
             MessageObject messageObject = new MessageObject(accountInstance.getCurrentAccount(), messages.valueAt(a), (LongSparseArray<TLRPC.User>) null, null, false, true);

@@ -10951,15 +10951,22 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             return raw;
         }
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        // Asymmetric filter (per plan): active mode shows everything (private + regular);
-        // off mode hides private chats unless they have exposed messages.
-        if (ssc.isActive() || ssc.getDialogIds().isEmpty()) {
+        if (ssc.getDialogIds().isEmpty()) {
             return raw;
         }
-        // Inside the archive view (this fragment is archive itself) hidden chats stay visible,
-        // DialogCell.applyPrivateSpaceMaskBeforeBuild strips their preview/counter/badges.
-        if (folderId == 1) {
-            return raw;
+        // Widget picker: ALWAYS strip private-space chats — widgets live on the home screen
+        // and any selection there is permanently visible outside the app.
+        if (initialDialogsType != DIALOGS_TYPE_WIDGET) {
+            // Asymmetric filter (per plan): active mode shows everything (private + regular);
+            // off mode hides private chats unless they have exposed messages.
+            if (ssc.isActive()) {
+                return raw;
+            }
+            // Inside the archive view (this fragment is archive itself) hidden chats stay visible,
+            // DialogCell.applyPrivateSpaceMaskBeforeBuild strips their preview/counter/badges.
+            if (folderId == 1) {
+                return raw;
+            }
         }
         ArrayList<TLRPC.Dialog> filtered = new ArrayList<>(raw.size());
         for (int i = 0; i < raw.size(); i++) {

@@ -287,7 +287,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
         return getVisibleHintsForAccount(currentAccount);
     }
 
-    static java.util.List<TLRPC.TL_topPeer> getVisibleHintsForAccount(int account) {
+    public static java.util.List<TLRPC.TL_topPeer> getVisibleHintsForAccount(int account) {
         java.util.List<TLRPC.TL_topPeer> all = MediaDataController.getInstance(account).hints;
         org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(account);
         if (ssc.isActive() || ssc.getDialogIds().isEmpty()) {
@@ -887,6 +887,14 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
         recentSearchObject.did = did;
         recentSearchObject.object = object;
         recentSearchObject.date = (int) (System.currentTimeMillis() / 1000);
+        // Mode-scope the entry: a search performed inside private space stays in private-only
+        // recents; the same dialog searched in off mode demotes the mark and becomes shared.
+        org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+        if (ssc.isActive()) {
+            ssc.markPrivateSearch(did);
+        } else {
+            ssc.unmarkPrivateSearch(did);
+        }
         filterRecent(lastSearchText != null ? lastSearchText.trim() : null);
         notifyDataSetChanged();
         MessagesStorage.getInstance(currentAccount).getStorageQueue().postRunnable(() -> {
@@ -2379,7 +2387,8 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 if (delegate != null && delegate.getSearchForumDialogId() == recentSearchObjects.get(i).did || !filter(recentSearchObjects.get(i).object)) {
                     continue;
                 }
-                if (!ssActive && ssc.isInSecondSpace(recentSearchObjects.get(i).did) && !ssc.hasExposedMessages(recentSearchObjects.get(i).did)) {
+                // Mode-scoped recents: searches performed inside private space stay there.
+                if (!ssActive && ssc.isPrivateSearchOnly(recentSearchObjects.get(i).did)) {
                     continue;
                 }
                 filteredRecentSearchObjects.add(recentSearchObjects.get(i));
@@ -2396,7 +2405,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
             if (delegate != null && delegate.getSearchForumDialogId() == obj.did || !filter(recentSearchObjects.get(i).object)) {
                 continue;
             }
-            if (!ssActive && ssc.isInSecondSpace(obj.did) && !ssc.hasExposedMessages(obj.did)) {
+            if (!ssActive && ssc.isPrivateSearchOnly(obj.did)) {
                 continue;
             }
             String title = null, username = null;

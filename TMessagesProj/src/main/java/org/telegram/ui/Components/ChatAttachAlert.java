@@ -6261,7 +6261,7 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
 
                     position -= buttonsCount;
                     child.setTag(position);
-                    child.setUser(MessagesController.getInstance(currentAccount).getUser(MediaDataController.getInstance(currentAccount).inlineBots.get(position).peer.user_id));
+                    child.setUser(MessagesController.getInstance(currentAccount).getUser(getVisibleInlineBots().get(position).peer.user_id));
                     break;
             }
         }
@@ -6280,9 +6280,27 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
         public int getItemCount() {
             int count = buttonsCount;
             if (editingMessageObject == null && baseFragment instanceof ChatActivity && !isPollAttach) {
-                count += MediaDataController.getInstance(currentAccount).inlineBots.size();
+                count += getVisibleInlineBots().size();
             }
             return count;
+        }
+
+        private java.util.List<TLRPC.TL_topPeer> getVisibleInlineBots() {
+            // Hide private-space bots from quick-recommendations in attach panel; reachable via explicit search only.
+            java.util.List<TLRPC.TL_topPeer> all = MediaDataController.getInstance(currentAccount).inlineBots;
+            org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+            if (ssc.isActive() || ssc.getDialogIds().isEmpty()) {
+                return all;
+            }
+            java.util.ArrayList<TLRPC.TL_topPeer> filtered = new java.util.ArrayList<>(all.size());
+            for (int i = 0, N = all.size(); i < N; i++) {
+                TLRPC.TL_topPeer peer = all.get(i);
+                if (peer == null || peer.peer == null) continue;
+                long did = peer.peer.user_id;
+                if (did != 0 && ssc.isInSecondSpace(did)) continue;
+                filtered.add(peer);
+            }
+            return filtered;
         }
 
         @Override
