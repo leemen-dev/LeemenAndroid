@@ -3825,7 +3825,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
             for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
                 TLRPC.User u = AccountInstance.getInstance(a).getUserConfig().getCurrentUser();
-                if (u != null) {
+                if (u != null && !org.telegram.messenger.SecondSpaceController.isHiddenFromSelectedAccount(a)) {
                     AccountSelectCell cell = new AccountSelectCell(context, false);
                     cell.setAccount(a, true);
                     switchItem.addSubItem(10 + a, cell, dp(230), dp(48));
@@ -11020,7 +11020,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             if (d == null) {
                 continue;
             }
-            if (!ssc.isInSecondSpace(d.id) || ssc.hasExposedMessages(d.id)) {
+            // In off-mode, hidden chats are visible iff they have either exposed messages
+            // (decided to be visible outside) or pending off-mode work (user just sent a
+            // message via search and hasn't been prompted yet — must remain reachable).
+            if (!ssc.isInSecondSpace(d.id) || ssc.hasExposedMessages(d.id) || ssc.hasPendingOffModeWork(d.id)) {
                 filtered.add(d);
             }
         }

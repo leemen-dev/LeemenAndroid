@@ -124,6 +124,7 @@ import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.OpenAttachedMenuBotReceiver;
 import org.telegram.messenger.PushListenerController;
 import org.telegram.messenger.R;
+import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.SharedPrefsHelper;
@@ -364,6 +365,12 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     };
 
     private FlagSecureReason flagSecureReason;
+    private boolean pendingSecureSnapshot;
+
+    /** Public hook for SecondSpaceController.setActive — toggles FLAG_SECURE immediately on PS on/off. */
+    public void invalidateFlagSecure() {
+        if (flagSecureReason != null) flagSecureReason.invalidate();
+    }
     private final LiteMode.BatteryReceiver batteryReceiver = new LiteMode.BatteryReceiver();
     private WindowAnimatedInsetsProvider rootAnimatedInsetsListener;
 
@@ -415,7 +422,19 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
         }
         getWindow().setBackgroundDrawableResource(R.drawable.transparent);
-        flagSecureReason = new FlagSecureReason(getWindow(), () -> SharedConfig.passcodeHash.length() > 0 && !SharedConfig.allowScreenCapture);
+        flagSecureReason = new FlagSecureReason(getWindow(), () -> {
+            if (SharedConfig.passcodeHash.length() > 0 && !SharedConfig.allowScreenCapture) return true;
+            // Keep window secure while any account is in Private Space, AND across the onPause-snapshot
+            // window (so the recents thumbnail captured during backgrounding is blank, not PS content).
+            if (pendingSecureSnapshot) return true;
+            for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                if (UserConfig.getInstance(a).isClientActivated()
+                        && SecondSpaceController.getInstance(a).isActive()) {
+                    return true;
+                }
+            }
+            return false;
+        });
         flagSecureReason.attach();
 
         super.onCreate(savedInstanceState);
@@ -1162,7 +1181,39 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         if (account == UserConfig.selectedAccount || !UserConfig.isValidAccount(account)) {
             return;
         }
+        SecondSpaceController targetSsc = SecondSpaceController.getInstance(account);
+        if (targetSsc.hasEntryPassword()) {
+            PrivateSpacePinDialog.showEnterAccountPassword(
+                this,
+                account,
+                () -> doSwitchToAccountInternal(account, removeAll, dialogsActivityProvider),
+                null
+            );
+            return;
+        }
+        doSwitchToAccountInternal(account, removeAll, dialogsActivityProvider);
+    }
+
+    private void doSwitchToAccountInternal(int account, boolean removeAll, GenericProvider<Void, MainTabsActivity> dialogsActivityProvider) {
+        if (account == UserConfig.selectedAccount || !UserConfig.isValidAccount(account)) {
+            return;
+        }
         switchingAccount = true;
+
+        // Outgoing-account Private Space auto-exit on switch (deniability requirement).
+        int outgoing = UserConfig.selectedAccount;
+        SecondSpaceController.getInstance(outgoing).setActive(false);
+        // Refresh per-account tray visibility against the NEW selected account's hide-list.
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            if (a == account) continue;
+            if (!UserConfig.getInstance(a).isClientActivated()) continue;
+            SecondSpaceController ns = SecondSpaceController.getInstance(account);
+            if (!ns.isActive() && ns.isAccountHidden(a)) {
+                org.telegram.messenger.NotificationsController.getInstance(a).hideNotifications();
+            } else {
+                org.telegram.messenger.NotificationsController.getInstance(a).showNotifications();
+            }
+        }
 
         ConnectionsManager.getInstance(currentAccount).setAppPaused(true, false);
         UserConfig.selectedAccount = account;
@@ -1200,6 +1251,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             showTosActivity(account, UserConfig.getInstance(account).unacceptedTermsOfService);
         }
         updateCurrentConnectionState(currentAccount);
+        org.telegram.messenger.NotificationsController.getInstance(account).updateBadge();
 
         switchingAccount = false;
     }
@@ -6586,6 +6638,21 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         super.onPause();
         isResumed = false;
         // Auto-exit Private Space on focus loss for any activated account — deniability requirement.
+        // FLAG_SECURE must remain on through the recents snapshot to prevent a PS preview leak: we
+        // arm pendingSecureSnapshot BEFORE clearing active so the lambda keeps returning true even
+        // after each setActive(false) call invalidates the secure reason. Cleared on resume.
+        boolean anyWasActive = false;
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            if (UserConfig.getInstance(a).isClientActivated()
+                    && SecondSpaceController.getInstance(a).isActive()) {
+                anyWasActive = true;
+                break;
+            }
+        }
+        if (anyWasActive) {
+            pendingSecureSnapshot = true;
+            if (flagSecureReason != null) flagSecureReason.invalidate();
+        }
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (UserConfig.getInstance(a).isClientActivated()) {
                 org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(a);
@@ -6803,6 +6870,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     protected void onResume() {
         super.onResume();
         isResumed = true;
+        if (pendingSecureSnapshot) {
+            pendingSecureSnapshot = false;
+            if (flagSecureReason != null) flagSecureReason.invalidate();
+        }
         pipActivityHandler.onResume();
         if (onResumeStaticCallback != null) {
             onResumeStaticCallback.run();

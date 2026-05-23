@@ -1171,6 +1171,8 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_ABOUT_REVENUE_SHARING_ADS = 33;
     public final static int OPTION_REPORT_AD = 34;
     public final static int OPTION_REMOVE_ADS = 35;
+    public final static int OPTION_PRIVATE_SPACE_EXPOSE = 36;
+    public final static int OPTION_PRIVATE_SPACE_HIDE = 37;
     public final static int OPTION_SEND_NOW = 100;
     public final static int OPTION_EDIT_SCHEDULE_TIME = 102;
     public final static int OPTION_SPEED_PROMO = 103;
@@ -20179,16 +20181,27 @@ public class ChatActivity extends BaseFragment implements
     }
 
     private void enterExposureSelectionMode(ArrayList<Integer> idSnapshot, ArrayList<MessageObject> msgSnapshot) {
-        // Add each candidate to the existing multi-select set; the action bar will
-        // enter action mode automatically on the first selected message.
+        // Collect valid candidates first so we can pass last=true on the final addToSelectedMessages
+        // (so its action-mode-show/refresh branch runs exactly once at the end).
+        ArrayList<MessageObject> valid = new ArrayList<>(idSnapshot.size());
         for (int i = 0; i < idSnapshot.size(); i++) {
             int id = idSnapshot.get(i);
             MessageObject mo = i < msgSnapshot.size() ? msgSnapshot.get(i) : null;
             if (mo == null) continue;
             int idx = mo.getDialogId() == mergeDialogId ? 1 : 0;
             if (selectedMessagesIds[idx].indexOfKey(id) < 0) {
-                addToSelectedMessages(mo, true, false);
+                valid.add(mo);
             }
+        }
+        if (valid.isEmpty()) {
+            return;
+        }
+        // Explicitly enter Telegram's action mode (the same code path long-press uses), otherwise
+        // addToSelectedMessages would do nothing visible until the user manually long-pressed something.
+        createActionMode();
+        actionBar.showActionMode(true, null, null, null, null, null, 0);
+        for (int i = 0; i < valid.size(); i++) {
+            addToSelectedMessages(valid.get(i), true, i == valid.size() - 1);
         }
         updateVisibleRows();
     }
@@ -33475,6 +33488,25 @@ public class ChatActivity extends BaseFragment implements
                 hideAds();
                 break;
             }
+            case OPTION_PRIVATE_SPACE_EXPOSE: {
+                SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                int mid = selectedObject.getId();
+                ssc.exposeMessage(dialog_id, mid);
+                ssc.setLastDecidedMessageId(dialog_id, mid);
+                privateSpaceExposurePending.remove(mid);
+                if (privateSpaceExposurePending.isEmpty()) {
+                    ssc.clearPendingOffModeWork(dialog_id);
+                }
+                updateVisibleRows();
+                break;
+            }
+            case OPTION_PRIVATE_SPACE_HIDE: {
+                SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                int mid = selectedObject.getId();
+                ssc.unexposeMessage(dialog_id, mid);
+                updateVisibleRows();
+                break;
+            }
             case OPTION_SPEED_PROMO: {
                 showDialog(new PremiumFeatureBottomSheet(ChatActivity.this, PremiumPreviewFragment.PREMIUM_FEATURE_DOWNLOAD_SPEED, true));
                 break;
@@ -34087,7 +34119,16 @@ public class ChatActivity extends BaseFragment implements
                 if (cell != scrimView) {
                     cell.setCheckPressed(!disableSelection, disableSelection && selected);
                 }
-                cell.setHighlighted(highlightMessageId != Integer.MAX_VALUE && messageObject != null && messageObject.getId() == highlightMessageId);
+                {
+                    boolean searchHighlight = highlightMessageId != Integer.MAX_VALUE && messageObject != null && messageObject.getId() == highlightMessageId;
+                    // Persistent highlight for messages exposed outside Private Space, only when user is in PS-on:
+                    // visually flags "leak surface" so the user immediately sees which messages are visible off-mode.
+                    SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                    boolean psExposedHighlight = ssc.isActive()
+                            && messageObject != null
+                            && ssc.isMessageExposed(dialog_id, messageObject.getId());
+                    cell.setHighlighted(searchHighlight || psExposedHighlight);
+                }
                 if (highlightMessageId != Integer.MAX_VALUE) {
                     startMessageUnselect();
                 }
@@ -45044,6 +45085,21 @@ public class ChatActivity extends BaseFragment implements
                 items.add(LocaleController.getString(chatMode == MODE_SAVED && threadMessageId != getUserConfig().getClientUserId() ? R.string.Remove : R.string.Delete));
                 options.add(OPTION_DELETE);
                 icons.add(deleteIconRes);
+            }
+        }
+        // Private Space per-message exposure controls. Only meaningful when the chat itself
+        // is in Private Space and the user is currently in PS-on (decisions only happen here).
+        SecondSpaceController psCtrl = SecondSpaceController.getInstance(currentAccount);
+        if (psCtrl.isActive() && psCtrl.isInSecondSpace(dialog_id)
+                && selectedObject != null && selectedObject.getId() > 0) {
+            if (psCtrl.isMessageExposed(dialog_id, selectedObject.getId())) {
+                items.add(LocaleController.getString(R.string.PrivateSpaceExposureHide));
+                options.add(OPTION_PRIVATE_SPACE_HIDE);
+                icons.add(R.drawable.msg_secret);
+            } else {
+                items.add(LocaleController.getString(R.string.PrivateSpaceExposureActionShort));
+                options.add(OPTION_PRIVATE_SPACE_EXPOSE);
+                icons.add(R.drawable.msg_seen);
             }
         }
     }

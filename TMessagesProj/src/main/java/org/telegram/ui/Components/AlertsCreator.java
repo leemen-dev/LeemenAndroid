@@ -7267,7 +7267,7 @@ public class AlertsCreator {
         linearLayout.setOrientation(LinearLayout.VERTICAL);
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             TLRPC.User u = UserConfig.getInstance(a).getCurrentUser();
-            if (u != null) {
+            if (u != null && !org.telegram.messenger.SecondSpaceController.isHiddenFromSelectedAccount(a)) {
                 AccountSelectCell cell = new AccountSelectCell(parentActivity, false);
                 cell.setAccount(a, false);
                 cell.setPadding(dp(14), 0, dp(14), 0);

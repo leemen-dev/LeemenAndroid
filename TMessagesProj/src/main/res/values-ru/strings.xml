@@ -298,6 +298,14 @@
     <string name="PrivateSpacePinMismatch">PIN-коды не совпадают.</string>
     <string name="PrivateSpacePinTooShort">PIN должен содержать минимум %1$d цифр.</string>
     <string name="PrivateSpacePinRemoveConfirm">Удалить PIN? Скрытое пространство перестанет требовать пароль.</string>
+    <string name="HiddenAccountEntryPasswordTitle">Пароль аккаунта</string>
+    <string name="HiddenAccountEntryPasswordInfo">Если включено, переход в этот аккаунт из другого потребует ввода пароля. Пароль не связан с PIN-кодом скрытого пространства.</string>
+    <string name="HiddenAccountEntryPasswordRemoveConfirm">Удалить пароль аккаунта? Переход в этот аккаунт перестанет требовать пароль.</string>
+    <string name="HiddenAccountEnterPasswordTitle">Введите пароль аккаунта</string>
+    <string name="HiddenAccountWrongPassword">Неверный пароль. Попробуйте ещё раз.</string>
+    <string name="HiddenAccountsListTitle">Скрыть другие аккаунты</string>
+    <string name="HiddenAccountsListInfo">Выбранные аккаунты не будут видны в переключателе пока скрытое пространство выключено. Их уведомления и счётчик отключаются. Они снова появятся когда вы войдёте в скрытое пространство.</string>
+    <string name="PrivateSpaceExposureHide">Скрыть снаружи</string>
     <string name="PrivateSpacePinInSearch">PIN в поле поиска</string>
     <string name="PrivateSpacePinInSearchInfo">Если включено, ввод PIN в строку поиска чатов открывает скрытое пространство.</string>
     <string name="PrivateSpacePinTimeoutTitle">Запоминать PIN</string>

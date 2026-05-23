@@ -125,6 +125,110 @@ public final class PrivateSpacePinDialog {
         focus(field1);
     }
 
+    /**
+     * Prompt for the account-entry password (per-account gate guarding switch INTO this account).
+     * If the target account has no entry password, runs onSuccess immediately. If user cancels,
+     * onCancel runs (may be null).
+     */
+    public static void showEnterAccountPassword(Context context, int targetAccount, Runnable onSuccess, Runnable onCancel) {
+        SecondSpaceController ssc = SecondSpaceController.getInstance(targetAccount);
+        if (!ssc.hasEntryPassword()) {
+            if (onSuccess != null) onSuccess.run();
+            return;
+        }
+        AlertDialog.Builder builder = baseBuilder(context, R.string.HiddenAccountEnterPasswordTitle);
+        EditText field = newPinField(context);
+        TextView error = new TextView(context);
+        error.setTextSize(13);
+        error.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
+        error.setVisibility(TextView.GONE);
+        LinearLayout container = wrap(context, field, error);
+        builder.setView(container);
+
+        AlertDialog[] alertRef = new AlertDialog[1];
+        boolean[] succeeded = {false};
+        Runnable submit = () -> {
+            String pin = field.getText().toString();
+            if (ssc.verifyEntryPassword(pin)) {
+                succeeded[0] = true;
+                if (alertRef[0] != null) alertRef[0].dismiss();
+                if (onSuccess != null) onSuccess.run();
+            } else {
+                error.setText(LocaleController.getString(R.string.HiddenAccountWrongPassword));
+                error.setVisibility(TextView.VISIBLE);
+                field.setText("");
+                AndroidUtilities.shakeView(field);
+            }
+        };
+        field.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                submit.run();
+                return true;
+            }
+            return false;
+        });
+        builder.setPositiveButton(LocaleController.getString(R.string.PrivateSpacePinEnter), null);
+        builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        builder.setOnDismissListener(d -> {
+            if (!succeeded[0] && onCancel != null) onCancel.run();
+        });
+        AlertDialog alert = builder.create();
+        alertRef[0] = alert;
+        alert.show();
+        alert.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> submit.run());
+        focus(field);
+    }
+
+    /** Prompt to set/change the account entry password (two-field confirmation). */
+    public static void showSetAccountPassword(Context context, int targetAccount, Runnable onSuccess) {
+        SecondSpaceController ssc = SecondSpaceController.getInstance(targetAccount);
+        AlertDialog.Builder builder = baseBuilder(context, R.string.HiddenAccountEntryPasswordTitle);
+        EditText field1 = newPinField(context);
+        EditText field2 = newPinField(context);
+        field2.setImeOptions(EditorInfo.IME_ACTION_DONE);
+        TextView error = new TextView(context);
+        error.setTextSize(13);
+        error.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
+        error.setVisibility(TextView.GONE);
+        LinearLayout container = wrap(context, field1, field2, error);
+        builder.setView(container);
+
+        AlertDialog[] alertRef = new AlertDialog[1];
+        Runnable submit = () -> {
+            String pin1 = field1.getText().toString();
+            String pin2 = field2.getText().toString();
+            if (pin1.length() < MIN_LEN) {
+                error.setText(LocaleController.formatString("PrivateSpacePinTooShort", R.string.PrivateSpacePinTooShort, MIN_LEN));
+                error.setVisibility(TextView.VISIBLE);
+                AndroidUtilities.shakeView(field1);
+                return;
+            }
+            if (!pin1.equals(pin2)) {
+                error.setText(LocaleController.getString(R.string.PrivateSpacePinMismatch));
+                error.setVisibility(TextView.VISIBLE);
+                AndroidUtilities.shakeView(field2);
+                return;
+            }
+            ssc.setEntryPassword(pin1);
+            if (alertRef[0] != null) alertRef[0].dismiss();
+            if (onSuccess != null) onSuccess.run();
+        };
+        field2.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                submit.run();
+                return true;
+            }
+            return false;
+        });
+        builder.setPositiveButton(LocaleController.getString(R.string.Save), null);
+        builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        AlertDialog alert = builder.create();
+        alertRef[0] = alert;
+        alert.show();
+        alert.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> submit.run());
+        focus(field1);
+    }
+
     /** Prompt to remove the current PIN — requires entering the current PIN. */
     public static void showRemove(Context context, int currentAccount, Runnable onSuccess) {
         showEnter(context, currentAccount, () -> {
