@@ -847,8 +847,8 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             ssc.markShortcutTested();
             ssc.setActive(true);
         };
-        if (ssc.hasPassword() && getParentActivity() != null) {
-            PrivateSpacePinDialog.showEnter(getParentActivity(), currentAccount, enter);
+        if (ssc.hasPassword() && !ssc.isPinPromptSkippable()) {
+            presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_ENTER).setOnSuccess(enter));
         } else {
             enter.run();
         }

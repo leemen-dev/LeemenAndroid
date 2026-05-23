@@ -105,10 +105,22 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
     }
 
     @Override
+    public boolean onBackPressed(boolean invoked) {
+        // Route system back through saveAndFinish so the same confirmation flow (validation
+        // warning + "test your shortcut" reminder) fires whether the user taps the toolbar
+        // back arrow OR uses the hardware/gesture back. Without this, system-back used to
+        // silently close, giving the impression that changes weren't applied.
+        if (invoked) {
+            saveAndFinish();
+            return false; // don't auto-close — saveAndFinish handles closing
+        }
+        return super.onBackPressed(invoked);
+    }
+
+    @Override
     public void onFragmentClosed() {
-        // Persist on any close path (back press, swipe back, or programmatic).
-        // Validation: empty sequence is fine (= no shortcut). Otherwise must contain at least
-        // one long-press OR be at least 3 short taps. If invalid, persist an empty sequence.
+        // Safety net for code paths that bypass saveAndFinish (programmatic close, force-finish,
+        // process death recovery). Persists current state — invalid sequence becomes empty.
         if (!isValidSequence(steps)) {
             SecondSpaceController.getInstance(currentAccount).setTabSequence(new ArrayList<>());
         } else {

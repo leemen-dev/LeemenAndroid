@@ -163,6 +163,7 @@ public class SecondSpaceController extends BaseController {
     }
 
     public void setTabSequence(java.util.List<TabStep> steps) {
+        boolean changed = !sameSequence(tabSequence, steps);
         tabSequence.clear();
         if (steps != null) tabSequence.addAll(steps);
         try {
@@ -176,6 +177,22 @@ public class SecondSpaceController extends BaseController {
             getMessagesController().getMainSettings().edit().putString(PREF_TAB_SEQUENCE, arr.toString()).apply();
         } catch (Exception ignored) {
         }
+        // Entry method changed → user must re-verify before the entry button can be hidden.
+        if (changed) {
+            clearShortcutTested();
+        }
+    }
+
+    private static boolean sameSequence(java.util.List<TabStep> a, java.util.List<TabStep> b) {
+        int an = a == null ? 0 : a.size();
+        int bn = b == null ? 0 : b.size();
+        if (an != bn) return false;
+        for (int i = 0; i < an; i++) {
+            TabStep sa = a.get(i);
+            TabStep sb = b.get(i);
+            if (sa.tabIndex != sb.tabIndex || sa.longPress != sb.longPress) return false;
+        }
+        return true;
     }
 
     public boolean isPinInSearchEnabled() {
@@ -183,8 +200,12 @@ public class SecondSpaceController extends BaseController {
     }
 
     public void setPinInSearchEnabled(boolean value) {
+        boolean changed = pinInSearchEnabled != value;
         pinInSearchEnabled = value;
         getMessagesController().getMainSettings().edit().putBoolean(PREF_PIN_IN_SEARCH, value).apply();
+        if (changed) {
+            clearShortcutTested();
+        }
     }
 
     /**
@@ -201,6 +222,23 @@ public class SecondSpaceController extends BaseController {
             shortcutTested = true;
             getMessagesController().getMainSettings().edit().putBoolean(PREF_SHORTCUT_TESTED, true).apply();
         }
+    }
+
+    /**
+     * Reset the "verified" flag — called whenever entry methods change (PIN set/removed,
+     * sequence updated, PIN-in-search toggled). Forces the explicit entry button back to
+     * visible until user successfully enters via the new method. Fires
+     * {@link NotificationCenter#secondSpaceModeChanged} so dependent UI rebinds.
+     * Returns true if the flag actually changed (was true and got reset).
+     */
+    public boolean clearShortcutTested() {
+        if (shortcutTested) {
+            shortcutTested = false;
+            getMessagesController().getMainSettings().edit().putBoolean(PREF_SHORTCUT_TESTED, false).apply();
+            getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceModeChanged);
+            return true;
+        }
+        return false;
     }
 
     public boolean hasConfiguredShortcut() {
@@ -221,10 +259,16 @@ public class SecondSpaceController extends BaseController {
 
     /** Pass empty/null to clear. */
     public void setPassword(String pin) {
-        passwordHash = TextUtils.isEmpty(pin) ? "" : hashPassword(pin);
+        String newHash = TextUtils.isEmpty(pin) ? "" : hashPassword(pin);
+        boolean changed = !newHash.equals(passwordHash);
+        passwordHash = newHash;
         getMessagesController().getMainSettings().edit().putString(PREF_PASSWORD_HASH, passwordHash).apply();
         // PIN changed → invalidate any cached «recently verified» state.
         clearPinVerified();
+        // Entry method changed → user must re-verify before the entry button can be hidden.
+        if (changed) {
+            clearShortcutTested();
+        }
     }
 
     private static String hashPassword(String pin) {
