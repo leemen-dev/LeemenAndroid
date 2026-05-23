@@ -22,6 +22,7 @@ public class SecondSpaceController extends BaseController {
     private static final String PREF_SHOW_ENTRY_BUTTON = "second_space_show_entry_button";
     private static final String PREF_PENDING_OFF_MODE = "second_space_pending_off_mode";
     private static final String PREF_PRIVATE_SEARCHES = "second_space_private_searches";
+    private static final String PREF_PASSWORD_HASH = "second_space_password_hash";
 
     private static final SecondSpaceController[] Instance = new SecondSpaceController[UserConfig.MAX_ACCOUNT_COUNT];
     private static final Object[] lockObjects = new Object[UserConfig.MAX_ACCOUNT_COUNT];
@@ -51,6 +52,7 @@ public class SecondSpaceController extends BaseController {
     private final Map<Long, MessageObject> lastExposedMessageCache = new HashMap<>();
     private final Set<Long> pendingOffModeWork = new HashSet<>();
     private final Set<Long> privateSearchDialogs = new HashSet<>();
+    private String passwordHash;
     private boolean active;
 
     private boolean entryButtonVisible;
@@ -81,6 +83,39 @@ public class SecondSpaceController extends BaseController {
                 } catch (NumberFormatException ignored) {
                 }
             }
+        }
+        passwordHash = prefs.getString(PREF_PASSWORD_HASH, "");
+    }
+
+    // --- Password (PIN) ---
+
+    public boolean hasPassword() {
+        return !TextUtils.isEmpty(passwordHash);
+    }
+
+    public boolean verifyPassword(String pin) {
+        if (pin == null) return false;
+        if (!hasPassword()) return true;
+        return hashPassword(pin).equals(passwordHash);
+    }
+
+    /** Pass empty/null to clear. */
+    public void setPassword(String pin) {
+        passwordHash = TextUtils.isEmpty(pin) ? "" : hashPassword(pin);
+        getMessagesController().getMainSettings().edit().putString(PREF_PASSWORD_HASH, passwordHash).apply();
+    }
+
+    private static String hashPassword(String pin) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] bytes = md.digest(pin.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            return pin;
         }
     }
 

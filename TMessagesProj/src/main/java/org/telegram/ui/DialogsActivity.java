@@ -604,6 +604,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private ActiveGiftAuctionsHintCell activeGiftAuctionsHintCell;
     private DialogsHintCell dialogsHintCell;
     private DialogsHintCell privateSpaceEmptyHintCell;
+    private boolean privateSpaceIntroPopupShown;
     private UnconfirmedAuthHintCell authHintCell;
     private Long cacheSize, deviceSize;
 
@@ -10319,6 +10320,22 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (privateSpaceEmptyHintCell != null) {
             topPanelLayout.setViewVisible(privateSpaceEmptyHintCell, show);
         }
+        if (show && !privateSpaceIntroPopupShown) {
+            privateSpaceIntroPopupShown = true;
+            showPrivateSpaceIntroPopup();
+        }
+    }
+
+    private void showPrivateSpaceIntroPopup() {
+        if (getParentActivity() == null) {
+            return;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
+        builder.setTitle(LocaleController.getString(R.string.PrivateSpaceTitle));
+        builder.setMessage(LocaleController.getString(R.string.PrivateSpaceIntroDescription));
+        builder.setPositiveButton(LocaleController.getString(R.string.PrivateSpaceAddChat), (d, w) -> presentFragment(new SecondSpaceSettingsActivity()));
+        builder.setNegativeButton(LocaleController.getString(R.string.OK), null);
+        builder.show();
     }
 
     @SuppressWarnings("unchecked")
