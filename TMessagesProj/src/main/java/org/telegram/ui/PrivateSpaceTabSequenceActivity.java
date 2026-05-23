@@ -1,0 +1,339 @@
+package org.telegram.ui;
+
+import android.content.Context;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.R;
+import org.telegram.messenger.SecondSpaceController;
+import org.telegram.ui.ActionBar.ActionBar;
+import org.telegram.ui.ActionBar.AlertDialog;
+import org.telegram.ui.ActionBar.BaseFragment;
+import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.Cells.HeaderCell;
+import org.telegram.ui.Cells.ManageChatTextCell;
+import org.telegram.ui.Cells.ShadowSectionCell;
+import org.telegram.ui.Cells.TextInfoPrivacyCell;
+import org.telegram.ui.Cells.TextSettingsCell;
+import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.RecyclerListView;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/** Builder UI for the tab-tap sequence that opens Private Space. */
+public class PrivateSpaceTabSequenceActivity extends BaseFragment {
+
+    private static final int VIEW_HEADER = 0;
+    private static final int VIEW_STEP = 1;
+    private static final int VIEW_ADD = 2;
+    private static final int VIEW_INFO = 3;
+    private static final int VIEW_SHADOW = 4;
+    private static final int VIEW_CLEAR = 5;
+
+    // Tab indexes mirror MainTabsActivity ordering — keep in sync.
+    private static final int INDEX_CHATS = 0;
+    private static final int INDEX_CONTACTS = 1;
+    private static final int INDEX_SETTINGS = 2;
+    private static final int INDEX_CALLS = 3;
+    private static final int INDEX_PROFILE = 4;
+
+    private RecyclerListView listView;
+    private ListAdapter adapter;
+    private final ArrayList<SecondSpaceController.TabStep> steps = new ArrayList<>();
+
+    private int rowHeader;
+    private int rowStepStart;
+    private int rowStepEnd;
+    private int rowAdd;
+    private int rowInfo;
+    private int rowShadow;
+    private int rowClear;
+    private int rowCount;
+
+    @Override
+    public boolean onFragmentCreate() {
+        if (!SecondSpaceController.getInstance(currentAccount).isActive()) {
+            return false;
+        }
+        steps.addAll(SecondSpaceController.getInstance(currentAccount).getTabSequence());
+        return super.onFragmentCreate();
+    }
+
+    @Override
+    public View createView(Context context) {
+        actionBar.setBackButtonImage(R.drawable.ic_ab_back);
+        actionBar.setAllowOverlayTitle(true);
+        actionBar.setTitle(LocaleController.getString(R.string.PrivateSpaceSequenceTitle));
+        actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
+            @Override
+            public void onItemClick(int id) {
+                if (id == -1) {
+                    saveAndFinish();
+                }
+            }
+        });
+
+        FrameLayout frame = new FrameLayout(context);
+        frame.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray));
+        fragmentView = frame;
+
+        listView = new RecyclerListView(context);
+        listView.setLayoutManager(new LinearLayoutManager(context));
+        listView.setAdapter(adapter = new ListAdapter(context));
+        listView.setOnItemClickListener((view, position) -> {
+            if (position == rowAdd) {
+                showAddStepDialog();
+            } else if (position == rowClear) {
+                steps.clear();
+                updateRows();
+                adapter.notifyDataSetChanged();
+            } else if (position >= rowStepStart && position < rowStepEnd) {
+                showRemoveStepDialog(position - rowStepStart);
+            }
+        });
+        frame.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+
+        updateRows();
+        return fragmentView;
+    }
+
+    @Override
+    public void onFragmentClosed() {
+        // Persist on any close path (back press, swipe back, or programmatic).
+        // Validation: empty sequence is fine (= no shortcut). Otherwise must contain at least
+        // one long-press OR be at least 3 short taps. If invalid, persist an empty sequence.
+        if (!isValidSequence(steps)) {
+            SecondSpaceController.getInstance(currentAccount).setTabSequence(new ArrayList<>());
+        } else {
+            SecondSpaceController.getInstance(currentAccount).setTabSequence(steps);
+        }
+        super.onFragmentClosed();
+    }
+
+    private void saveAndFinish() {
+        if (!steps.isEmpty() && !isValidSequence(steps) && getParentActivity() != null) {
+            AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
+            b.setTitle(LocaleController.getString(R.string.PrivateSpaceSequenceTitle));
+            b.setMessage(LocaleController.getString(R.string.PrivateSpaceSequenceTooShort));
+            b.setPositiveButton(LocaleController.getString(R.string.OK), null);
+            b.show();
+            return;
+        }
+        SecondSpaceController.getInstance(currentAccount).setTabSequence(steps);
+        finishFragment();
+    }
+
+    /** A sequence is valid if it contains ≥1 long-press OR ≥3 short taps. */
+    private static boolean isValidSequence(List<SecondSpaceController.TabStep> seq) {
+        int taps = 0;
+        for (SecondSpaceController.TabStep step : seq) {
+            if (step.longPress) return true;
+            taps++;
+        }
+        return taps >= 3;
+    }
+
+    private void updateRows() {
+        rowCount = 0;
+        rowHeader = rowCount++;
+        if (!steps.isEmpty()) {
+            rowStepStart = rowCount;
+            rowCount += steps.size();
+            rowStepEnd = rowCount;
+        } else {
+            rowStepStart = -1;
+            rowStepEnd = -1;
+        }
+        rowAdd = rowCount++;
+        rowInfo = rowCount++;
+        if (!steps.isEmpty()) {
+            rowShadow = rowCount++;
+            rowClear = rowCount++;
+        } else {
+            rowShadow = -1;
+            rowClear = -1;
+        }
+    }
+
+    private void showAddStepDialog() {
+        if (getParentActivity() == null) return;
+        CharSequence[] tabLabels = {
+                LocaleController.getString(R.string.MainTabsChats),
+                LocaleController.getString(R.string.MainTabsContacts),
+                LocaleController.getString(R.string.Settings),
+                LocaleController.getString(R.string.MainTabsCalls),
+                LocaleController.getString(R.string.MainTabsProfile),
+        };
+        int[] tabIds = {INDEX_CHATS, INDEX_CONTACTS, INDEX_SETTINGS, INDEX_CALLS, INDEX_PROFILE};
+        AlertDialog.Builder tabPicker = new AlertDialog.Builder(getParentActivity());
+        tabPicker.setTitle(LocaleController.getString(R.string.PrivateSpaceSequencePickTab));
+        tabPicker.setItems(tabLabels, (d, which) -> {
+            final int chosenTab = tabIds[which];
+            CharSequence[] actions = {
+                    LocaleController.getString(R.string.PrivateSpaceSequenceTap),
+                    LocaleController.getString(R.string.PrivateSpaceSequenceLongPress),
+            };
+            AlertDialog.Builder actionPicker = new AlertDialog.Builder(getParentActivity());
+            actionPicker.setTitle(LocaleController.getString(R.string.PrivateSpaceSequencePickAction));
+            actionPicker.setItems(actions, (d2, which2) -> {
+                steps.add(new SecondSpaceController.TabStep(chosenTab, which2 == 1));
+                updateRows();
+                if (adapter != null) adapter.notifyDataSetChanged();
+            });
+            actionPicker.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+            actionPicker.show();
+        });
+        tabPicker.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        tabPicker.show();
+    }
+
+    private void showRemoveStepDialog(int stepIndex) {
+        if (getParentActivity() == null) return;
+        AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
+        b.setTitle(LocaleController.getString(R.string.PrivateSpaceSequenceTitle));
+        b.setMessage(LocaleController.getString(R.string.PrivateSpaceSequenceRemoveStep));
+        b.setPositiveButton(LocaleController.getString(R.string.Remove), (d, w) -> {
+            if (stepIndex >= 0 && stepIndex < steps.size()) {
+                steps.remove(stepIndex);
+                updateRows();
+                if (adapter != null) adapter.notifyDataSetChanged();
+            }
+        });
+        b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        AlertDialog alert = b.create();
+        alert.show();
+        alert.redPositive();
+    }
+
+    private String stepLabel(SecondSpaceController.TabStep step) {
+        String tabName;
+        switch (step.tabIndex) {
+            case INDEX_CHATS: tabName = LocaleController.getString(R.string.MainTabsChats); break;
+            case INDEX_CONTACTS: tabName = LocaleController.getString(R.string.MainTabsContacts); break;
+            case INDEX_SETTINGS: tabName = LocaleController.getString(R.string.Settings); break;
+            case INDEX_CALLS: tabName = LocaleController.getString(R.string.MainTabsCalls); break;
+            case INDEX_PROFILE: tabName = LocaleController.getString(R.string.MainTabsProfile); break;
+            default: tabName = "?";
+        }
+        String action = step.longPress
+                ? LocaleController.getString(R.string.PrivateSpaceSequenceLongPress)
+                : LocaleController.getString(R.string.PrivateSpaceSequenceTap);
+        return tabName + " — " + action;
+    }
+
+    private class ListAdapter extends RecyclerListView.SelectionAdapter {
+        private final Context mContext;
+
+        ListAdapter(Context context) {
+            mContext = context;
+        }
+
+        @Override
+        public boolean isEnabled(RecyclerView.ViewHolder holder) {
+            int vt = holder.getItemViewType();
+            return vt == VIEW_STEP || vt == VIEW_ADD || vt == VIEW_CLEAR;
+        }
+
+        @NonNull
+        @Override
+        public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            View view;
+            switch (viewType) {
+                case VIEW_HEADER: {
+                    HeaderCell cell = new HeaderCell(mContext, Theme.key_windowBackgroundWhiteBlueHeader, 21, 11, false);
+                    cell.setHeight(43);
+                    view = cell;
+                    break;
+                }
+                case VIEW_STEP: {
+                    TextSettingsCell cell = new TextSettingsCell(mContext);
+                    cell.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+                    view = cell;
+                    break;
+                }
+                case VIEW_ADD: {
+                    ManageChatTextCell cell = new ManageChatTextCell(mContext);
+                    cell.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+                    view = cell;
+                    break;
+                }
+                case VIEW_INFO: {
+                    view = new TextInfoPrivacyCell(mContext);
+                    break;
+                }
+                case VIEW_CLEAR: {
+                    TextSettingsCell cell = new TextSettingsCell(mContext);
+                    cell.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+                    view = cell;
+                    break;
+                }
+                case VIEW_SHADOW:
+                default:
+                    view = new ShadowSectionCell(mContext);
+                    break;
+            }
+            return new RecyclerListView.Holder(view);
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+            int viewType = holder.getItemViewType();
+            switch (viewType) {
+                case VIEW_HEADER: {
+                    HeaderCell cell = (HeaderCell) holder.itemView;
+                    cell.setText(LocaleController.getString(R.string.PrivateSpaceSequenceTitle));
+                    break;
+                }
+                case VIEW_STEP: {
+                    int idx = position - rowStepStart;
+                    SecondSpaceController.TabStep step = steps.get(idx);
+                    TextSettingsCell cell = (TextSettingsCell) holder.itemView;
+                    cell.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+                    cell.setTextAndValue((idx + 1) + ". " + stepLabel(step), "", position != rowStepEnd - 1);
+                    break;
+                }
+                case VIEW_ADD: {
+                    ManageChatTextCell cell = (ManageChatTextCell) holder.itemView;
+                    cell.setColors(Theme.key_windowBackgroundWhiteBlueIcon, Theme.key_windowBackgroundWhiteBlueButton);
+                    cell.setText(LocaleController.getString(R.string.PrivateSpaceSequenceAddStep), null, R.drawable.msg_contact_add, false);
+                    break;
+                }
+                case VIEW_INFO: {
+                    TextInfoPrivacyCell cell = (TextInfoPrivacyCell) holder.itemView;
+                    cell.setFixedSize(0);
+                    cell.setText(LocaleController.getString(R.string.PrivateSpaceSequenceInfo));
+                    break;
+                }
+                case VIEW_CLEAR: {
+                    TextSettingsCell cell = (TextSettingsCell) holder.itemView;
+                    cell.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
+                    cell.setText(LocaleController.getString(R.string.PrivateSpaceSequenceClear), false);
+                    break;
+                }
+            }
+        }
+
+        @Override
+        public int getItemViewType(int position) {
+            if (position == rowHeader) return VIEW_HEADER;
+            if (position >= rowStepStart && position < rowStepEnd) return VIEW_STEP;
+            if (position == rowAdd) return VIEW_ADD;
+            if (position == rowInfo) return VIEW_INFO;
+            if (position == rowShadow) return VIEW_SHADOW;
+            if (position == rowClear) return VIEW_CLEAR;
+            return VIEW_SHADOW;
+        }
+
+        @Override
+        public int getItemCount() {
+            return rowCount;
+        }
+    }
+}

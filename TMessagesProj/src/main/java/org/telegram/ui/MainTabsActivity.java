@@ -259,18 +259,24 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         tabs[INDEX_PRIVATE_SPACE_EXIT] = GlassTabView.createStaticIconTab(context, resourceProvider, R.drawable.msg_close, R.string.PrivateSpaceExitTab);
         tabs[INDEX_PROFILE].setOnLongClickListener(v -> {
             openAccountSelector(v);
+            recordTabEvent(INDEX_PROFILE, true);
             return true;
         });
-        // Long-press the Chats tab: toggle private space mode (deniable entry/exit).
+        // Long-press any other regular tab: contribute to private-space tap-sequence (configurable).
         tabs[INDEX_CHATS].setOnLongClickListener(v -> {
-            org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
-            if (ssc.isActive()) {
-                ssc.setActive(false);
-            } else if (ssc.hasPassword() && getParentActivity() != null) {
-                PrivateSpacePinDialog.showEnter(getParentActivity(), currentAccount, () -> ssc.setActive(true));
-            } else {
-                ssc.setActive(true);
-            }
+            recordTabEvent(INDEX_CHATS, true);
+            return true;
+        });
+        tabs[INDEX_CONTACTS].setOnLongClickListener(v -> {
+            recordTabEvent(INDEX_CONTACTS, true);
+            return true;
+        });
+        tabs[INDEX_SETTINGS].setOnLongClickListener(v -> {
+            recordTabEvent(INDEX_SETTINGS, true);
+            return true;
+        });
+        tabs[INDEX_CALLS].setOnLongClickListener(v -> {
+            recordTabEvent(INDEX_CALLS, true);
             return true;
         });
         tabs[INDEX_PRIVATE_SPACE_EXIT].setOnClickListener(v -> {
@@ -282,10 +288,13 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
             if (index != INDEX_PRIVATE_SPACE_EXIT) {
                 final int position = indexToPosition(index);
+                final int tabIndexForSequence = index;
                 tabs[index].setOnClickListener(v -> {
                     if (viewPager.isManualScrolling() || viewPager.isTouch()) {
                         return;
                     }
+
+                    recordTabEvent(tabIndexForSequence, false);
 
                     if (viewPager.getCurrentPosition() == position) {
                         final BaseFragment fragment = getCurrentVisibleFragment();
@@ -774,6 +783,60 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         if (viewPager.getCurrentPosition() != POSITION_CHATS) {
             viewPager.scrollToPosition(POSITION_CHATS);
             selectTab(POSITION_CHATS, true);
+        }
+    }
+
+    // --- Private-space tap-sequence detection ---
+    //
+    // Each tab interaction (tap or long-press) is logged with a timestamp. After each event,
+    // the buffer's most recent N entries (N = configured sequence length) are matched against
+    // the saved sequence. If all N match and span less than SEQUENCE_WINDOW_MS, Private Space
+    // entry is triggered (PIN prompt if a PIN is set).
+
+    private static final long SEQUENCE_WINDOW_MS = 3000L;
+
+    private final java.util.ArrayDeque<long[]> tabEventBuffer = new java.util.ArrayDeque<>();
+
+    private void recordTabEvent(int tabIndex, boolean longPress) {
+        org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+        if (ssc.isActive()) {
+            // Sequence is an enter-only trigger; while active we don't re-arm it.
+            tabEventBuffer.clear();
+            return;
+        }
+        java.util.List<org.telegram.messenger.SecondSpaceController.TabStep> seq = ssc.getTabSequence();
+        if (seq.isEmpty()) {
+            return;
+        }
+        long now = android.os.SystemClock.uptimeMillis();
+        tabEventBuffer.addLast(new long[]{tabIndex, longPress ? 1L : 0L, now});
+        while (tabEventBuffer.size() > seq.size()) {
+            tabEventBuffer.removeFirst();
+        }
+        if (tabEventBuffer.size() != seq.size()) {
+            return;
+        }
+        // First event timestamp must be within window from latest.
+        if (now - tabEventBuffer.peekFirst()[2] > SEQUENCE_WINDOW_MS) {
+            return;
+        }
+        int i = 0;
+        for (long[] ev : tabEventBuffer) {
+            org.telegram.messenger.SecondSpaceController.TabStep step = seq.get(i++);
+            if (ev[0] != step.tabIndex || (ev[1] == 1L) != step.longPress) {
+                return;
+            }
+        }
+        // Match — fire entry.
+        tabEventBuffer.clear();
+        Runnable enter = () -> {
+            ssc.markShortcutTested();
+            ssc.setActive(true);
+        };
+        if (ssc.hasPassword() && getParentActivity() != null) {
+            PrivateSpacePinDialog.showEnter(getParentActivity(), currentAccount, enter);
+        } else {
+            enter.run();
         }
     }
 
