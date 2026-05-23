@@ -811,17 +811,25 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             case 100:
                 presentFragment(new SecondSpaceSettingsActivity());
                 break;
-            case 101:
-                SecondSpaceController.getInstance(currentAccount).setActive(true);
-                if (getParentLayout() != null) {
-                    for (org.telegram.ui.ActionBar.BaseFragment f : getParentLayout().getFragmentStack()) {
-                        if (f instanceof MainTabsActivity) {
-                            ((MainTabsActivity) f).switchToChatsTab();
-                            break;
+            case 101: {
+                Runnable enter = () -> {
+                    SecondSpaceController.getInstance(currentAccount).setActive(true);
+                    if (getParentLayout() != null) {
+                        for (org.telegram.ui.ActionBar.BaseFragment f : getParentLayout().getFragmentStack()) {
+                            if (f instanceof MainTabsActivity) {
+                                ((MainTabsActivity) f).switchToChatsTab();
+                                break;
+                            }
                         }
                     }
+                };
+                if (SecondSpaceController.getInstance(currentAccount).hasPassword() && getParentActivity() != null) {
+                    PrivateSpacePinDialog.showEnter(getParentActivity(), currentAccount, enter);
+                } else {
+                    enter.run();
                 }
                 break;
+            }
             case 5:
                 presentFragment(new NotificationsSettingsActivity());
                 break;

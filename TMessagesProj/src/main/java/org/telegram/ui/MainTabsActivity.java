@@ -264,7 +264,13 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         // Long-press the Chats tab: toggle private space mode (deniable entry/exit).
         tabs[INDEX_CHATS].setOnLongClickListener(v -> {
             org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
-            ssc.setActive(!ssc.isActive());
+            if (ssc.isActive()) {
+                ssc.setActive(false);
+            } else if (ssc.hasPassword() && getParentActivity() != null) {
+                PrivateSpacePinDialog.showEnter(getParentActivity(), currentAccount, () -> ssc.setActive(true));
+            } else {
+                ssc.setActive(true);
+            }
             return true;
         });
         tabs[INDEX_PRIVATE_SPACE_EXIT].setOnClickListener(v -> {

@@ -44,6 +44,7 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     private static final int VIEW_HEADER = 3;
     private static final int VIEW_SHADOW = 4;
     private static final int VIEW_SWITCH = 5;
+    private static final int VIEW_VALUE = 6;
 
     private RecyclerListView listView;
     private ListAdapter adapter;
@@ -58,6 +59,9 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     private int chatsShadowRow;
     private int switchRow;
     private int switchInfoRow;
+    private int passwordShadowRow;
+    private int passwordRow;
+    private int passwordInfoRow;
 
     @Override
     public boolean onFragmentCreate() {
@@ -110,6 +114,8 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                 openChatPicker();
             } else if (position == switchRow) {
                 onEntryButtonSwitchClick((TextCheckCell) view);
+            } else if (position == passwordRow) {
+                onPasswordRowClick();
             } else if (position >= chatsStartRow && position < chatsEndRow) {
                 long dialogId = hiddenIds.get(position - chatsStartRow);
                 confirmRemove(dialogId);
@@ -161,6 +167,29 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         alert.redPositive();
     }
 
+    private void onPasswordRowClick() {
+        if (getParentActivity() == null) return;
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        if (ssc.hasPassword()) {
+            AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
+            b.setTitle(LocaleController.getString(R.string.PrivateSpacePinTitle));
+            b.setMessage(LocaleController.getString(R.string.PrivateSpacePinRemoveConfirm));
+            b.setPositiveButton(LocaleController.getString(R.string.Remove), (d, w) -> {
+                PrivateSpacePinDialog.showRemove(getParentActivity(), currentAccount, () -> {
+                    if (adapter != null) adapter.notifyDataSetChanged();
+                });
+            });
+            b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+            AlertDialog alert = b.create();
+            alert.show();
+            alert.redPositive();
+        } else {
+            PrivateSpacePinDialog.showSet(getParentActivity(), currentAccount, () -> {
+                if (adapter != null) adapter.notifyDataSetChanged();
+            });
+        }
+    }
+
     private void onEntryButtonSwitchClick(TextCheckCell cell) {
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
         boolean currentValue = ssc.isEntryButtonVisible();
@@ -207,6 +236,9 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         }
         switchRow = rowCount++;
         switchInfoRow = rowCount++;
+        passwordShadowRow = rowCount++;
+        passwordRow = rowCount++;
+        passwordInfoRow = rowCount++;
     }
 
     private class ListAdapter extends RecyclerListView.SelectionAdapter {
@@ -219,7 +251,7 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         @Override
         public boolean isEnabled(RecyclerView.ViewHolder holder) {
             int vt = holder.getItemViewType();
-            return vt == VIEW_USER || vt == VIEW_ADD || vt == VIEW_SWITCH;
+            return vt == VIEW_USER || vt == VIEW_ADD || vt == VIEW_SWITCH || vt == VIEW_VALUE;
         }
 
         @NonNull
@@ -250,6 +282,12 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                 }
                 case VIEW_SWITCH: {
                     TextCheckCell cell = new TextCheckCell(mContext);
+                    cell.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+                    view = cell;
+                    break;
+                }
+                case VIEW_VALUE: {
+                    org.telegram.ui.Cells.TextSettingsCell cell = new org.telegram.ui.Cells.TextSettingsCell(mContext);
                     cell.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
                     view = cell;
                     break;
@@ -303,12 +341,13 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                 }
                 case VIEW_INFO: {
                     TextInfoPrivacyCell privacyCell = (TextInfoPrivacyCell) holder.itemView;
+                    privacyCell.setFixedSize(0);
                     if (position == addChatInfoRow) {
-                        privacyCell.setFixedSize(0);
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceAddChatsInfo));
                     } else if (position == switchInfoRow) {
-                        privacyCell.setFixedSize(0);
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceShowEntryButtonInfo));
+                    } else if (position == passwordInfoRow) {
+                        privacyCell.setText(LocaleController.getString(R.string.PrivateSpacePinInfo));
                     }
                     break;
                 }
@@ -329,6 +368,15 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                     cell.setTextAndCheck(LocaleController.getString(R.string.PrivateSpaceShowEntryButton), checked, false);
                     break;
                 }
+                case VIEW_VALUE: {
+                    org.telegram.ui.Cells.TextSettingsCell cell = (org.telegram.ui.Cells.TextSettingsCell) holder.itemView;
+                    boolean on = SecondSpaceController.getInstance(currentAccount).hasPassword();
+                    cell.setTextAndValue(
+                            LocaleController.getString(R.string.PrivateSpacePinTitle),
+                            LocaleController.getString(on ? R.string.PrivateSpacePinOn : R.string.PrivateSpacePinOff),
+                            false);
+                    break;
+                }
             }
         }
 
@@ -341,6 +389,9 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             if (position == chatsShadowRow) return VIEW_SHADOW;
             if (position == switchRow) return VIEW_SWITCH;
             if (position == switchInfoRow) return VIEW_INFO;
+            if (position == passwordShadowRow) return VIEW_SHADOW;
+            if (position == passwordRow) return VIEW_VALUE;
+            if (position == passwordInfoRow) return VIEW_INFO;
             return VIEW_SHADOW;
         }
 
