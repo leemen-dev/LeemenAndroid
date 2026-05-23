@@ -240,7 +240,11 @@ def getProps(String propName) {
         return "";
     }
 }
-apply plugin: 'com.google.gms.google-services'
+// google-services plugin lives only in the App modules — they own google-services.json
+// processing for their applicationId. Applying it here too pinned library namespace
+// (org.telegram.messenger) as a required client entry in the JSON, which doesn't match
+// our Firebase project. Firebase SDK in this library still works fine: it picks up the
+// runtime config injected by the App module's google-services processor.
 
 task checkVisibility {
     doFirst {

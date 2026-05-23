@@ -82,7 +82,9 @@ public class BuildVars {
     private static Boolean betaApp;
     public static boolean isBetaApp() {
         if (betaApp == null) {
-            betaApp = ApplicationLoader.applicationContext != null && "org.telegram.messenger.beta".equals(ApplicationLoader.applicationContext.getPackageName());
+            // Compare against the build-type applicationId suffix runtime; this stays in sync
+            // with the rename in gradle.properties (APP_PACKAGE) plus the `.beta` suffix.
+            betaApp = ApplicationLoader.applicationContext != null && "app.leemen.android.beta".equals(ApplicationLoader.applicationContext.getPackageName());
         }
         return betaApp;
     }
