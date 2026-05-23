@@ -1483,6 +1483,9 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     private boolean isPressed;
     private boolean forwardName;
     private boolean isHighlighted;
+    /** Independent of search/press highlight: persistent visual mark when this message is exposed
+     *  outside Private Space and viewer is in PS-on. Set via {@link #setPrivateSpaceExposed}. */
+    private boolean privateSpaceExposed;
     private boolean isHighlightedAnimated;
     private int highlightProgress;
     private float currentSelectedBackgroundAlpha;
@@ -12369,7 +12372,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         if (drawRadialCheckBackground) {
             return;
         }
-        boolean forcePressed = (isHighlighted || isPressed || isPressed()) && (!drawPhotoImage || !photoImage.hasBitmapImage());
+        boolean forcePressed = (isHighlighted || isPressed || isPressed() || privateSpaceExposed) && (!drawPhotoImage || !photoImage.hasBitmapImage());
         radialProgress.setPressed(forcePressed || buttonPressed != 0, false);
         if (hasMiniProgress != 0) {
             radialProgress.setPressed(forcePressed || miniButtonPressed != 0, true);
@@ -18440,7 +18443,19 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     public boolean isDrawSelectionBackground() {
-        return (isPressed() && isCheckPressed || !isCheckPressed && isPressed || isHighlighted) && !textIsSelectionMode() && !hasSelectionOverlay() && (currentMessageObject == null || !currentMessageObject.preview);
+        return (isPressed() && isCheckPressed || !isCheckPressed && isPressed || isHighlighted || privateSpaceExposed) && !textIsSelectionMode() && !hasSelectionOverlay() && (currentMessageObject == null || !currentMessageObject.preview);
+    }
+
+    /** Mark / unmark this cell as "exposed outside Private Space"; renders with the selected-bubble look.
+     *  Independent of search highlight & press state so other code paths don't reset it. */
+    public void setPrivateSpaceExposed(boolean value) {
+        if (privateSpaceExposed == value) return;
+        privateSpaceExposed = value;
+        invalidate();
+    }
+
+    public boolean isPrivateSpaceExposed() {
+        return privateSpaceExposed;
     }
 
     private boolean isOpenChatByShare(MessageObject messageObject) {
