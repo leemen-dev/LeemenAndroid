@@ -2364,6 +2364,16 @@
     <string name="PrivateSpacePinMismatch">PINs don\'t match.</string>
     <string name="PrivateSpacePinTooShort">PIN must be at least %1$d digits.</string>
     <string name="PrivateSpacePinRemoveConfirm">Remove the PIN? Private Space will no longer require a password.</string>
+    <!-- Hidden accounts: per-account entry password gating switch INTO this account -->
+    <string name="HiddenAccountEntryPasswordTitle">Account password</string>
+    <string name="HiddenAccountEntryPasswordInfo">When enabled, switching to this account from another account requires this password. The password is independent of the Private Space PIN.</string>
+    <string name="HiddenAccountEntryPasswordRemoveConfirm">Remove the account password? Switching to this account will no longer require a password.</string>
+    <string name="HiddenAccountEnterPasswordTitle">Enter account password</string>
+    <string name="HiddenAccountWrongPassword">Wrong password. Try again.</string>
+    <!-- Hidden accounts: per-account list of OTHER accounts to hide while in off-mode -->
+    <string name="HiddenAccountsListTitle">Hide other accounts</string>
+    <string name="HiddenAccountsListInfo">Selected accounts will not appear in the account switcher while Private Space is off. Their notifications and badges are muted. They reappear when you enter Private Space.</string>
+    <string name="PrivateSpaceExposureHide">Hide outside</string>
     <string name="PrivateSpaceIntroDescription">Hidden chats stay invisible from the main chat list, search recommendations, notifications, and widgets when Private Space is off. Open settings to add chats now.</string>
     <string name="PrivateSpaceSequenceTitle">Tap sequence</string>
     <string name="PrivateSpaceSequenceRowOff">Off</string>

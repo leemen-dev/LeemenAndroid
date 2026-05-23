@@ -28,6 +28,8 @@ public class SecondSpaceController extends BaseController {
     private static final String PREF_SHORTCUT_TESTED = "second_space_shortcut_tested";
     private static final String PREF_PIN_TIMEOUT_MIN = "second_space_pin_timeout_min";
     private static final String PREF_PIN_LAST_OK_MS = "second_space_pin_last_ok_ms";
+    private static final String PREF_ENTRY_PASSWORD_HASH = "second_space_entry_password_hash";
+    private static final String PREF_HIDDEN_ACCOUNTS = "second_space_hidden_accounts";
 
     /** A single step in the tab-tap gesture sequence. */
     public static final class TabStep {
@@ -75,6 +77,8 @@ public class SecondSpaceController extends BaseController {
     private int pinTimeoutMinutes;
     private long pinLastVerifiedAt;
     private boolean active;
+    private String entryPasswordHash;
+    private final Set<Integer> hiddenAccounts = new HashSet<>();
 
     private boolean entryButtonVisible;
 
@@ -111,6 +115,20 @@ public class SecondSpaceController extends BaseController {
         shortcutTested = prefs.getBoolean(PREF_SHORTCUT_TESTED, false);
         pinTimeoutMinutes = prefs.getInt(PREF_PIN_TIMEOUT_MIN, 0);
         pinLastVerifiedAt = prefs.getLong(PREF_PIN_LAST_OK_MS, 0L);
+        entryPasswordHash = prefs.getString(PREF_ENTRY_PASSWORD_HASH, "");
+        String hiddenAccountsCsv = prefs.getString(PREF_HIDDEN_ACCOUNTS, "");
+        if (!TextUtils.isEmpty(hiddenAccountsCsv)) {
+            for (String s : hiddenAccountsCsv.split(",")) {
+                try {
+                    int id = Integer.parseInt(s);
+                    // Defense in depth: an account can never hide itself.
+                    if (id != num) {
+                        hiddenAccounts.add(id);
+                    }
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
     }
 
     // --- PIN remember-timeout ---
@@ -226,19 +244,30 @@ public class SecondSpaceController extends BaseController {
 
     /**
      * Reset the "verified" flag — called whenever entry methods change (PIN set/removed,
-     * sequence updated, PIN-in-search toggled). Forces the explicit entry button back to
-     * visible until user successfully enters via the new method. Fires
+     * sequence updated, PIN-in-search toggled). Also forces the raw entry-button-visible
+     * flag back to ON so the settings toggle stays in sync with what the user actually sees
+     * (the button must remain reachable until the new method is verified). Fires
      * {@link NotificationCenter#secondSpaceModeChanged} so dependent UI rebinds.
-     * Returns true if the flag actually changed (was true and got reset).
+     * Returns true if anything actually changed.
      */
     public boolean clearShortcutTested() {
+        boolean changed = false;
+        SharedPreferences.Editor editor = getMessagesController().getMainSettings().edit();
         if (shortcutTested) {
             shortcutTested = false;
-            getMessagesController().getMainSettings().edit().putBoolean(PREF_SHORTCUT_TESTED, false).apply();
-            getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceModeChanged);
-            return true;
+            editor.putBoolean(PREF_SHORTCUT_TESTED, false);
+            changed = true;
         }
-        return false;
+        if (!entryButtonVisible) {
+            entryButtonVisible = true;
+            editor.putBoolean(PREF_SHOW_ENTRY_BUTTON, true);
+            changed = true;
+        }
+        if (changed) {
+            editor.apply();
+            getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceModeChanged);
+        }
+        return changed;
     }
 
     public boolean hasConfiguredShortcut() {
@@ -375,9 +404,28 @@ public class SecondSpaceController extends BaseController {
         }
         active = value;
         // Intentionally NOT persisted: active is per-session, always false on next launch.
+        // Re-evaluate FLAG_SECURE: snapshot capture / screenshots must be blocked while PS is on.
+        try {
+            org.telegram.ui.LaunchActivity la = org.telegram.ui.LaunchActivity.instance;
+            if (la != null) la.invalidateFlagSecure();
+        } catch (Throwable ignored) {
+        }
         NotificationCenter nc = getNotificationCenter();
         nc.postNotificationName(NotificationCenter.secondSpaceModeChanged);
         nc.postNotificationName(NotificationCenter.dialogsNeedReload);
+        // When this account is the selected one, accounts it hides must refresh their tray
+        // notifications: dismiss on PS-off, re-show queued ones on PS-on. Also re-aggregate
+        // the launcher badge across all accounts.
+        if (currentAccount == UserConfig.selectedAccount && !hiddenAccounts.isEmpty()) {
+            for (Integer hiddenAcc : hiddenAccounts) {
+                if (value) {
+                    NotificationsController.getInstance(hiddenAcc).showNotifications();
+                } else {
+                    NotificationsController.getInstance(hiddenAcc).hideNotifications();
+                }
+            }
+            NotificationsController.getInstance(currentAccount).updateBadge();
+        }
     }
 
     // --- Entry button visibility ---
@@ -455,6 +503,17 @@ public class SecondSpaceController extends BaseController {
             exposedMessages.put(dialogId, set);
         }
         if (set.add(messageId)) {
+            persistExposed();
+            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+        }
+    }
+
+    public void unexposeMessage(long dialogId, int messageId) {
+        Set<Integer> set = exposedMessages.get(dialogId);
+        if (set != null && set.remove(messageId)) {
+            if (set.isEmpty()) {
+                exposedMessages.remove(dialogId);
+            }
             persistExposed();
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
@@ -578,5 +637,91 @@ public class SecondSpaceController extends BaseController {
             getMessagesController().getMainSettings().edit().putString(PREF_LAST_DECIDED, obj.toString()).apply();
         } catch (Exception ignored) {
         }
+    }
+
+    // --- Entry password (own account) ---
+    //
+    // Optional per-account PIN that gates *switching INTO* this account from any other
+    // selected account. Independent of the Private Space PIN (which gates entering PS
+    // *within* an already-open account). Same SHA-256 4–6-digit format.
+
+    public boolean hasEntryPassword() {
+        return !TextUtils.isEmpty(entryPasswordHash);
+    }
+
+    public boolean verifyEntryPassword(String pin) {
+        if (pin == null) return false;
+        if (!hasEntryPassword()) return true;
+        return hashPassword(pin).equals(entryPasswordHash);
+    }
+
+    /** Pass empty/null to clear. */
+    public void setEntryPassword(String pin) {
+        entryPasswordHash = TextUtils.isEmpty(pin) ? "" : hashPassword(pin);
+        getMessagesController().getMainSettings().edit().putString(PREF_ENTRY_PASSWORD_HASH, entryPasswordHash).apply();
+    }
+
+    // --- Hidden other accounts ---
+    //
+    // Per-account list of OTHER account IDs that this account hides from the switcher /
+    // notifications / badge while it itself is in off-mode. When this account is the
+    // selected one and in PS-on, all accounts become visible again.
+
+    public boolean isAccountHidden(int otherAccountNum) {
+        return hiddenAccounts.contains(otherAccountNum);
+    }
+
+    public void setAccountHidden(int otherAccountNum, boolean hidden) {
+        if (otherAccountNum == currentAccount) return;
+        boolean changed = hidden ? hiddenAccounts.add(otherAccountNum) : hiddenAccounts.remove(otherAccountNum);
+        if (changed) {
+            persistHiddenAccounts();
+            getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceModeChanged);
+            // If this account is currently selected and off-mode, hiding-state change must
+            // immediately reflect in the tray for the toggled account.
+            if (currentAccount == UserConfig.selectedAccount && !active) {
+                if (hidden) {
+                    NotificationsController.getInstance(otherAccountNum).hideNotifications();
+                } else {
+                    NotificationsController.getInstance(otherAccountNum).showNotifications();
+                }
+                NotificationsController.getInstance(currentAccount).updateBadge();
+            }
+        }
+    }
+
+    public Set<Integer> getHiddenAccounts() {
+        return Collections.unmodifiableSet(hiddenAccounts);
+    }
+
+    /** Called from logout cleanup — drop a deactivated account from this account's hide-list. */
+    public void onOtherAccountLoggedOut(int otherAccountNum) {
+        if (hiddenAccounts.remove(otherAccountNum)) {
+            persistHiddenAccounts();
+        }
+    }
+
+    private void persistHiddenAccounts() {
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (Integer id : hiddenAccounts) {
+            if (!first) sb.append(',');
+            sb.append(id);
+            first = false;
+        }
+        getMessagesController().getMainSettings().edit().putString(PREF_HIDDEN_ACCOUNTS, sb.toString()).apply();
+    }
+
+    /**
+     * Whether an account should be hidden from the currently selected account's UI.
+     * True iff: (a) selected account is in off-mode AND (b) selected account's hide-list contains targetAccountNum.
+     * Returns false if targetAccountNum == selectedAccount (you can never hide yourself from yourself).
+     */
+    public static boolean isHiddenFromSelectedAccount(int targetAccountNum) {
+        int selected = UserConfig.selectedAccount;
+        if (targetAccountNum == selected) return false;
+        SecondSpaceController ssc = getInstance(selected);
+        if (ssc.isActive()) return false;
+        return ssc.isAccountHidden(targetAccountNum);
     }
 }

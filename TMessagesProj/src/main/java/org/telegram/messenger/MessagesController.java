@@ -15391,6 +15391,12 @@ public class MessagesController extends BaseController implements NotificationCe
         getUserConfig().clearConfig();
         SharedPrefsHelper.cleanupAccount(currentAccount);
 
+        // Private Space cleanup: drop this account from every other account's hide-list.
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            if (a == currentAccount) continue;
+            SecondSpaceController.getInstance(a).onOtherAccountLoggedOut(currentAccount);
+        }
+
         boolean shouldHandle = true;
         ArrayList<NotificationCenter.NotificationCenterDelegate> observers = getNotificationCenter().getObservers(NotificationCenter.appDidLogout);
         if (observers != null) {

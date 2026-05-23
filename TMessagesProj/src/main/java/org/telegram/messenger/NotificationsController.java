@@ -1725,6 +1725,11 @@ public class NotificationsController extends BaseController {
             if (!UserConfig.getInstance(a).isClientActivated() || !SharedConfig.showNotificationsForAllAccounts && UserConfig.selectedAccount != a) {
                 continue;
             }
+            // Accounts hidden by the currently selected account (in off-mode) must not
+            // contribute to the launcher badge — same "silent by design" principle as hidden chats.
+            if (SecondSpaceController.isHiddenFromSelectedAccount(a)) {
+                continue;
+            }
             NotificationsController controller = getInstance(a);
             // Hidden chats never contribute to the total app-icon badge or tab badges,
             // regardless of mode — they are "silent by design".
@@ -4087,6 +4092,10 @@ public class NotificationsController extends BaseController {
 
     private void showOrUpdateNotification(boolean notifyAboutLast) {
         if (!getUserConfig().isClientActivated() || pushMessages.isEmpty() && storyPushMessages.isEmpty() || !SharedConfig.showNotificationsForAllAccounts && currentAccount != UserConfig.selectedAccount) {
+            dismissNotification();
+            return;
+        }
+        if (SecondSpaceController.isHiddenFromSelectedAccount(currentAccount)) {
             dismissNotification();
             return;
         }
