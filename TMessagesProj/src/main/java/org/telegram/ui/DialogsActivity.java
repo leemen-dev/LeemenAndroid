@@ -603,6 +603,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private DialogsActivityTopBubblesFadeView topBubblesFadeView;
     private ActiveGiftAuctionsHintCell activeGiftAuctionsHintCell;
     private DialogsHintCell dialogsHintCell;
+    private DialogsHintCell privateSpaceEmptyHintCell;
     private UnconfirmedAuthHintCell authHintCell;
     private Long cacheSize, deviceSize;
 
@@ -3182,6 +3183,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         authHintCell = null;
         activeGiftAuctionsHintCell = null;
         dialogsHintCell = null;
+        privateSpaceEmptyHintCell = null;
         topPanelLayout = null;
 
         ActionBarMenu menu = actionBar.createMenu();
@@ -4042,9 +4044,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             viewPage.progressView.setViewType(FlickerLoadingView.DIALOG_CELL_TYPE);
             viewPage.progressView.setVisibility(View.GONE);
             viewPage.addView(viewPage.progressView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
-
-            viewPage.privateSpaceEmptyView = createPrivateSpaceEmptyView(context);
-            viewPage.addView(viewPage.privateSpaceEmptyView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
 
             viewPage.listView = new DialogsRecyclerView(context, viewPage);
             viewPage.listView.addEdgeEffectListener(() -> viewPage.listView.postOnAnimation(this::blur3_InvalidateBlur));
@@ -10294,44 +10293,31 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         privateSpaceExitItem.setVisibility(active ? View.VISIBLE : View.GONE);
     }
 
-    private View createPrivateSpaceEmptyView(android.content.Context context) {
-        android.widget.LinearLayout container = new android.widget.LinearLayout(context);
-        container.setOrientation(android.widget.LinearLayout.VERTICAL);
-        container.setGravity(Gravity.CENTER);
-        container.setPadding(AndroidUtilities.dp(40), 0, AndroidUtilities.dp(40), 0);
-
-        android.widget.TextView title = new android.widget.TextView(context);
-        title.setText(LocaleController.getString(R.string.PrivateSpaceEmpty));
-        title.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 16);
-        title.setTextColor(Theme.getColor(Theme.key_chats_message));
-        title.setGravity(Gravity.CENTER);
-        container.addView(title);
-
-        android.widget.TextView btn = new android.widget.TextView(context);
-        btn.setText(LocaleController.getString(R.string.PrivateSpaceEmptyOpenSettings));
-        btn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 14);
-        btn.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
-        btn.setTypeface(AndroidUtilities.bold());
-        btn.setGravity(Gravity.CENTER);
-        btn.setPadding(0, AndroidUtilities.dp(16), 0, 0);
-        btn.setOnClickListener(v -> presentFragment(new SecondSpaceSettingsActivity()));
-        container.addView(btn);
-
-        container.setVisibility(View.GONE);
-        return container;
-    }
-
     private void updatePrivateSpaceEmptyView() {
-        if (viewPages == null) {
+        if (topPanelLayout == null || fragmentView == null || getContext() == null) {
             return;
         }
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        boolean show = !onlySelect && ssc.isActive() && ssc.getDialogIds().isEmpty();
-        for (int a = 0; a < viewPages.length; a++) {
-            ViewPage vp = viewPages[a];
-            if (vp != null && vp.privateSpaceEmptyView != null) {
-                vp.privateSpaceEmptyView.setVisibility(show ? View.VISIBLE : View.GONE);
-            }
+        boolean show = !onlySelect
+                && folderId == 0
+                && initialDialogsType == DIALOGS_TYPE_DEFAULT
+                && ssc.isActive()
+                && ssc.getDialogIds().isEmpty()
+                && (rightSlidingDialogContainer == null || !rightSlidingDialogContainer.hasFragment())
+                && !animatorSearchVisible.getValue();
+        if (show && privateSpaceEmptyHintCell == null) {
+            privateSpaceEmptyHintCell = new DialogsHintCell(getContext());
+            privateSpaceEmptyHintCell.setBackground(Theme.getSelectorDrawable(false));
+            privateSpaceEmptyHintCell.setText(
+                    LocaleController.getString(R.string.PrivateSpaceEmpty),
+                    LocaleController.getString(R.string.PrivateSpaceEmptyOpenSettings),
+                    true,
+                    false);
+            privateSpaceEmptyHintCell.setOnClickListener(v -> presentFragment(new SecondSpaceSettingsActivity()));
+            topPanelLayout.addView(privateSpaceEmptyHintCell);
+        }
+        if (privateSpaceEmptyHintCell != null) {
+            topPanelLayout.setViewVisible(privateSpaceEmptyHintCell, show);
         }
     }
 
