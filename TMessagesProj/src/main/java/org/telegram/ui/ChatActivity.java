@@ -1612,6 +1612,8 @@ public class ChatActivity extends BaseFragment implements
 
     private final static int chat_menu_topic_create = 73;
 
+    private final static int private_space_expose = 80;
+
     private final static int id_chat_compose_panel = 1000;
 
     RecyclerListView.OnItemLongClickListenerExtended onItemLongClickListener = new RecyclerListView.OnItemLongClickListenerExtended() {
@@ -3765,6 +3767,8 @@ public class ChatActivity extends BaseFragment implements
                     createDeleteMessagesAlert(null, null);
                 } else if (id == forward) {
                     openForward(true);
+                } else if (id == private_space_expose) {
+                    confirmAndExposeSelectedMessages();
                 } else if (id == share) {
                     share();
                 } else if (id == open_direct) {
@@ -10144,11 +10148,13 @@ public class ChatActivity extends BaseFragment implements
             }
             actionModeViews.add(actionMode.addItemWithWidth(share, R.drawable.msg_shareout, AndroidUtilities.dp(54), LocaleController.getString(R.string.ShareFile)));
             actionModeViews.add(actionMode.addItemWithWidth(delete, R.drawable.msg_delete, AndroidUtilities.dp(54), LocaleController.getString(R.string.Delete)));
+            actionModeViews.add(actionMode.addItemWithWidth(private_space_expose, R.drawable.msg_seen, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureActionShort)));
         } else {
             actionModeViews.add(actionMode.addItemWithWidth(edit, R.drawable.msg_edit, AndroidUtilities.dp(54), LocaleController.getString(R.string.Edit)));
             actionModeViews.add(actionMode.addItemWithWidth(star, R.drawable.msg_fave, AndroidUtilities.dp(54), LocaleController.getString(R.string.AddToFavorites)));
             actionModeViews.add(actionMode.addItemWithWidth(copy, R.drawable.msg_copy, AndroidUtilities.dp(54), LocaleController.getString(R.string.Copy)));
             actionModeViews.add(actionMode.addItemWithWidth(delete, R.drawable.msg_delete, AndroidUtilities.dp(54), LocaleController.getString(R.string.Delete)));
+            actionModeViews.add(actionMode.addItemWithWidth(private_space_expose, R.drawable.msg_seen, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureActionShort)));
         }
         actionMode.setItemVisibility(edit, canEditMessagesCount == 1 && selectedMessagesIds[0].size() + selectedMessagesIds[1].size() == 1 ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(copy, !isPeerNoForwards() && selectedMessagesCanCopyIds[0].size() + selectedMessagesCanCopyIds[1].size() != 0 ? View.VISIBLE : View.GONE);
@@ -10156,6 +10162,7 @@ public class ChatActivity extends BaseFragment implements
         actionMode.setItemVisibility(delete, cantDeleteMessagesCount == 0 ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(tag_message, getUserConfig().isPremium() ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(share, View.GONE);
+        actionMode.setItemVisibility(private_space_expose, isPrivateSpaceExposurePending() ? View.VISIBLE : View.GONE);
     }
 
     private void hideTagSelector() {
@@ -18960,6 +18967,10 @@ public class ChatActivity extends BaseFragment implements
                 if (deleteItem != null) {
                     deleteItem.setVisibility(cantDeleteMessagesCount == 0 ? View.VISIBLE : View.GONE);
                 }
+                ActionBarMenuItem exposeItem = actionBar.createActionMode().getItem(private_space_expose);
+                if (exposeItem != null) {
+                    exposeItem.setVisibility(isPrivateSpaceExposurePending() ? View.VISIBLE : View.GONE);
+                }
                 hasUnfavedSelected = false;
                 for (int a = 0; a < 2; a++) {
                     for (int b = 0; b < selectedMessagesCanStarIds[a].size(); b++) {
@@ -20049,6 +20060,13 @@ public class ChatActivity extends BaseFragment implements
     private int privateSpacePendingMaxId = 0;
     private boolean privateSpaceDecisionShown = false;
 
+    // After the user clicks "Manage" in the decision popup we drop into Telegram's
+    // existing multi-select mode with these IDs pre-selected. The set sticks around
+    // so the action-mode "Show outside" button knows which selection batch is
+    // an exposure decision (vs. a regular forward/delete operation).
+    private final java.util.HashSet<Integer> privateSpaceExposurePending = new java.util.HashSet<>();
+    private int privateSpaceExposureUpTo = 0;
+
     private ArrayList<MessageObject> filterToExposedSecondSpace(ArrayList<MessageObject> messages) {
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
         int lastDecided = ssc.getLastDecidedMessageId(dialog_id);
@@ -20064,6 +20082,11 @@ public class ChatActivity extends BaseFragment implements
                     latestExposed = mo;
                 }
             } else if (id > lastDecided) {
+                // Pending (undecided) messages stay visible to the user IN THE OPEN CHAT until
+                // they decide what to do with them later in active mode. Without this, the user
+                // would type a message in off mode (entering via search), hit send, and watch
+                // their own message vanish — confusing and breaks the chat flow.
+                filtered.add(mo);
                 privateSpacePendingMessageIds.add(id);
                 privateSpacePendingMessages.add(mo);
                 if (id > privateSpacePendingMaxId) {
@@ -20117,90 +20140,107 @@ public class ChatActivity extends BaseFragment implements
             return;
         }
         privateSpaceDecisionShown = true;
-        final int count = privateSpacePendingMessageIds.size();
         final ArrayList<Integer> idSnapshot = new ArrayList<>(privateSpacePendingMessageIds);
         final ArrayList<MessageObject> msgSnapshot = new ArrayList<>(privateSpacePendingMessages);
         final int upTo = privateSpacePendingMaxId;
-        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
-        builder.setTitle(LocaleController.getString(R.string.PrivateSpaceTitle));
-        builder.setMessage(LocaleController.formatPluralString("PrivateSpacePendingDesc", count));
-        builder.setPositiveButton(LocaleController.getString(R.string.PrivateSpacePendingHide), (d, w) -> {
-            SecondSpaceController c = SecondSpaceController.getInstance(currentAccount);
-            c.setLastDecidedMessageId(dialog_id, upTo);
-            c.clearPendingOffModeWork(dialog_id);
-            privateSpacePendingMessageIds.clear();
-            privateSpacePendingMessages.clear();
-        });
-        builder.setNegativeButton(LocaleController.getString(R.string.PrivateSpacePendingShow), (d, w) -> {
-            SecondSpaceController c = SecondSpaceController.getInstance(currentAccount);
-            for (int i = 0; i < idSnapshot.size(); i++) {
-                int mid = idSnapshot.get(i);
-                c.exposeMessage(dialog_id, mid);
-                MessageObject mo = i < msgSnapshot.size() ? msgSnapshot.get(i) : null;
-                if (mo != null) c.cacheLastExposedMessage(dialog_id, mo);
-            }
-            c.setLastDecidedMessageId(dialog_id, upTo);
-            c.clearPendingOffModeWork(dialog_id);
-            privateSpacePendingMessageIds.clear();
-            privateSpacePendingMessages.clear();
-        });
-        if (count > 1) {
-            builder.setNeutralButton(LocaleController.getString(R.string.PrivateSpacePendingChoose), (d, w) -> {
-                showPrivateSpacePerMessagePicker(idSnapshot, msgSnapshot, upTo);
-            });
-        }
-        builder.show();
+        showPrivateSpaceExposurePopup(idSnapshot, msgSnapshot, upTo);
     }
 
-    private void showPrivateSpacePerMessagePicker(ArrayList<Integer> idSnapshot, ArrayList<MessageObject> msgSnapshot, int upTo) {
-        if (getParentActivity() == null || idSnapshot.isEmpty()) {
-            return;
-        }
-        int n = idSnapshot.size();
-        CharSequence[] labels = new CharSequence[n];
-        for (int i = 0; i < n; i++) {
-            MessageObject mo = i < msgSnapshot.size() ? msgSnapshot.get(i) : null;
-            String preview;
-            if (mo == null || mo.messageText == null || mo.messageText.length() == 0) {
-                preview = "#" + idSnapshot.get(i);
-            } else {
-                preview = mo.messageText.toString();
-                if (preview.length() > 80) preview = preview.substring(0, 77) + "…";
-            }
-            labels[i] = preview;
-        }
-        final boolean[] checked = new boolean[n];
+    private void showPrivateSpaceExposurePopup(ArrayList<Integer> idSnapshot, ArrayList<MessageObject> msgSnapshot, int upTo) {
+        if (getParentActivity() == null || idSnapshot.isEmpty()) return;
+        final int count = idSnapshot.size();
+
         AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
-        builder.setTitle(LocaleController.getString(R.string.PrivateSpacePendingChooseTitle));
-        android.widget.LinearLayout pickerContent = new android.widget.LinearLayout(getParentActivity());
-        pickerContent.setOrientation(android.widget.LinearLayout.VERTICAL);
-        int pad = AndroidUtilities.dp(8);
-        pickerContent.setPadding(AndroidUtilities.dp(20), pad, AndroidUtilities.dp(20), pad);
-        for (int i = 0; i < n; i++) {
-            android.widget.CheckBox cb = new android.widget.CheckBox(getParentActivity());
-            cb.setText(labels[i]);
-            cb.setTextColor(Theme.getColor(Theme.key_dialogTextBlack));
-            final int idx = i;
-            cb.setOnCheckedChangeListener((cv, isChecked) -> checked[idx] = isChecked);
-            pickerContent.addView(cb);
-        }
-        builder.setView(pickerContent);
-        builder.setPositiveButton(LocaleController.getString(R.string.PrivateSpacePendingChooseApply), (d, w) -> {
+        builder.setTitle(LocaleController.getString(R.string.PrivateSpaceExposureTitle));
+        builder.setMessage(LocaleController.formatPluralString("PrivateSpaceExposurePopupBody", count));
+        builder.setPositiveButton(LocaleController.getString(R.string.PrivateSpaceExposureManage), (d, w) -> {
+            privateSpaceExposurePending.clear();
+            privateSpaceExposurePending.addAll(idSnapshot);
+            privateSpaceExposureUpTo = upTo;
+            enterExposureSelectionMode(idSnapshot, msgSnapshot);
+        });
+        builder.setNegativeButton(LocaleController.getString(R.string.PrivateSpaceExposureSkip), (d, w) -> {
+            // "Keep all hidden" — close the case so we don't re-prompt for this batch.
             SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-            for (int i = 0; i < n; i++) {
-                if (checked[i]) {
-                    ssc.exposeMessage(dialog_id, idSnapshot.get(i));
-                    MessageObject mo = i < msgSnapshot.size() ? msgSnapshot.get(i) : null;
-                    if (mo != null) ssc.cacheLastExposedMessage(dialog_id, mo);
-                }
-            }
             ssc.setLastDecidedMessageId(dialog_id, upTo);
             ssc.clearPendingOffModeWork(dialog_id);
             privateSpacePendingMessageIds.clear();
             privateSpacePendingMessages.clear();
         });
+        builder.setOnCancelListener(d -> {
+            // Treat dismiss-by-back/scrim like Skip so we don't loop the popup forever.
+            SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+            ssc.setLastDecidedMessageId(dialog_id, upTo);
+            ssc.clearPendingOffModeWork(dialog_id);
+            privateSpacePendingMessageIds.clear();
+            privateSpacePendingMessages.clear();
+        });
+        builder.show();
+    }
+
+    private void enterExposureSelectionMode(ArrayList<Integer> idSnapshot, ArrayList<MessageObject> msgSnapshot) {
+        // Add each candidate to the existing multi-select set; the action bar will
+        // enter action mode automatically on the first selected message.
+        for (int i = 0; i < idSnapshot.size(); i++) {
+            int id = idSnapshot.get(i);
+            MessageObject mo = i < msgSnapshot.size() ? msgSnapshot.get(i) : null;
+            if (mo == null) continue;
+            int idx = mo.getDialogId() == mergeDialogId ? 1 : 0;
+            if (selectedMessagesIds[idx].indexOfKey(id) < 0) {
+                addToSelectedMessages(mo, true, false);
+            }
+        }
+        updateVisibleRows();
+    }
+
+    boolean isPrivateSpaceExposurePending() {
+        return !privateSpaceExposurePending.isEmpty();
+    }
+
+    private void confirmAndExposeSelectedMessages() {
+        if (getParentActivity() == null) return;
+        // Build the list of currently-selected candidate IDs.
+        final ArrayList<Integer> toExpose = new ArrayList<>();
+        final ArrayList<MessageObject> toExposeMsgs = new ArrayList<>();
+        for (int idx = 0; idx < 2; idx++) {
+            for (int i = 0; i < selectedMessagesIds[idx].size(); i++) {
+                int id = selectedMessagesIds[idx].keyAt(i);
+                MessageObject mo = selectedMessagesIds[idx].valueAt(i);
+                if (privateSpaceExposurePending.contains(id)) {
+                    toExpose.add(id);
+                    toExposeMsgs.add(mo);
+                }
+            }
+        }
+        if (toExpose.isEmpty()) {
+            // User deselected everything → behave like Skip.
+            finalizeExposureDecision(new ArrayList<>(), new ArrayList<>());
+            return;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
+        builder.setTitle(LocaleController.getString(R.string.PrivateSpaceExposureTitle));
+        builder.setMessage(LocaleController.formatPluralString("PrivateSpaceExposureConfirmBody", toExpose.size()));
+        builder.setPositiveButton(LocaleController.getString(R.string.PrivateSpaceExposureConfirm),
+                (d, w) -> finalizeExposureDecision(toExpose, toExposeMsgs));
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         builder.show();
+    }
+
+    private void finalizeExposureDecision(ArrayList<Integer> toExpose, ArrayList<MessageObject> toExposeMsgs) {
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        for (int i = 0; i < toExpose.size(); i++) {
+            int id = toExpose.get(i);
+            ssc.exposeMessage(dialog_id, id);
+            MessageObject mo = i < toExposeMsgs.size() ? toExposeMsgs.get(i) : null;
+            if (mo != null) ssc.cacheLastExposedMessage(dialog_id, mo);
+        }
+        ssc.setLastDecidedMessageId(dialog_id, privateSpaceExposureUpTo);
+        ssc.clearPendingOffModeWork(dialog_id);
+        privateSpacePendingMessageIds.clear();
+        privateSpacePendingMessages.clear();
+        privateSpaceExposurePending.clear();
+        privateSpaceExposureUpTo = 0;
+        clearSelectionMode();
     }
 
     @Override

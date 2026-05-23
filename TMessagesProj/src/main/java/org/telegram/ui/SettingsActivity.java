@@ -688,14 +688,15 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
         items.add(SettingCell.Factory.of(1, IconBackgroundColors.BLUE.top, IconBackgroundColors.BLUE.bottom, R.drawable.settings_account, getString(R.string.SettingsAccount), getString(R.string.SettingsAccountInfo)));
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        if (!ssc.isActive() && ssc.isEntryButtonEffectivelyVisible()) {
+        // Private-space row sits in a single fixed slot right under Account regardless of mode:
+        // off-mode shows «Enter Private Space» (id=101), active-mode shows «Private Space Settings» (id=100).
+        if (ssc.isActive()) {
+            items.add(SettingCell.Factory.of(100, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.msg2_secret, getString(R.string.PrivateSpaceSettings), ""));
+        } else if (ssc.isEntryButtonEffectivelyVisible()) {
             items.add(SettingCell.Factory.of(101, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.msg2_secret, getString(R.string.PrivateSpaceEnter), ""));
         }
         items.add(SettingCell.Factory.of(2, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.settings_chat, getString(R.string.SettingsChat), getString(R.string.SettingsChatInfo)));
         items.add(SettingCell.Factory.of(3, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.settings_privacy, getString(R.string.SettingsPrivacySecurity), getString(R.string.SettingsPrivacySecurityInfo)));
-        if (ssc.isActive()) {
-            items.add(SettingCell.Factory.of(100, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.msg2_secret, getString(R.string.PrivateSpaceSettings), ""));
-        }
         items.add(SettingCell.Factory.of(5, IconBackgroundColors.RED.top, IconBackgroundColors.RED.bottom, R.drawable.settings_sounds, getString(R.string.SettingsNotifications), getString(R.string.SettingsNotificationsInfo)));
         items.add(SettingCell.Factory.of(6, IconBackgroundColors.BLUE_DEEP.top, IconBackgroundColors.BLUE_DEEP.bottom, R.drawable.settings_data, getString(R.string.SettingsData), getString(R.string.SettingsDataInfo)));
         items.add(SettingCell.Factory.of(7, IconBackgroundColors.BLUE_ALT.top, IconBackgroundColors.BLUE_ALT.bottom, R.drawable.settings_folders, getString(R.string.SettingsFolders), getString(R.string.SettingsFoldersInfo)));
@@ -823,8 +824,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                         }
                     }
                 };
-                if (SecondSpaceController.getInstance(currentAccount).hasPassword() && getParentActivity() != null) {
-                    PrivateSpacePinDialog.showEnter(getParentActivity(), currentAccount, enter);
+                SecondSpaceController ssc101 = SecondSpaceController.getInstance(currentAccount);
+                if (ssc101.hasPassword() && !ssc101.isPinPromptSkippable()) {
+                    presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_ENTER).setOnSuccess(enter));
                 } else {
                     enter.run();
                 }

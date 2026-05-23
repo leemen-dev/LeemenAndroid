@@ -187,23 +187,39 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             b.setTitle(LocaleController.getString(R.string.PrivateSpacePinTitle));
             b.setMessage(LocaleController.getString(R.string.PrivateSpacePinRemoveConfirm));
             b.setPositiveButton(LocaleController.getString(R.string.Remove), (d, w) -> {
-                PrivateSpacePinDialog.showRemove(getParentActivity(), currentAccount, () -> {
-                    // PIN removal disables pin-in-search and rebalances row layout.
-                    SecondSpaceController.getInstance(currentAccount).setPinInSearchEnabled(false);
-                    updateRows();
-                    if (adapter != null) adapter.notifyDataSetChanged();
-                });
+                boolean wasTested = ssc.isShortcutTested();
+                presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_REMOVE)
+                        .setOnSuccess(() -> {
+                            // PIN removal disables pin-in-search and rebalances row layout.
+                            SecondSpaceController.getInstance(currentAccount).setPinInSearchEnabled(false);
+                            updateRows();
+                            if (adapter != null) adapter.notifyDataSetChanged();
+                            if (wasTested) notifyEntryMethodChanged();
+                        }));
             });
             b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
             AlertDialog alert = b.create();
             alert.show();
             alert.redPositive();
         } else {
-            PrivateSpacePinDialog.showSet(getParentActivity(), currentAccount, () -> {
-                updateRows();
-                if (adapter != null) adapter.notifyDataSetChanged();
-            });
+            boolean wasTested = ssc.isShortcutTested();
+            presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_SET)
+                    .setOnSuccess(() -> {
+                        updateRows();
+                        if (adapter != null) adapter.notifyDataSetChanged();
+                        if (wasTested) notifyEntryMethodChanged();
+                    }));
         }
+    }
+
+    /** Pop a non-blocking notice that the user must re-verify their entry method. */
+    private void notifyEntryMethodChanged() {
+        if (getParentActivity() == null) return;
+        org.telegram.ui.Components.BulletinFactory.of(this)
+                .createSimpleBulletin(R.raw.info,
+                        LocaleController.getString(R.string.PrivateSpaceShortcutRetestRequired))
+                .setDuration(6000)
+                .show();
     }
 
     private void showPinTimeoutPicker() {
@@ -241,9 +257,11 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         if (!ssc.hasPassword()) {
             return;
         }
+        boolean wasTested = ssc.isShortcutTested();
         boolean newValue = !ssc.isPinInSearchEnabled();
         ssc.setPinInSearchEnabled(newValue);
         cell.setChecked(newValue);
+        if (wasTested) notifyEntryMethodChanged();
     }
 
     private void onEntryButtonSwitchClick(TextCheckCell cell) {
