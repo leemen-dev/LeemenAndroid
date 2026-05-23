@@ -1171,8 +1171,6 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_ABOUT_REVENUE_SHARING_ADS = 33;
     public final static int OPTION_REPORT_AD = 34;
     public final static int OPTION_REMOVE_ADS = 35;
-    public final static int OPTION_PRIVATE_SPACE_EXPOSE = 36;
-    public final static int OPTION_PRIVATE_SPACE_HIDE = 37;
     public final static int OPTION_SEND_NOW = 100;
     public final static int OPTION_EDIT_SCHEDULE_TIME = 102;
     public final static int OPTION_SPEED_PROMO = 103;
@@ -1615,6 +1613,7 @@ public class ChatActivity extends BaseFragment implements
     private final static int chat_menu_topic_create = 73;
 
     private final static int private_space_expose = 80;
+    private final static int private_space_hide = 81;
 
     private final static int id_chat_compose_panel = 1000;
 
@@ -3770,7 +3769,13 @@ public class ChatActivity extends BaseFragment implements
                 } else if (id == forward) {
                     openForward(true);
                 } else if (id == private_space_expose) {
-                    confirmAndExposeSelectedMessages();
+                    if (isPrivateSpaceExposurePending()) {
+                        confirmAndExposeSelectedMessages();
+                    } else {
+                        exposeSelectedMessagesBulk();
+                    }
+                } else if (id == private_space_hide) {
+                    hideSelectedMessagesBulk();
                 } else if (id == share) {
                     share();
                 } else if (id == open_direct) {
@@ -10151,12 +10156,14 @@ public class ChatActivity extends BaseFragment implements
             actionModeViews.add(actionMode.addItemWithWidth(share, R.drawable.msg_shareout, AndroidUtilities.dp(54), LocaleController.getString(R.string.ShareFile)));
             actionModeViews.add(actionMode.addItemWithWidth(delete, R.drawable.msg_delete, AndroidUtilities.dp(54), LocaleController.getString(R.string.Delete)));
             actionModeViews.add(actionMode.addItemWithWidth(private_space_expose, R.drawable.msg_seen, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureActionShort)));
+            actionModeViews.add(actionMode.addItemWithWidth(private_space_hide, R.drawable.msg_secret, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureHide)));
         } else {
             actionModeViews.add(actionMode.addItemWithWidth(edit, R.drawable.msg_edit, AndroidUtilities.dp(54), LocaleController.getString(R.string.Edit)));
             actionModeViews.add(actionMode.addItemWithWidth(star, R.drawable.msg_fave, AndroidUtilities.dp(54), LocaleController.getString(R.string.AddToFavorites)));
             actionModeViews.add(actionMode.addItemWithWidth(copy, R.drawable.msg_copy, AndroidUtilities.dp(54), LocaleController.getString(R.string.Copy)));
             actionModeViews.add(actionMode.addItemWithWidth(delete, R.drawable.msg_delete, AndroidUtilities.dp(54), LocaleController.getString(R.string.Delete)));
             actionModeViews.add(actionMode.addItemWithWidth(private_space_expose, R.drawable.msg_seen, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureActionShort)));
+            actionModeViews.add(actionMode.addItemWithWidth(private_space_hide, R.drawable.msg_secret, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureHide)));
         }
         actionMode.setItemVisibility(edit, canEditMessagesCount == 1 && selectedMessagesIds[0].size() + selectedMessagesIds[1].size() == 1 ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(copy, !isPeerNoForwards() && selectedMessagesCanCopyIds[0].size() + selectedMessagesCanCopyIds[1].size() != 0 ? View.VISIBLE : View.GONE);
@@ -10164,7 +10171,29 @@ public class ChatActivity extends BaseFragment implements
         actionMode.setItemVisibility(delete, cantDeleteMessagesCount == 0 ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(tag_message, getUserConfig().isPremium() ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(share, View.GONE);
-        actionMode.setItemVisibility(private_space_expose, isPrivateSpaceExposurePending() ? View.VISIBLE : View.GONE);
+        // Per-message expose/hide buttons in the action-mode toolbar. Shown whenever we're in a
+        // hidden chat in PS-on. Visibility per direction: expose-button shown only if at least
+        // one selected message is currently hidden; hide-button only if at least one is exposed.
+        {
+            SecondSpaceController psCtrl2 = SecondSpaceController.getInstance(currentAccount);
+            boolean inHiddenChatPsOn = psCtrl2.isActive() && psCtrl2.isInSecondSpace(dialog_id);
+            boolean hasExposedSel = false;
+            boolean hasUnexposedSel = false;
+            if (inHiddenChatPsOn) {
+                for (int idx = 0; idx < 2; idx++) {
+                    for (int i = 0; i < selectedMessagesIds[idx].size(); i++) {
+                        int mid = selectedMessagesIds[idx].keyAt(i);
+                        if (mid <= 0) continue;
+                        if (psCtrl2.isMessageExposed(dialog_id, mid)) hasExposedSel = true;
+                        else hasUnexposedSel = true;
+                    }
+                }
+            }
+            boolean exposeVisible = inHiddenChatPsOn && (hasUnexposedSel || isPrivateSpaceExposurePending());
+            boolean hideVisible = inHiddenChatPsOn && hasExposedSel;
+            actionMode.setItemVisibility(private_space_expose, exposeVisible ? View.VISIBLE : View.GONE);
+            actionMode.setItemVisibility(private_space_hide, hideVisible ? View.VISIBLE : View.GONE);
+        }
     }
 
     private void hideTagSelector() {
@@ -18969,9 +18998,29 @@ public class ChatActivity extends BaseFragment implements
                 if (deleteItem != null) {
                     deleteItem.setVisibility(cantDeleteMessagesCount == 0 ? View.VISIBLE : View.GONE);
                 }
-                ActionBarMenuItem exposeItem = actionBar.createActionMode().getItem(private_space_expose);
-                if (exposeItem != null) {
-                    exposeItem.setVisibility(isPrivateSpaceExposurePending() ? View.VISIBLE : View.GONE);
+                {
+                    SecondSpaceController psCtrl3 = SecondSpaceController.getInstance(currentAccount);
+                    boolean inHidden3 = psCtrl3.isActive() && psCtrl3.isInSecondSpace(dialog_id);
+                    boolean hasExposedSel3 = false, hasUnexposedSel3 = false;
+                    if (inHidden3) {
+                        for (int ix = 0; ix < 2; ix++) {
+                            for (int jx = 0; jx < selectedMessagesIds[ix].size(); jx++) {
+                                int mid = selectedMessagesIds[ix].keyAt(jx);
+                                if (mid <= 0) continue;
+                                if (psCtrl3.isMessageExposed(dialog_id, mid)) hasExposedSel3 = true;
+                                else hasUnexposedSel3 = true;
+                            }
+                        }
+                    }
+                    ActionBarMenuItem exposeItem = actionBar.createActionMode().getItem(private_space_expose);
+                    if (exposeItem != null) {
+                        boolean v = inHidden3 && (hasUnexposedSel3 || isPrivateSpaceExposurePending());
+                        exposeItem.setVisibility(v ? View.VISIBLE : View.GONE);
+                    }
+                    ActionBarMenuItem hideItem = actionBar.createActionMode().getItem(private_space_hide);
+                    if (hideItem != null) {
+                        hideItem.setVisibility(inHidden3 && hasExposedSel3 ? View.VISIBLE : View.GONE);
+                    }
                 }
                 hasUnfavedSelected = false;
                 for (int a = 0; a < 2; a++) {
@@ -20244,6 +20293,52 @@ public class ChatActivity extends BaseFragment implements
                 (d, w) -> finalizeExposureDecision(toExpose, toExposeMsgs));
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         builder.show();
+    }
+
+    /** Toolbar "show outside": exposes every selected message currently hidden. */
+    private void exposeSelectedMessagesBulk() {
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        int changed = 0;
+        for (int idx = 0; idx < 2; idx++) {
+            for (int i = 0; i < selectedMessagesIds[idx].size(); i++) {
+                int mid = selectedMessagesIds[idx].keyAt(i);
+                if (mid <= 0) continue;
+                if (!ssc.isMessageExposed(dialog_id, mid)) {
+                    ssc.exposeMessage(dialog_id, mid);
+                    ssc.cacheLastExposedMessage(dialog_id, selectedMessagesIds[idx].valueAt(i));
+                    ssc.setLastDecidedMessageId(dialog_id, mid);
+                    changed++;
+                }
+            }
+        }
+        if (changed > 0) {
+            clearSelectionMode();
+            updateVisibleRows();
+        }
+    }
+
+    /** Toolbar "hide outside": un-exposes every selected message currently exposed. */
+    private void hideSelectedMessagesBulk() {
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        int changed = 0;
+        for (int idx = 0; idx < 2; idx++) {
+            for (int i = 0; i < selectedMessagesIds[idx].size(); i++) {
+                int mid = selectedMessagesIds[idx].keyAt(i);
+                if (mid <= 0) continue;
+                if (ssc.isMessageExposed(dialog_id, mid)) {
+                    ssc.unexposeMessage(dialog_id, mid);
+                    MessageObject cached = ssc.getLastExposedMessageCached(dialog_id);
+                    if (cached != null && cached.getId() == mid) {
+                        ssc.invalidateLastExposedCache(dialog_id);
+                    }
+                    changed++;
+                }
+            }
+        }
+        if (changed > 0) {
+            clearSelectionMode();
+            updateVisibleRows();
+        }
     }
 
     private void finalizeExposureDecision(ArrayList<Integer> toExpose, ArrayList<MessageObject> toExposeMsgs) {
@@ -33495,32 +33590,6 @@ public class ChatActivity extends BaseFragment implements
                 hideAds();
                 break;
             }
-            case OPTION_PRIVATE_SPACE_EXPOSE: {
-                SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-                int mid = selectedObject.getId();
-                ssc.exposeMessage(dialog_id, mid);
-                ssc.cacheLastExposedMessage(dialog_id, selectedObject);
-                ssc.setLastDecidedMessageId(dialog_id, mid);
-                privateSpaceExposurePending.remove(mid);
-                if (privateSpaceExposurePending.isEmpty()) {
-                    ssc.clearPendingOffModeWork(dialog_id);
-                }
-                updateVisibleRows();
-                break;
-            }
-            case OPTION_PRIVATE_SPACE_HIDE: {
-                SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-                int mid = selectedObject.getId();
-                ssc.unexposeMessage(dialog_id, mid);
-                // If we just hid the cached "last exposed", invalidate; the next bind of the
-                // chat list cell will fall back gracefully (cleared preview, see DialogCell).
-                MessageObject cached = ssc.getLastExposedMessageCached(dialog_id);
-                if (cached != null && cached.getId() == mid) {
-                    ssc.invalidateLastExposedCache(dialog_id);
-                }
-                updateVisibleRows();
-                break;
-            }
             case OPTION_SPEED_PROMO: {
                 showDialog(new PremiumFeatureBottomSheet(ChatActivity.this, PremiumPreviewFragment.PREMIUM_FEATURE_DOWNLOAD_SPEED, true));
                 break;
@@ -34135,13 +34204,13 @@ public class ChatActivity extends BaseFragment implements
                 }
                 {
                     boolean searchHighlight = highlightMessageId != Integer.MAX_VALUE && messageObject != null && messageObject.getId() == highlightMessageId;
-                    // Persistent highlight for messages exposed outside Private Space, only when user is in PS-on:
-                    // visually flags "leak surface" so the user immediately sees which messages are visible off-mode.
+                    cell.setHighlighted(searchHighlight);
+                    // Persistent visual mark for messages exposed outside Private Space in PS-on.
+                    // Uses an independent flag so mention-read clears, search-fade, etc. don't reset it.
                     SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-                    boolean psExposedHighlight = ssc.isActive()
+                    cell.setPrivateSpaceExposed(ssc.isActive()
                             && messageObject != null
-                            && ssc.isMessageExposed(dialog_id, messageObject.getId());
-                    cell.setHighlighted(searchHighlight || psExposedHighlight);
+                            && ssc.isMessageExposed(dialog_id, messageObject.getId()));
                 }
                 if (highlightMessageId != Integer.MAX_VALUE) {
                     startMessageUnselect();
@@ -45099,21 +45168,6 @@ public class ChatActivity extends BaseFragment implements
                 items.add(LocaleController.getString(chatMode == MODE_SAVED && threadMessageId != getUserConfig().getClientUserId() ? R.string.Remove : R.string.Delete));
                 options.add(OPTION_DELETE);
                 icons.add(deleteIconRes);
-            }
-        }
-        // Private Space per-message exposure controls. Only meaningful when the chat itself
-        // is in Private Space and the user is currently in PS-on (decisions only happen here).
-        SecondSpaceController psCtrl = SecondSpaceController.getInstance(currentAccount);
-        if (psCtrl.isActive() && psCtrl.isInSecondSpace(dialog_id)
-                && selectedObject != null && selectedObject.getId() > 0) {
-            if (psCtrl.isMessageExposed(dialog_id, selectedObject.getId())) {
-                items.add(LocaleController.getString(R.string.PrivateSpaceExposureHide));
-                options.add(OPTION_PRIVATE_SPACE_HIDE);
-                icons.add(R.drawable.msg_secret);
-            } else {
-                items.add(LocaleController.getString(R.string.PrivateSpaceExposureActionShort));
-                options.add(OPTION_PRIVATE_SPACE_EXPOSE);
-                icons.add(R.drawable.msg_seen);
             }
         }
     }
