@@ -2391,6 +2391,12 @@
     <string name="PrivateSpaceShowEntryButtonBlockedNoShortcut">Configure a tap sequence or enable PIN-in-search first — otherwise you will lose access to Private Space.</string>
     <string name="PrivateSpaceShowEntryButtonBlockedUntested">Open Private Space using your shortcut at least once. Once confirmed working, you can hide this button.</string>
     <string name="PrivateSpaceSequenceTooShort">A sequence must contain at least one long press, or be at least 3 short taps.</string>
+    <string name="PrivateSpaceSequenceConfirmTitle">Test your shortcut</string>
+    <string name="PrivateSpaceSequenceConfirmMessage">Sequence saved. To confirm it works, exit Private Space and try entering with your new sequence. Until you do, the entry button stays visible in Settings.</string>
+    <string name="PrivateSpaceSequenceConfirmMessageAgain">Sequence updated. To confirm the new sequence works, exit Private Space and try entering with it. The entry button stays visible until you confirm.</string>
+    <string name="PrivateSpacePinTimeoutTitle">Remember PIN</string>
+    <string name="PrivateSpacePinTimeoutOff">Off</string>
+    <string name="PrivateSpacePinTimeoutMinutes">%1$d min</string>
     <string name="PrivateSpaceEmpty">No chats in Private Space yet. Open settings to add them.</string>
     <string name="PrivateSpaceEmptyOpenSettings">Open settings</string>
     <string name="BlockUserMultiTitle">Block User</string>

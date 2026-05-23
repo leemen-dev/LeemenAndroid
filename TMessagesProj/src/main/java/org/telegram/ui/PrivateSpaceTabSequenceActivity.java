@@ -126,7 +126,27 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
             b.show();
             return;
         }
-        SecondSpaceController.getInstance(currentAccount).setTabSequence(steps);
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        boolean hadShortcutBefore = ssc.hasConfiguredShortcut();
+        ssc.setTabSequence(steps);
+        // After saving a fresh / changed sequence, nudge user to actually try it.
+        // The explicit entry button in main Settings stays visible until the shortcut
+        // is confirmed working (shortcut-tested gate) — see SecondSpaceController.
+        if (!steps.isEmpty() && !ssc.isShortcutTested() && getParentActivity() != null) {
+            AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
+            b.setTitle(LocaleController.getString(R.string.PrivateSpaceSequenceConfirmTitle));
+            b.setMessage(LocaleController.getString(hadShortcutBefore
+                    ? R.string.PrivateSpaceSequenceConfirmMessageAgain
+                    : R.string.PrivateSpaceSequenceConfirmMessage));
+            b.setPositiveButton(LocaleController.getString(R.string.OK), (d, w) -> finishFragment());
+            b.setOnDismissListener(d -> {
+                if (getParentLayout() != null && getParentLayout().getFragmentStack().contains(PrivateSpaceTabSequenceActivity.this)) {
+                    finishFragment();
+                }
+            });
+            b.show();
+            return;
+        }
         finishFragment();
     }
 
@@ -162,36 +182,105 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
         }
     }
 
+    private static class TabOption {
+        final int tabIndex;
+        final int iconRes;
+        final int labelRes;
+        TabOption(int tabIndex, int iconRes, int labelRes) {
+            this.tabIndex = tabIndex;
+            this.iconRes = iconRes;
+            this.labelRes = labelRes;
+        }
+    }
+
+    /** Returns only tabs that are actually visible in MainTabsActivity for this user. Exit excluded. */
+    private List<TabOption> visibleTabOptions() {
+        ArrayList<TabOption> list = new ArrayList<>(4);
+        list.add(new TabOption(INDEX_CHATS, R.drawable.tabs_chats_24, R.string.MainTabsChats));
+        list.add(new TabOption(INDEX_CONTACTS, R.drawable.tabs_contacts_24, R.string.MainTabsContacts));
+        if (getUserConfig().showCallsTab) {
+            list.add(new TabOption(INDEX_CALLS, R.drawable.tabs_calls_24, R.string.MainTabsCalls));
+        } else {
+            list.add(new TabOption(INDEX_SETTINGS, R.drawable.outline_profile_settings, R.string.Settings));
+        }
+        list.add(new TabOption(INDEX_PROFILE, R.drawable.outline_profile_member_24, R.string.MainTabsProfile));
+        return list;
+    }
+
     private void showAddStepDialog() {
         if (getParentActivity() == null) return;
-        CharSequence[] tabLabels = {
-                LocaleController.getString(R.string.MainTabsChats),
-                LocaleController.getString(R.string.MainTabsContacts),
-                LocaleController.getString(R.string.Settings),
-                LocaleController.getString(R.string.MainTabsCalls),
-                LocaleController.getString(R.string.MainTabsProfile),
-        };
-        int[] tabIds = {INDEX_CHATS, INDEX_CONTACTS, INDEX_SETTINGS, INDEX_CALLS, INDEX_PROFILE};
-        AlertDialog.Builder tabPicker = new AlertDialog.Builder(getParentActivity());
+        List<TabOption> options = visibleTabOptions();
+        Context context = getParentActivity();
+
+        android.widget.LinearLayout container = new android.widget.LinearLayout(context);
+        container.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int padTop = org.telegram.messenger.AndroidUtilities.dp(4);
+        int padBot = org.telegram.messenger.AndroidUtilities.dp(8);
+        container.setPadding(0, padTop, 0, padBot);
+
+        AlertDialog.Builder tabPicker = new AlertDialog.Builder(context);
         tabPicker.setTitle(LocaleController.getString(R.string.PrivateSpaceSequencePickTab));
-        tabPicker.setItems(tabLabels, (d, which) -> {
-            final int chosenTab = tabIds[which];
-            CharSequence[] actions = {
-                    LocaleController.getString(R.string.PrivateSpaceSequenceTap),
-                    LocaleController.getString(R.string.PrivateSpaceSequenceLongPress),
-            };
-            AlertDialog.Builder actionPicker = new AlertDialog.Builder(getParentActivity());
-            actionPicker.setTitle(LocaleController.getString(R.string.PrivateSpaceSequencePickAction));
-            actionPicker.setItems(actions, (d2, which2) -> {
-                steps.add(new SecondSpaceController.TabStep(chosenTab, which2 == 1));
-                updateRows();
-                if (adapter != null) adapter.notifyDataSetChanged();
+        AlertDialog[] alertRef = new AlertDialog[1];
+
+        for (TabOption opt : options) {
+            android.widget.LinearLayout row = new android.widget.LinearLayout(context);
+            row.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            row.setBackground(Theme.getSelectorDrawable(false));
+            int sidePad = org.telegram.messenger.AndroidUtilities.dp(20);
+            int vPad = org.telegram.messenger.AndroidUtilities.dp(12);
+            row.setPadding(sidePad, vPad, sidePad, vPad);
+
+            android.widget.ImageView icon = new android.widget.ImageView(context);
+            icon.setImageResource(opt.iconRes);
+            icon.setColorFilter(new android.graphics.PorterDuffColorFilter(
+                    Theme.getColor(Theme.key_dialogTextBlack),
+                    android.graphics.PorterDuff.Mode.SRC_IN));
+            int iconSize = org.telegram.messenger.AndroidUtilities.dp(24);
+            android.widget.LinearLayout.LayoutParams iconLp =
+                    new android.widget.LinearLayout.LayoutParams(iconSize, iconSize);
+            iconLp.rightMargin = org.telegram.messenger.AndroidUtilities.dp(16);
+            row.addView(icon, iconLp);
+
+            android.widget.TextView label = new android.widget.TextView(context);
+            label.setText(LocaleController.getString(opt.labelRes));
+            label.setTextColor(Theme.getColor(Theme.key_dialogTextBlack));
+            label.setTextSize(16);
+            row.addView(label, new android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT));
+
+            final int chosenTab = opt.tabIndex;
+            row.setOnClickListener(v -> {
+                if (alertRef[0] != null) alertRef[0].dismiss();
+                showActionPicker(chosenTab);
             });
-            actionPicker.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
-            actionPicker.show();
-        });
+            container.addView(row, new android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT));
+        }
+
+        tabPicker.setView(container);
         tabPicker.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
-        tabPicker.show();
+        alertRef[0] = tabPicker.create();
+        alertRef[0].show();
+    }
+
+    private void showActionPicker(int chosenTab) {
+        if (getParentActivity() == null) return;
+        CharSequence[] actions = {
+                LocaleController.getString(R.string.PrivateSpaceSequenceTap),
+                LocaleController.getString(R.string.PrivateSpaceSequenceLongPress),
+        };
+        AlertDialog.Builder actionPicker = new AlertDialog.Builder(getParentActivity());
+        actionPicker.setTitle(LocaleController.getString(R.string.PrivateSpaceSequencePickAction));
+        actionPicker.setItems(actions, (d2, which2) -> {
+            steps.add(new SecondSpaceController.TabStep(chosenTab, which2 == 1));
+            updateRows();
+            if (adapter != null) adapter.notifyDataSetChanged();
+        });
+        actionPicker.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        actionPicker.show();
     }
 
     private void showRemoveStepDialog(int stepIndex) {

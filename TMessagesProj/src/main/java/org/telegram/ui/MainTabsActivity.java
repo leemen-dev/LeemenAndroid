@@ -365,7 +365,18 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             return;
         }
 
-        final int unreadCount = MessagesStorage.getInstance(currentAccount).getMainUnreadCount();
+        int unreadCount = MessagesStorage.getInstance(currentAccount).getMainUnreadCount();
+        // Subtract unread counts of chats that live in private space — hidden chats are
+        // silent by design and must not inflate the Chats-tab badge.
+        org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+        if (!ssc.getDialogIds().isEmpty()) {
+            int sub = 0;
+            for (Long did : ssc.getDialogIds()) {
+                org.telegram.tgnet.TLRPC.Dialog d = MessagesController.getInstance(currentAccount).dialogs_dict.get(did);
+                if (d != null) sub += d.unread_count;
+            }
+            unreadCount = Math.max(0, unreadCount - sub);
+        }
         if (unreadCount > 0) {
             final String unreadCountFmt = LocaleController.formatNumber(unreadCount, ',');
             tabs[INDEX_CHATS].setCounter(unreadCountFmt, false, animated);
@@ -765,6 +776,9 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             checkContactsTabBadge();
         } else if (id == NotificationCenter.secondSpaceModeChanged) {
             updatePrivateSpaceExitTabVisibility(true);
+            // Hidden chats' unread counts are excluded from the Chats-tab badge.
+            // Re-run to reflect any change in the hidden-chats set or active mode.
+            checkUnreadCount(true);
         }
     }
 

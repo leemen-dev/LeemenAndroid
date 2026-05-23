@@ -26,6 +26,8 @@ public class SecondSpaceController extends BaseController {
     private static final String PREF_TAB_SEQUENCE = "second_space_tab_sequence";
     private static final String PREF_PIN_IN_SEARCH = "second_space_pin_in_search";
     private static final String PREF_SHORTCUT_TESTED = "second_space_shortcut_tested";
+    private static final String PREF_PIN_TIMEOUT_MIN = "second_space_pin_timeout_min";
+    private static final String PREF_PIN_LAST_OK_MS = "second_space_pin_last_ok_ms";
 
     /** A single step in the tab-tap gesture sequence. */
     public static final class TabStep {
@@ -70,6 +72,8 @@ public class SecondSpaceController extends BaseController {
     private final java.util.List<TabStep> tabSequence = new java.util.ArrayList<>();
     private boolean pinInSearchEnabled;
     private boolean shortcutTested;
+    private int pinTimeoutMinutes;
+    private long pinLastVerifiedAt;
     private boolean active;
 
     private boolean entryButtonVisible;
@@ -105,6 +109,40 @@ public class SecondSpaceController extends BaseController {
         loadTabSequence(prefs.getString(PREF_TAB_SEQUENCE, ""));
         pinInSearchEnabled = prefs.getBoolean(PREF_PIN_IN_SEARCH, false);
         shortcutTested = prefs.getBoolean(PREF_SHORTCUT_TESTED, false);
+        pinTimeoutMinutes = prefs.getInt(PREF_PIN_TIMEOUT_MIN, 0);
+        pinLastVerifiedAt = prefs.getLong(PREF_PIN_LAST_OK_MS, 0L);
+    }
+
+    // --- PIN remember-timeout ---
+    //
+    // After a successful PIN entry, skip prompt for `pinTimeoutMinutes` minutes.
+    // 0 = always ask (default). Updated whenever PIN is verified.
+
+    public int getPinTimeoutMinutes() {
+        return pinTimeoutMinutes;
+    }
+
+    public void setPinTimeoutMinutes(int minutes) {
+        pinTimeoutMinutes = Math.max(0, minutes);
+        getMessagesController().getMainSettings().edit().putInt(PREF_PIN_TIMEOUT_MIN, pinTimeoutMinutes).apply();
+    }
+
+    /** Should the PIN prompt be skipped right now because of a recent successful entry? */
+    public boolean isPinPromptSkippable() {
+        if (pinTimeoutMinutes <= 0 || pinLastVerifiedAt <= 0) return false;
+        long deadlineMs = pinLastVerifiedAt + pinTimeoutMinutes * 60_000L;
+        return System.currentTimeMillis() < deadlineMs;
+    }
+
+    public void recordPinVerified() {
+        pinLastVerifiedAt = System.currentTimeMillis();
+        getMessagesController().getMainSettings().edit().putLong(PREF_PIN_LAST_OK_MS, pinLastVerifiedAt).apply();
+    }
+
+    public void clearPinVerified() {
+        if (pinLastVerifiedAt == 0L) return;
+        pinLastVerifiedAt = 0L;
+        getMessagesController().getMainSettings().edit().remove(PREF_PIN_LAST_OK_MS).apply();
     }
 
     private void loadTabSequence(String json) {
@@ -185,6 +223,8 @@ public class SecondSpaceController extends BaseController {
     public void setPassword(String pin) {
         passwordHash = TextUtils.isEmpty(pin) ? "" : hashPassword(pin);
         getMessagesController().getMainSettings().edit().putString(PREF_PASSWORD_HASH, passwordHash).apply();
+        // PIN changed → invalidate any cached «recently verified» state.
+        clearPinVerified();
     }
 
     private static String hashPassword(String pin) {

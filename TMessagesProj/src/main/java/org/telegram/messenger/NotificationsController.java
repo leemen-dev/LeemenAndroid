@@ -1061,7 +1061,7 @@ public class NotificationsController extends BaseController {
             SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
             for (int a = 0; a < messageObjects.size(); a++) {
                 MessageObject messageObject = messageObjects.get(a);
-                if (messageObject != null && !ssc.isActive() && ssc.isInSecondSpace(messageObject.getDialogId())) {
+                if (messageObject != null && ssc.isInSecondSpace(messageObject.getDialogId())) {
                     if (BuildVars.LOGS_ENABLED) {
                         FileLog.d("skipped message because dialog is in private space and mode is off");
                     }
@@ -1361,7 +1361,7 @@ public class NotificationsController extends BaseController {
     private void appendMessage(MessageObject messageObject) {
         if (messageObject != null) {
             SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-            if (!ssc.isActive() && ssc.isInSecondSpace(messageObject.getDialogId())) {
+            if (ssc.isInSecondSpace(messageObject.getDialogId())) {
                 return;
             }
         }
@@ -1534,7 +1534,7 @@ public class NotificationsController extends BaseController {
                             message.silent && (message.action instanceof TLRPC.TL_messageActionContactSignUp || message.action instanceof TLRPC.TL_messageActionUserJoined)) {
                         continue;
                     }
-                    if (!ssc.isActive() && ssc.isInSecondSpace(MessageObject.getDialogId(message))) {
+                    if (ssc.isInSecondSpace(MessageObject.getDialogId(message))) {
                         continue;
                     }
                     long did;
@@ -1726,6 +1726,9 @@ public class NotificationsController extends BaseController {
                 continue;
             }
             NotificationsController controller = getInstance(a);
+            // Hidden chats never contribute to the total app-icon badge or tab badges,
+            // regardless of mode — they are "silent by design".
+            SecondSpaceController ssc = SecondSpaceController.getInstance(a);
             if (controller.showBadgeNumber) {
                 if (controller.showBadgeMessages) {
                     if (controller.showBadgeMuted) {
@@ -1733,27 +1736,36 @@ public class NotificationsController extends BaseController {
                             final ArrayList<TLRPC.Dialog> dialogs = new ArrayList<>(MessagesController.getInstance(a).allDialogs);
                             for (int i = 0, N = dialogs.size(); i < N; i++) {
                                 TLRPC.Dialog dialog = dialogs.get(i);
-                                if (dialog != null && DialogObject.isChatDialog(dialog.id)) {
+                                if (dialog == null) continue;
+                                if (ssc.isInSecondSpace(dialog.id)) continue;
+                                if (DialogObject.isChatDialog(dialog.id)) {
                                     TLRPC.Chat chat = getMessagesController().getChat(-dialog.id);
                                     if (ChatObject.isNotInChat(chat)) {
                                         continue;
                                     }
                                 }
-                                if (dialog != null) {
-                                    count += MessagesController.getInstance(a).getDialogUnreadCount(dialog);
-                                }
+                                count += MessagesController.getInstance(a).getDialogUnreadCount(dialog);
                             }
                         } catch (Exception e) {
                             FileLog.e(e);
                         }
                     } else {
-                        count += controller.total_unread_count;
+                        // total_unread_count is maintained from push paths which already early-skip
+                        // hidden chats; remaining inflation could come from prior reads — subtract.
+                        int sub = 0;
+                        for (Long did : ssc.getDialogIds()) {
+                            TLRPC.Dialog d = MessagesController.getInstance(a).dialogs_dict.get(did);
+                            if (d != null) sub += d.unread_count;
+                        }
+                        count += Math.max(0, controller.total_unread_count - sub);
                     }
                 } else {
                     if (controller.showBadgeMuted) {
                         try {
                             for (int i = 0, N = MessagesController.getInstance(a).allDialogs.size(); i < N; i++) {
                                 TLRPC.Dialog dialog = MessagesController.getInstance(a).allDialogs.get(i);
+                                if (dialog == null) continue;
+                                if (ssc.isInSecondSpace(dialog.id)) continue;
                                 if (DialogObject.isChatDialog(dialog.id)) {
                                     TLRPC.Chat chat = getMessagesController().getChat(-dialog.id);
                                     if (ChatObject.isNotInChat(chat)) {
@@ -1769,7 +1781,15 @@ public class NotificationsController extends BaseController {
                             FileLog.e(e, false);
                         }
                     } else {
-                        count += controller.pushDialogs.size();
+                        // pushDialogs counts chats with active push entries; hidden chats are
+                        // pre-filtered from push paths but defensively subtract anything that
+                        // slipped in.
+                        int n = controller.pushDialogs.size();
+                        for (int i = 0; i < controller.pushDialogs.size(); i++) {
+                            long did = controller.pushDialogs.keyAt(i);
+                            if (ssc.isInSecondSpace(did)) n--;
+                        }
+                        count += Math.max(0, n);
                     }
                 }
             }
