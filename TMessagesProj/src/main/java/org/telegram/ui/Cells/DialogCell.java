@@ -3156,6 +3156,23 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                         clearingDialog = MessagesController.getInstance(currentAccount).isClearingDialog(dialog.id);
                         groupMessages = MessagesController.getInstance(currentAccount).dialogMessage.get(dialog.id);
                         message = groupMessages != null && groupMessages.size() > 0 ? groupMessages.get(0) : null;
+                        // Hidden chat in PS off-mode: substitute the cached last EXPOSED message
+                        // as preview, so we don't leak a hidden message into the dialogs list.
+                        // Falls back to the actual last message if nothing is cached (rare; the
+                        // cell only appears in off-mode when hasExposedMessages or hasPendingOffModeWork).
+                        org.telegram.messenger.SecondSpaceController ssc =
+                                org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+                        if (!ssc.isActive() && ssc.isInSecondSpace(dialog.id)) {
+                            org.telegram.messenger.MessageObject lastExposed = ssc.getLastExposedMessageCached(dialog.id);
+                            if (lastExposed != null) {
+                                message = lastExposed;
+                                groupMessages = null;
+                            } else if (message != null && !ssc.isMessageExposed(dialog.id, message.getId())) {
+                                // No cache and actual last is hidden — clear preview text rather than leak it.
+                                message = null;
+                                groupMessages = null;
+                            }
+                        }
                         lastUnreadState = message != null && message.isUnread();
                         TLRPC.Chat localChat = MessagesController.getInstance(currentAccount).getChat(-dialog.id);
                         boolean isForumCell = localChat != null && localChat.forum && !isTopic;
