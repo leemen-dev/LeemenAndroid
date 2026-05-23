@@ -2342,7 +2342,10 @@
     <string name="BlockedUsersInfo">Blocked users will not be able to contact you and will not see your Last Seen time.</string>
     <string name="PrivateSpace">Private Space</string>
     <string name="PrivateSpaceTitle">Private Space</string>
-    <string name="PrivateSpaceSelectChats">Select chats</string>
+    <string name="PrivateSpaceSelectChats">Hidden chats</string>
+    <string name="PrivateSpaceAddChat">Add chats</string>
+    <string name="PrivateSpaceAddChatsInfo">These chats will be hidden when Private Space is off.</string>
+    <string name="PrivateSpaceRemoveChatConfirm">Remove this chat from Private Space?</string>
     <string name="PrivateSpaceEnter">Enter Private Space</string>
     <string name="PrivateSpaceExit">Exit Private Space</string>
     <string name="PrivateSpaceExitTab">Exit</string>

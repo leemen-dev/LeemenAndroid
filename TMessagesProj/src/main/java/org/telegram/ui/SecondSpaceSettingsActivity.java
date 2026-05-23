@@ -1,6 +1,7 @@
 package org.telegram.ui;
 
 import android.content.Context;
+import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -9,6 +10,9 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import org.telegram.PhoneFormat.PhoneFormat;
+import org.telegram.messenger.ChatObject;
+import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
@@ -21,6 +25,8 @@ import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.HeaderCell;
+import org.telegram.ui.Cells.ManageChatTextCell;
+import org.telegram.ui.Cells.ManageChatUserCell;
 import org.telegram.ui.Cells.ShadowSectionCell;
 import org.telegram.ui.Cells.TextCheckCell;
 import org.telegram.ui.Cells.TextInfoPrivacyCell;
@@ -28,18 +34,30 @@ import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.RecyclerListView;
 
 import java.util.ArrayList;
+import java.util.Set;
 
 public class SecondSpaceSettingsActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
 
-    private static final int VIEW_TYPE_HEADER = 0;
-    private static final int VIEW_TYPE_CHECK_CHAT = 1;
-    private static final int VIEW_TYPE_SHADOW = 2;
-    private static final int VIEW_TYPE_SWITCH = 3;
-    private static final int VIEW_TYPE_INFO = 4;
+    private static final int VIEW_USER = 0;
+    private static final int VIEW_INFO = 1;
+    private static final int VIEW_ADD = 2;
+    private static final int VIEW_HEADER = 3;
+    private static final int VIEW_SHADOW = 4;
+    private static final int VIEW_SWITCH = 5;
 
     private RecyclerListView listView;
     private ListAdapter adapter;
-    private final ArrayList<TLRPC.Dialog> dialogs = new ArrayList<>();
+    private final ArrayList<Long> hiddenIds = new ArrayList<>();
+
+    private int rowCount;
+    private int addChatRow;
+    private int addChatInfoRow;
+    private int chatsHeaderRow;
+    private int chatsStartRow;
+    private int chatsEndRow;
+    private int chatsShadowRow;
+    private int switchRow;
+    private int switchInfoRow;
 
     @Override
     public boolean onFragmentCreate() {
@@ -88,29 +106,59 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         listView.setLayoutManager(new LinearLayoutManager(context));
         listView.setAdapter(adapter = new ListAdapter(context));
         listView.setOnItemClickListener((view, position) -> {
-            int viewType = adapter.getItemViewType(position);
-            if (viewType == VIEW_TYPE_CHECK_CHAT) {
-                int dialogIndex = position - 1;
-                if (dialogIndex < 0 || dialogIndex >= dialogs.size()) {
-                    return;
-                }
-                TLRPC.Dialog dialog = dialogs.get(dialogIndex);
-                SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-                boolean currentlyIn = ssc.isInSecondSpace(dialog.id);
-                if (currentlyIn) {
-                    ssc.removeFromSecondSpace(dialog.id);
-                } else {
-                    ssc.addToSecondSpace(dialog.id);
-                }
-                ((TextCheckCell) view).setChecked(!currentlyIn);
-            } else if (viewType == VIEW_TYPE_SWITCH) {
+            if (position == addChatRow) {
+                openChatPicker();
+            } else if (position == switchRow) {
                 onEntryButtonSwitchClick((TextCheckCell) view);
+            } else if (position >= chatsStartRow && position < chatsEndRow) {
+                long dialogId = hiddenIds.get(position - chatsStartRow);
+                confirmRemove(dialogId);
             }
+        });
+        listView.setOnItemLongClickListener((view, position) -> {
+            if (position >= chatsStartRow && position < chatsEndRow) {
+                confirmRemove(hiddenIds.get(position - chatsStartRow));
+                return true;
+            }
+            return false;
         });
         frameLayout.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
-        reloadDialogs();
+        reloadHiddenIds();
         return fragmentView;
+    }
+
+    private void openChatPicker() {
+        Bundle args = new Bundle();
+        args.putBoolean("isAlwaysShare", true);
+        args.putInt("chatAddType", 2); // FILTER — accepts users + chats + channels
+        GroupCreateActivity fragment = new GroupCreateActivity(args);
+        fragment.setDelegate((premium, miniapps, ids) -> {
+            SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+            for (Long id : ids) {
+                if (id == null) continue;
+                ssc.addToSecondSpace(id);
+            }
+            reloadHiddenIds();
+        });
+        presentFragment(fragment);
+    }
+
+    private void confirmRemove(long dialogId) {
+        if (getParentActivity() == null) {
+            return;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
+        builder.setTitle(LocaleController.getString(R.string.PrivateSpaceTitle));
+        builder.setMessage(LocaleController.getString(R.string.PrivateSpaceRemoveChatConfirm));
+        builder.setPositiveButton(LocaleController.getString(R.string.Remove), (d, w) -> {
+            SecondSpaceController.getInstance(currentAccount).removeFromSecondSpace(dialogId);
+            reloadHiddenIds();
+        });
+        builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        AlertDialog alert = builder.create();
+        alert.show();
+        alert.redPositive();
     }
 
     private void onEntryButtonSwitchClick(TextCheckCell cell) {
@@ -120,80 +168,58 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         boolean ok = ssc.setEntryButtonVisible(newValue);
         if (ok) {
             cell.setChecked(newValue);
-        } else {
-            if (getParentActivity() != null) {
-                new AlertDialog.Builder(getParentActivity())
-                        .setTitle(LocaleController.getString(R.string.PrivateSpaceTitle))
-                        .setMessage(LocaleController.getString(R.string.PrivateSpaceShowEntryButtonBlocked))
-                        .setPositiveButton(LocaleController.getString(R.string.OK), null)
-                        .show();
-            }
+        } else if (getParentActivity() != null) {
+            new AlertDialog.Builder(getParentActivity())
+                    .setTitle(LocaleController.getString(R.string.PrivateSpaceTitle))
+                    .setMessage(LocaleController.getString(R.string.PrivateSpaceShowEntryButtonBlocked))
+                    .setPositiveButton(LocaleController.getString(R.string.OK), null)
+                    .show();
         }
     }
 
-    private void reloadDialogs() {
-        dialogs.clear();
-        ArrayList<TLRPC.Dialog> all = MessagesController.getInstance(currentAccount).getAllDialogs();
+    private void reloadHiddenIds() {
+        hiddenIds.clear();
+        Set<Long> all = SecondSpaceController.getInstance(currentAccount).getDialogIds();
         if (all != null) {
-            for (int i = 0; i < all.size(); i++) {
-                TLRPC.Dialog d = all.get(i);
-                if (d == null || isSelfOrService(d.id)) {
-                    continue;
-                }
-                dialogs.add(d);
-            }
+            hiddenIds.addAll(all);
         }
+        updateRows();
         if (adapter != null) {
             adapter.notifyDataSetChanged();
         }
     }
 
-    private boolean isSelfOrService(long dialogId) {
-        long selfId = getUserConfig().getClientUserId();
-        if (dialogId == selfId) {
-            return true;
-        }
-        if (dialogId > 0) {
-            TLRPC.User u = MessagesController.getInstance(currentAccount).getUser(dialogId);
-            return u != null && (UserObject.isReplyUser(u) || UserObject.isDeleted(u));
-        }
-        return false;
-    }
-
-    private String dialogTitle(TLRPC.Dialog dialog) {
-        if (dialog.id > 0) {
-            TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(dialog.id);
-            if (user != null) {
-                return UserObject.getUserName(user);
-            }
+    private void updateRows() {
+        rowCount = 0;
+        addChatRow = rowCount++;
+        addChatInfoRow = rowCount++;
+        if (!hiddenIds.isEmpty()) {
+            chatsHeaderRow = rowCount++;
+            chatsStartRow = rowCount;
+            rowCount += hiddenIds.size();
+            chatsEndRow = rowCount;
+            chatsShadowRow = rowCount++;
         } else {
-            TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(-dialog.id);
-            if (chat != null) {
-                return chat.title != null ? chat.title : "";
-            }
+            chatsHeaderRow = -1;
+            chatsStartRow = -1;
+            chatsEndRow = -1;
+            chatsShadowRow = -1;
         }
-        return "";
+        switchRow = rowCount++;
+        switchInfoRow = rowCount++;
     }
-
-    private int rowHeader() { return 0; }
-    private int rowFirstChat() { return 1; }
-    private int rowLastChat() { return dialogs.size(); }
-    private int rowShadow() { return dialogs.size() + 1; }
-    private int rowSwitch() { return dialogs.size() + 2; }
-    private int rowInfo() { return dialogs.size() + 3; }
-    private int rowCount() { return dialogs.size() + 4; }
 
     private class ListAdapter extends RecyclerListView.SelectionAdapter {
         private final Context mContext;
 
         ListAdapter(Context context) {
-            this.mContext = context;
+            mContext = context;
         }
 
         @Override
         public boolean isEnabled(RecyclerView.ViewHolder holder) {
             int vt = holder.getItemViewType();
-            return vt == VIEW_TYPE_CHECK_CHAT || vt == VIEW_TYPE_SWITCH;
+            return vt == VIEW_USER || vt == VIEW_ADD || vt == VIEW_SWITCH;
         }
 
         @NonNull
@@ -201,24 +227,36 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
             View view;
             switch (viewType) {
-                case VIEW_TYPE_HEADER:
-                    view = new HeaderCell(mContext);
-                    view.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+                case VIEW_USER: {
+                    ManageChatUserCell userCell = new ManageChatUserCell(mContext, 7, 6, true);
+                    userCell.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+                    view = userCell;
                     break;
-                case VIEW_TYPE_SHADOW:
-                    view = new ShadowSectionCell(mContext);
-                    break;
-                case VIEW_TYPE_SWITCH:
-                    view = new TextCheckCell(mContext);
-                    view.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
-                    break;
-                case VIEW_TYPE_INFO:
+                }
+                case VIEW_INFO:
                     view = new TextInfoPrivacyCell(mContext);
                     break;
-                case VIEW_TYPE_CHECK_CHAT:
+                case VIEW_ADD: {
+                    ManageChatTextCell actionCell = new ManageChatTextCell(mContext);
+                    actionCell.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+                    view = actionCell;
+                    break;
+                }
+                case VIEW_HEADER: {
+                    HeaderCell headerCell = new HeaderCell(mContext, Theme.key_windowBackgroundWhiteBlueHeader, 21, 11, false);
+                    headerCell.setHeight(43);
+                    view = headerCell;
+                    break;
+                }
+                case VIEW_SWITCH: {
+                    TextCheckCell cell = new TextCheckCell(mContext);
+                    cell.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+                    view = cell;
+                    break;
+                }
+                case VIEW_SHADOW:
                 default:
-                    view = new TextCheckCell(mContext);
-                    view.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+                    view = new ShadowSectionCell(mContext);
                     break;
             }
             return new RecyclerListView.Holder(view);
@@ -228,32 +266,67 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
             int viewType = holder.getItemViewType();
             switch (viewType) {
-                case VIEW_TYPE_HEADER: {
-                    HeaderCell cell = (HeaderCell) holder.itemView;
-                    cell.setText(LocaleController.getString(R.string.PrivateSpaceSelectChats));
-                    break;
-                }
-                case VIEW_TYPE_CHECK_CHAT: {
-                    int dialogIndex = position - 1;
-                    if (dialogIndex < 0 || dialogIndex >= dialogs.size()) {
-                        return;
+                case VIEW_USER: {
+                    ManageChatUserCell userCell = (ManageChatUserCell) holder.itemView;
+                    long did = hiddenIds.get(position - chatsStartRow);
+                    userCell.setTag(did);
+                    if (did > 0) {
+                        TLRPC.User user = getMessagesController().getUser(did);
+                        if (user != null) {
+                            String subtitle;
+                            if (user.bot) {
+                                subtitle = LocaleController.getString(R.string.Bot);
+                            } else if (user.phone != null && user.phone.length() != 0) {
+                                subtitle = PhoneFormat.getInstance().format("+" + user.phone);
+                            } else {
+                                subtitle = LocaleController.getString(R.string.NumberUnknown);
+                            }
+                            userCell.setData(user, null, subtitle, position != chatsEndRow - 1);
+                        }
+                    } else {
+                        TLRPC.Chat chat = getMessagesController().getChat(-did);
+                        if (chat != null) {
+                            String subtitle;
+                            if (chat.participants_count != 0) {
+                                subtitle = LocaleController.formatPluralString("Members", chat.participants_count);
+                            } else if (chat.has_geo) {
+                                subtitle = LocaleController.getString(R.string.MegaLocation);
+                            } else if (!ChatObject.isPublic(chat)) {
+                                subtitle = LocaleController.getString(R.string.MegaPrivate);
+                            } else {
+                                subtitle = LocaleController.getString(R.string.MegaPublic);
+                            }
+                            userCell.setData(chat, null, subtitle, position != chatsEndRow - 1);
+                        }
                     }
-                    TLRPC.Dialog dialog = dialogs.get(dialogIndex);
-                    boolean checked = SecondSpaceController.getInstance(currentAccount).isInSecondSpace(dialog.id);
-                    boolean divider = dialogIndex < dialogs.size() - 1;
-                    TextCheckCell cell = (TextCheckCell) holder.itemView;
-                    cell.setTextAndCheck(dialogTitle(dialog), checked, divider);
                     break;
                 }
-                case VIEW_TYPE_SWITCH: {
+                case VIEW_INFO: {
+                    TextInfoPrivacyCell privacyCell = (TextInfoPrivacyCell) holder.itemView;
+                    if (position == addChatInfoRow) {
+                        privacyCell.setFixedSize(0);
+                        privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceAddChatsInfo));
+                    } else if (position == switchInfoRow) {
+                        privacyCell.setFixedSize(0);
+                        privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceShowEntryButtonInfo));
+                    }
+                    break;
+                }
+                case VIEW_ADD: {
+                    ManageChatTextCell actionCell = (ManageChatTextCell) holder.itemView;
+                    actionCell.setColors(Theme.key_windowBackgroundWhiteBlueIcon, Theme.key_windowBackgroundWhiteBlueButton);
+                    actionCell.setText(LocaleController.getString(R.string.PrivateSpaceAddChat), null, R.drawable.msg_contact_add, false);
+                    break;
+                }
+                case VIEW_HEADER: {
+                    HeaderCell headerCell = (HeaderCell) holder.itemView;
+                    headerCell.setText(LocaleController.getString(R.string.PrivateSpaceSelectChats));
+                    break;
+                }
+                case VIEW_SWITCH: {
                     TextCheckCell cell = (TextCheckCell) holder.itemView;
                     boolean checked = SecondSpaceController.getInstance(currentAccount).isEntryButtonVisible();
                     cell.setTextAndCheck(LocaleController.getString(R.string.PrivateSpaceShowEntryButton), checked, false);
-                    break;
-                }
-                case VIEW_TYPE_INFO: {
-                    TextInfoPrivacyCell cell = (TextInfoPrivacyCell) holder.itemView;
-                    cell.setText(LocaleController.getString(R.string.PrivateSpaceShowEntryButtonInfo));
                     break;
                 }
             }
@@ -261,23 +334,25 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
 
         @Override
         public int getItemViewType(int position) {
-            if (position == rowHeader()) return VIEW_TYPE_HEADER;
-            if (position >= rowFirstChat() && position <= rowLastChat()) return VIEW_TYPE_CHECK_CHAT;
-            if (position == rowShadow()) return VIEW_TYPE_SHADOW;
-            if (position == rowSwitch()) return VIEW_TYPE_SWITCH;
-            if (position == rowInfo()) return VIEW_TYPE_INFO;
-            return VIEW_TYPE_SHADOW;
+            if (position == addChatRow) return VIEW_ADD;
+            if (position == addChatInfoRow) return VIEW_INFO;
+            if (position == chatsHeaderRow) return VIEW_HEADER;
+            if (position >= chatsStartRow && position < chatsEndRow) return VIEW_USER;
+            if (position == chatsShadowRow) return VIEW_SHADOW;
+            if (position == switchRow) return VIEW_SWITCH;
+            if (position == switchInfoRow) return VIEW_INFO;
+            return VIEW_SHADOW;
         }
 
         @Override
         public int getItemCount() {
-            return rowCount();
+            return rowCount;
         }
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        reloadDialogs();
+        reloadHiddenIds();
     }
 }

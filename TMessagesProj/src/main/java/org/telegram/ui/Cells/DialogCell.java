@@ -1050,13 +1050,10 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         ArrayList<TLRPC.Dialog> dialogs = messagesController.getDialogs(currentDialogFolderId);
         currentDialogFolderDialogsCount = dialogs.size();
         org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
-        boolean hidePrivate = !ssc.isActive();
+        boolean maskPrivate = !ssc.isActive();
         SpannableStringBuilder builder = new SpannableStringBuilder();
         for (int a = 0, N = dialogs.size(); a < N; a++) {
             TLRPC.Dialog dialog = dialogs.get(a);
-            if (dialog != null && hidePrivate && ssc.isInSecondSpace(dialog.id) && !ssc.hasExposedMessages(dialog.id)) {
-                continue;
-            }
             TLRPC.User currentUser = null;
             TLRPC.Chat currentChat = null;
             if (messagesController.isHiddenByUndo(dialog.id)) {
@@ -1092,7 +1089,8 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             int boldStart = builder.length();
             int boldEnd = boldStart + title.length();
             builder.append(title);
-            if (dialog.unread_count > 0) {
+            boolean privateMasked = maskPrivate && ssc.isInSecondSpace(dialog.id) && !ssc.hasExposedMessages(dialog.id);
+            if (dialog.unread_count > 0 && !privateMasked) {
                 builder.setSpan(new TypefaceSpan(AndroidUtilities.bold(), 0, Theme.getColor(Theme.key_chats_nameArchived, resourcesProvider)), boldStart, boldEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
             if (builder.length() > 150) {

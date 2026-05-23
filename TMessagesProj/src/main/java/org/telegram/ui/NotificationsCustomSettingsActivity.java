@@ -182,7 +182,7 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
     }
 
     private static boolean isTop5Peer(int currentAccount, long did) {
-        ArrayList<TLRPC.TL_topPeer> topPeers = new ArrayList<>(MediaDataController.getInstance(currentAccount).hints);
+        ArrayList<TLRPC.TL_topPeer> topPeers = new ArrayList<>(org.telegram.ui.Adapters.DialogsSearchAdapter.getVisibleHintsForAccount(currentAccount));
         Collections.sort(topPeers, Comparator.comparingDouble(a -> a.rating));
         int index = -1;
         for (int i = 0; i < topPeers.size(); ++i) {
@@ -1102,7 +1102,7 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
         final ArrayList<TLRPC.TL_topPeer> topPeers;
         if (currentType == TYPE_STORIES) {
             MediaDataController.getInstance(currentAccount).loadHints(true);
-            topPeers = new ArrayList<>(MediaDataController.getInstance(currentAccount).hints);
+            topPeers = new ArrayList<>(org.telegram.ui.Adapters.DialogsSearchAdapter.getVisibleHintsForAccount(currentAccount));
         } else {
             topPeers = null;
         }

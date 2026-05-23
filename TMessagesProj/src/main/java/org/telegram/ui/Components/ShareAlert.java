@@ -2903,12 +2903,17 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
             }
             ArrayList<TLRPC.Dialog> archivedDialogs = new ArrayList<>();
             ArrayList<TLRPC.Dialog> allDialogs = MessagesController.getInstance(currentAccount).getAllDialogs();
+            org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+            boolean filterPrivate = !ssc.isActive();
             for (int a = 0; a < allDialogs.size(); a++) {
                 TLRPC.Dialog dialog = allDialogs.get(a);
                 if (!(dialog instanceof TLRPC.TL_dialog)) {
                     continue;
                 }
                 if (dialog.id == selfUserId) {
+                    continue;
+                }
+                if (filterPrivate && ssc.isInSecondSpace(dialog.id)) {
                     continue;
                 }
                 if (!DialogObject.isEncryptedDialog(dialog.id)) {
@@ -3573,7 +3578,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                                 cell.setColors(Theme.key_voipgroup_nameText, Theme.key_voipgroup_inviteMembersBackground);
                             }
 
-                            TLRPC.TL_topPeer peer = MediaDataController.getInstance(currentAccount).hints.get(position);
+                            TLRPC.TL_topPeer peer = org.telegram.ui.Adapters.DialogsSearchAdapter.getVisibleHintsForAccount(currentAccount).get(position);
                             TLRPC.Chat chat = null;
                             TLRPC.User user = null;
                             long did = 0;

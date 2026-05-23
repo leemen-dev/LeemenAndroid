@@ -501,8 +501,10 @@ public class EditWidgetActivity extends BaseFragment {
                         int num = position * 2 + a;
                         TLRPC.Dialog dialog;
                         if (selectedDialogs.isEmpty()) {
-                            if (num < getMediaDataController().hints.size()) {
-                                long userId = getMediaDataController().hints.get(num).peer.user_id;
+                            // Skip private-space chats so the widget preview never seeds with hidden contacts.
+                            java.util.List<TLRPC.TL_topPeer> visibleHints = org.telegram.ui.Adapters.DialogsSearchAdapter.getVisibleHintsForAccount(currentAccount);
+                            if (num < visibleHints.size()) {
+                                long userId = visibleHints.get(num).peer.user_id;
                                 dialog = getMessagesController().dialogs_dict.get(userId);
                                 if (dialog == null) {
                                     dialog = new TLRPC.TL_dialog();

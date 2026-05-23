@@ -239,5 +239,15 @@ class ContactsRemoteViewsFactory implements RemoteViewsService.RemoteViewsFactor
         accountInstance.getMessagesStorage().getWidgetDialogs(appWidgetId, 1, dids, dialogs, messages, users, chats);
         accountInstance.getMessagesController().putUsers(users, true);
         accountInstance.getMessagesController().putChats(chats, true);
+        // Always strip private-space chats from home-screen widgets.
+        SecondSpaceController ssc = SecondSpaceController.getInstance(accountInstance.getCurrentAccount());
+        if (!ssc.getDialogIds().isEmpty()) {
+            for (int i = dids.size() - 1; i >= 0; i--) {
+                if (ssc.isInSecondSpace(dids.get(i))) {
+                    dialogs.remove(dids.get(i));
+                    dids.remove(i);
+                }
+            }
+        }
     }
 }

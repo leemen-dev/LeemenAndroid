@@ -140,7 +140,7 @@ public class ProfileNotificationsActivity extends BaseFragment implements Notifi
     @Override
     public boolean onFragmentCreate() {
         if (DialogObject.isUserDialog(dialogId)) {
-            ArrayList<TLRPC.TL_topPeer> topPeers = getMediaDataController().hints;
+            java.util.List<TLRPC.TL_topPeer> topPeers = org.telegram.ui.Adapters.DialogsSearchAdapter.getVisibleHintsForAccount(currentAccount);
             for (int i = 0; i < topPeers.size(); ++i) {
                 TLRPC.Peer peer = topPeers.get(i).peer;
                 if (peer instanceof TLRPC.TL_peerUser && peer.user_id == dialogId) {

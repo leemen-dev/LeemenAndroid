@@ -21,6 +21,7 @@ public class SecondSpaceController extends BaseController {
     private static final String PREF_LAST_DECIDED = "second_space_last_decided";
     private static final String PREF_SHOW_ENTRY_BUTTON = "second_space_show_entry_button";
     private static final String PREF_PENDING_OFF_MODE = "second_space_pending_off_mode";
+    private static final String PREF_PRIVATE_SEARCHES = "second_space_private_searches";
 
     private static final SecondSpaceController[] Instance = new SecondSpaceController[UserConfig.MAX_ACCOUNT_COUNT];
     private static final Object[] lockObjects = new Object[UserConfig.MAX_ACCOUNT_COUNT];
@@ -49,6 +50,7 @@ public class SecondSpaceController extends BaseController {
     private final Map<Long, Integer> lastDecidedMessageId = new HashMap<>();
     private final Map<Long, MessageObject> lastExposedMessageCache = new HashMap<>();
     private final Set<Long> pendingOffModeWork = new HashSet<>();
+    private final Set<Long> privateSearchDialogs = new HashSet<>();
     private boolean active;
 
     private boolean entryButtonVisible;
@@ -67,6 +69,15 @@ public class SecondSpaceController extends BaseController {
             for (String s : pendingCsv.split(",")) {
                 try {
                     pendingOffModeWork.add(Long.parseLong(s));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        String searchCsv = prefs.getString(PREF_PRIVATE_SEARCHES, "");
+        if (!TextUtils.isEmpty(searchCsv)) {
+            for (String s : searchCsv.split(",")) {
+                try {
+                    privateSearchDialogs.add(Long.parseLong(s));
                 } catch (NumberFormatException ignored) {
                 }
             }
@@ -237,6 +248,39 @@ public class SecondSpaceController extends BaseController {
             persistExposed();
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
+    }
+
+    // --- Search history scoping (per chat) ---
+    //
+    // Recent-search entries are mode-scoped: a dialog searched in ACTIVE mode is marked
+    // "private" and only surfaces in active-mode recents. Searching the same dialog in
+    // OFF mode demotes the mark — once exposed outside, no further hiding.
+
+    public boolean isPrivateSearchOnly(long dialogId) {
+        return privateSearchDialogs.contains(dialogId);
+    }
+
+    public void markPrivateSearch(long dialogId) {
+        if (privateSearchDialogs.add(dialogId)) {
+            persistPrivateSearches();
+        }
+    }
+
+    public void unmarkPrivateSearch(long dialogId) {
+        if (privateSearchDialogs.remove(dialogId)) {
+            persistPrivateSearches();
+        }
+    }
+
+    private void persistPrivateSearches() {
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (Long id : privateSearchDialogs) {
+            if (!first) sb.append(',');
+            sb.append(id);
+            first = false;
+        }
+        getMessagesController().getMainSettings().edit().putString(PREF_PRIVATE_SEARCHES, sb.toString()).apply();
     }
 
     // --- Pending off-mode work (per chat flag) ---
