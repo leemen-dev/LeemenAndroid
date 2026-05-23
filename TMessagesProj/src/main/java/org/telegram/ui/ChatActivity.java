@@ -20094,6 +20094,13 @@ public class ChatActivity extends BaseFragment implements
                 if (id > privateSpacePendingMaxId) {
                     privateSpacePendingMaxId = id;
                 }
+            } else if (mo.isOut() && (id < 0 || mo.isSending() || mo.isSendError())) {
+                // Local outgoing placeholders (negative ids before server confirmation) and
+                // retried-after-failure messages must remain visible — they're the user's own
+                // work-in-progress and dropping them leaves a stuck "sending" spinner and the
+                // typed message vanishing. Server confirmation will assign a positive id larger
+                // than lastDecided and the pending branch above will pick it up on next bind.
+                filtered.add(mo);
             }
         }
         if (latestExposed != null) {
@@ -33492,6 +33499,7 @@ public class ChatActivity extends BaseFragment implements
                 SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
                 int mid = selectedObject.getId();
                 ssc.exposeMessage(dialog_id, mid);
+                ssc.cacheLastExposedMessage(dialog_id, selectedObject);
                 ssc.setLastDecidedMessageId(dialog_id, mid);
                 privateSpaceExposurePending.remove(mid);
                 if (privateSpaceExposurePending.isEmpty()) {
@@ -33504,6 +33512,12 @@ public class ChatActivity extends BaseFragment implements
                 SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
                 int mid = selectedObject.getId();
                 ssc.unexposeMessage(dialog_id, mid);
+                // If we just hid the cached "last exposed", invalidate; the next bind of the
+                // chat list cell will fall back gracefully (cleared preview, see DialogCell).
+                MessageObject cached = ssc.getLastExposedMessageCached(dialog_id);
+                if (cached != null && cached.getId() == mid) {
+                    ssc.invalidateLastExposedCache(dialog_id);
+                }
                 updateVisibleRows();
                 break;
             }
