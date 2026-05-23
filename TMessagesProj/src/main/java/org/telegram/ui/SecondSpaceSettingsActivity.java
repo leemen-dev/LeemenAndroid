@@ -228,7 +228,7 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             View view;
             switch (viewType) {
                 case VIEW_USER: {
-                    ManageChatUserCell userCell = new ManageChatUserCell(mContext, 7, 6, true);
+                    ManageChatUserCell userCell = new ManageChatUserCell(mContext, 7, 6, false);
                     userCell.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
                     view = userCell;
                     break;
