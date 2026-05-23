@@ -493,6 +493,14 @@ public class SecondSpaceController extends BaseController {
         MessageObject existing = lastExposedMessageCache.get(dialogId);
         if (existing == null || message.getId() > existing.getId()) {
             lastExposedMessageCache.put(dialogId, message);
+            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+        }
+    }
+
+    /** Drop the cached "last exposed" — used when the cached message gets unexposed. */
+    public void invalidateLastExposedCache(long dialogId) {
+        if (lastExposedMessageCache.remove(dialogId) != null) {
+            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
     }
 
