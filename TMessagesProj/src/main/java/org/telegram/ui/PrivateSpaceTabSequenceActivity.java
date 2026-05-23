@@ -12,7 +12,10 @@ import androidx.recyclerview.widget.RecyclerView;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SecondSpaceController;
+import org.telegram.messenger.AndroidUtilities;
 import org.telegram.ui.ActionBar.ActionBar;
+import org.telegram.ui.ActionBar.ActionBarMenu;
+import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
@@ -44,9 +47,12 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
     private static final int INDEX_CALLS = 3;
     private static final int INDEX_PROFILE = 4;
 
+    private static final int DONE_BUTTON = 1;
+
     private RecyclerListView listView;
     private ListAdapter adapter;
     private final ArrayList<SecondSpaceController.TabStep> steps = new ArrayList<>();
+    private final ArrayList<SecondSpaceController.TabStep> originalSteps = new ArrayList<>();
 
     private int rowHeader;
     private int rowStepStart;
@@ -62,7 +68,9 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
         if (!SecondSpaceController.getInstance(currentAccount).isActive()) {
             return false;
         }
-        steps.addAll(SecondSpaceController.getInstance(currentAccount).getTabSequence());
+        List<SecondSpaceController.TabStep> saved = SecondSpaceController.getInstance(currentAccount).getTabSequence();
+        steps.addAll(saved);
+        originalSteps.addAll(saved);
         return super.onFragmentCreate();
     }
 
@@ -75,10 +83,15 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
             @Override
             public void onItemClick(int id) {
                 if (id == -1) {
-                    saveAndFinish();
+                    handleBackOrCancel();
+                } else if (id == DONE_BUTTON) {
+                    confirmAndApply();
                 }
             }
         });
+        ActionBarMenu menu = actionBar.createMenu();
+        ActionBarMenuItem doneItem = menu.addItemWithWidth(DONE_BUTTON, R.drawable.ic_ab_done, AndroidUtilities.dp(56));
+        doneItem.setContentDescription(LocaleController.getString(R.string.Done));
 
         FrameLayout frame = new FrameLayout(context);
         frame.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray));
@@ -106,30 +119,37 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
 
     @Override
     public boolean onBackPressed(boolean invoked) {
-        // Route system back through saveAndFinish so the same confirmation flow (validation
-        // warning + "test your shortcut" reminder) fires whether the user taps the toolbar
-        // back arrow OR uses the hardware/gesture back. Without this, system-back used to
-        // silently close, giving the impression that changes weren't applied.
+        // Both toolbar arrow and system back route here. If user edited the sequence but didn't
+        // confirm via the explicit Done button, ask before discarding.
         if (invoked) {
-            saveAndFinish();
-            return false; // don't auto-close — saveAndFinish handles closing
+            handleBackOrCancel();
+            return false; // don't auto-close — handleBackOrCancel decides
         }
         return super.onBackPressed(invoked);
     }
 
-    @Override
-    public void onFragmentClosed() {
-        // Safety net for code paths that bypass saveAndFinish (programmatic close, force-finish,
-        // process death recovery). Persists current state — invalid sequence becomes empty.
-        if (!isValidSequence(steps)) {
-            SecondSpaceController.getInstance(currentAccount).setTabSequence(new ArrayList<>());
-        } else {
-            SecondSpaceController.getInstance(currentAccount).setTabSequence(steps);
+    /** Toolbar arrow / system back. Confirms before discarding unsaved changes. */
+    private void handleBackOrCancel() {
+        if (sameSequence(steps, originalSteps)) {
+            finishFragment();
+            return;
         }
-        super.onFragmentClosed();
+        if (getParentActivity() == null) {
+            finishFragment();
+            return;
+        }
+        AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
+        b.setTitle(LocaleController.getString(R.string.PrivateSpaceSequenceDiscardTitle));
+        b.setMessage(LocaleController.getString(R.string.PrivateSpaceSequenceDiscardMessage));
+        b.setPositiveButton(LocaleController.getString(R.string.Discard), (d, w) -> finishFragment());
+        b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        AlertDialog alert = b.create();
+        alert.show();
+        alert.redPositive();
     }
 
-    private void saveAndFinish() {
+    /** Done button. Validates, saves, then shows the "test your shortcut" reminder. */
+    private void confirmAndApply() {
         if (!steps.isEmpty() && !isValidSequence(steps) && getParentActivity() != null) {
             AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
             b.setTitle(LocaleController.getString(R.string.PrivateSpaceSequenceTitle));
@@ -141,9 +161,6 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
         boolean hadShortcutBefore = ssc.hasConfiguredShortcut();
         ssc.setTabSequence(steps);
-        // After saving a fresh / changed sequence, nudge user to actually try it.
-        // The explicit entry button in main Settings stays visible until the shortcut
-        // is confirmed working (shortcut-tested gate) — see SecondSpaceController.
         if (!steps.isEmpty() && !ssc.isShortcutTested() && getParentActivity() != null) {
             AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
             b.setTitle(LocaleController.getString(R.string.PrivateSpaceSequenceConfirmTitle));
@@ -160,6 +177,16 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
             return;
         }
         finishFragment();
+    }
+
+    private static boolean sameSequence(List<SecondSpaceController.TabStep> a, List<SecondSpaceController.TabStep> b) {
+        if (a.size() != b.size()) return false;
+        for (int i = 0; i < a.size(); i++) {
+            SecondSpaceController.TabStep sa = a.get(i);
+            SecondSpaceController.TabStep sb = b.get(i);
+            if (sa.tabIndex != sb.tabIndex || sa.longPress != sb.longPress) return false;
+        }
+        return true;
     }
 
     /** A sequence is valid if it contains ≥1 long-press OR ≥3 short taps. */
