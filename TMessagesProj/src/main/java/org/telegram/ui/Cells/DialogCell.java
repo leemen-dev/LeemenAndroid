@@ -6048,14 +6048,24 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 }
                 return false;
             }
+            // Hidden-from-current-view chat: freeze every comparison field that could be moved
+            // by an external (non-exposed) message arriving. {@link #applyPrivateSpaceMaskBeforeBuild}
+            // already overrode `this.message` to the cached last-exposed preview, so messageHash
+            // stays stable unless a new EXPOSED message arrives (which is exactly the case where
+            // we *do* want the cell to re-layout). Everything else (unread counters, typing,
+            // drafts, call state, translation) is masked to a frozen zero so non-exposed traffic
+            // can't trigger needUpdate.
+            boolean hidden = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(currentDialogId);
+
             int messageHash = message == null ? 0 : message.getId() + message.hashCode();
             Integer printingType = null;
-            long readHash = dialog.read_inbox_max_id + ((long) dialog.read_outbox_max_id << 8) + ((long) (dialog.unread_count + (dialog.unread_mark ? -1 : 0)) << 16) +
+            long readHash = hidden ? 0L :
+                    dialog.read_inbox_max_id + ((long) dialog.read_outbox_max_id << 8) + ((long) (dialog.unread_count + (dialog.unread_mark ? -1 : 0)) << 16) +
                     (dialog.unread_reactions_count > 0 ? (1 << 18) : 0) +
                     (dialog.unread_mentions_count > 0 ? (1 << 19) : 0) +
                     (dialog.unread_poll_votes_count > 0 ? (1 << 21) : 0);
 
-            if (isForumCell()) {
+            if (!hidden && isForumCell()) {
                 int[] f = MessagesController.getInstance(currentAccount).getTopicsController().getForumUnreadCount(-currentDialogId);
                 if (f[2] > 0) {
                     readHash |= (1 << 20);
@@ -6065,7 +6075,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 }
             }
 
-            if (!isForumCell() && (isDialogCell || isTopic)) {
+            if (!hidden && !isForumCell() && (isDialogCell || isTopic)) {
                 if (!TextUtils.isEmpty(MessagesController.getInstance(currentAccount).getPrintingString(currentDialogId, getTopicId(), true))) {
                     printingType = MessagesController.getInstance(currentAccount).getPrintingStringType(currentDialogId, getTopicId());
                 } else {
@@ -6084,19 +6094,19 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
 
             boolean draftVoice = false;
             TLRPC.DraftMessage draftMessage = null;
-            if (isTopic) {
+            if (!hidden && isTopic) {
                 draftVoice = MediaDataController.getInstance(currentAccount).getDraftVoice(currentDialogId, getTopicId()) != null;
                 draftMessage = !draftVoice ? MediaDataController.getInstance(currentAccount).getDraft(currentDialogId, getTopicId()) : null;
                 if (draftMessage != null && TextUtils.isEmpty(draftMessage.message)) {
                     draftMessage = null;
                 }
-            } else if (isDialogCell) {
+            } else if (!hidden && isDialogCell) {
                 draftVoice = MediaDataController.getInstance(currentAccount).getDraftVoice(currentDialogId, 0) != null;
                 draftMessage = !draftVoice ? MediaDataController.getInstance(currentAccount).getDraft(currentDialogId, 0) : null;
             }
             int draftHash = draftMessage == null ? 0 : draftMessage.message.hashCode() + (draftMessage.reply_to != null ? (draftMessage.reply_to.reply_to_msg_id << 16) : 0);
-            boolean hasCall = chat != null && chat.call_active && chat.call_not_empty;
-            boolean translated = MessagesController.getInstance(currentAccount).getTranslateController().isTranslatingDialog(currentDialogId);
+            boolean hasCall = !hidden && chat != null && chat.call_active && chat.call_not_empty;
+            boolean translated = !hidden && MessagesController.getInstance(currentAccount).getTranslateController().isTranslatingDialog(currentDialogId);
             if (lastDrawnSizeHash == sizeHash &&
                     lastDrawnMessageId == messageHash &&
                     lastDrawnTranslated == translated &&

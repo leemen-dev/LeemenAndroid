@@ -2980,6 +2980,26 @@ public class ChatActivity extends BaseFragment implements
                     showScrollToMessageError = true;
                     needSelectFromMessageId = true;
                 }
+                // Hidden chat in off / fake-cross mode: anchor the initial load to the last
+                // exposed message (or the top) rather than the saved scroll position or any
+                // caller-supplied message_id. Restoring a position that points at hidden
+                // history would briefly fetch + render context around a non-exposed message
+                // before the messagesDidLoad filter strips it.
+                SecondSpaceController psCtrlInit = SecondSpaceController.getInstance(currentAccount);
+                if (psCtrlInit.isHiddenFromCurrentView(dialog_id)) {
+                    MessageObject lastExposedInit = psCtrlInit.getLastExposedMessageCached(dialog_id);
+                    int safeAnchor = lastExposedInit != null ? lastExposedInit.getId() : 0;
+                    if (startLoadFromMessageId != safeAnchor) {
+                        startLoadFromMessageId = safeAnchor;
+                        // Also reset the saved-scroll bookkeeping so we don't attempt offset
+                        // restoration onto a no-longer-valid anchor.
+                        wasManualScroll = false;
+                        loadingFromOldPosition = false;
+                        startLoadFromMessageOffset = 0;
+                        needSelectFromMessageId = false;
+                        showScrollToMessageError = false;
+                    }
+                }
             }
         }
 
@@ -20146,6 +20166,13 @@ public class ChatActivity extends BaseFragment implements
         for (int i = 0; i < messages.size(); i++) {
             MessageObject mo = messages.get(i);
             if (mo == null) continue;
+            // Suppress pin-action service messages ("X pinned a message", "X pinned the
+            // message") regardless of whether their id is marked exposed — the inline
+            // service line would leak the existence of a pin event (and frequently
+            // references the pinned message text, which itself may be hidden).
+            if (mo.messageOwner != null && mo.messageOwner.action instanceof TLRPC.TL_messageActionPinMessage) {
+                continue;
+            }
             int id = mo.getId();
             boolean exposed = ssc.isMessageExposed(dialog_id, id);
             boolean pending = !exposed && ssc.isMessagePending(dialog_id, id);
@@ -29609,6 +29636,13 @@ public class ChatActivity extends BaseFragment implements
     }
 
     public void saveDraft() {
+        // Hidden chat opened from the off-mode exposed view: skip persisting whatever's
+        // in the input field — applyDraftMaybe already refused to load the live draft
+        // here, so anything sitting in the field is junk that would overwrite the real
+        // (active-mode) draft on disk.
+        if (SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(dialog_id)) {
+            return;
+        }
         CharSequence draftMessage = null;
         MessageObject replyMessage = null;
         boolean searchWebpage = true;
@@ -29883,6 +29917,13 @@ public class ChatActivity extends BaseFragment implements
             return;
         }
         if (chatMode == MODE_SUGGESTIONS && (!ChatObject.isMonoForum(currentChat) || threadMessageId == 0 && ChatObject.canManageMonoForum(currentAccount, currentChat))) {
+            return;
+        }
+        // Hidden chat in current view: don't load the persisted draft into the input
+        // field — it would surface text typed in active mode (or fake mode) when the
+        // chat is opened from the off-mode exposed-messages view. The on-disk draft is
+        // left intact so it reappears when the chat is opened from its own space.
+        if (SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(dialog_id)) {
             return;
         }
 
