@@ -1138,9 +1138,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         }
         // Off-mode rendering of a chat that lives in private space: strip every visual cue
         // that could betray activity. Mask is intentionally over-aggressive because
-        // `update()` re-assigns several of these fields BEFORE buildLayout runs (line ~3145
-        // sets `message` from `dialogMessage.get`; line ~3172 sets `lastMessageDate` from
-        // dialog directly). buildLayout calls this method first, so we re-override here.
+        // `update()` re-assigns several of these fields BEFORE buildLayout runs.
         draftMessage = null;
         unreadCount = 0;
         markUnread = false;
@@ -1149,12 +1147,19 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         pollVotesMentionCount = 0;
         hasUnmutedTopics = false;
         lastUnreadState = false;
-        org.telegram.messenger.MessageObject exposed = ssc.getLastExposedMessageCached(currentDialogId);
-        message = exposed;
-        // Date column must not leak the real top-message timestamp.
-        if (exposed != null) {
-            lastMessageDate = exposed.messageOwner.date;
-            currentEditDate = exposed.messageOwner.edit_date;
+        // Preview text: keep the real `message` set by update() when it's safe to display —
+        // either explicitly exposed, or the user's own outgoing work-in-progress in a chat
+        // that carries the pending-off-mode-work flag (they typed it themselves via search).
+        // Otherwise fall back to the cached preview hint, which may be null → blank preview.
+        boolean keepReal = message != null
+                && ((message.isOut() && ssc.hasPendingOffModeWork(currentDialogId))
+                    || ssc.isMessageExposed(currentDialogId, message.getId()));
+        if (!keepReal) {
+            message = ssc.getLastExposedMessageCached(currentDialogId);
+        }
+        if (message != null) {
+            lastMessageDate = message.messageOwner.date;
+            currentEditDate = message.messageOwner.edit_date;
         } else {
             lastMessageDate = 0;
             currentEditDate = 0;
@@ -3156,20 +3161,18 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                         clearingDialog = MessagesController.getInstance(currentAccount).isClearingDialog(dialog.id);
                         groupMessages = MessagesController.getInstance(currentAccount).dialogMessage.get(dialog.id);
                         message = groupMessages != null && groupMessages.size() > 0 ? groupMessages.get(0) : null;
-                        // Hidden chat in PS off-mode: the latest message could be hidden, or
-                        // dialogMessage might not yet have the just-sent message (timing window
-                        // between send and dialog-message update). For preview purposes we treat as
-                        // exposed:
-                        //   (a) messages explicitly exposed by the user, and
-                        //   (b) anything while the chat carries the pending-off-mode-work flag.
-                        // Otherwise (or if message is null) fall back to the cached preview hint
-                        // (latestExposed OR latest own pending — populated by filterToExposedSecondSpace).
+                        // Hidden chat in PS off-mode: treat as safe to display when (a) the
+                        // message is explicitly exposed, or (b) it's the user's own outgoing
+                        // message in a chat with pending off-mode work (they typed it via
+                        // search and expect to see their own activity). Incoming messages
+                        // must NOT pass through just because pending is set — that would leak
+                        // partner replies into the off-mode preview.
                         org.telegram.messenger.SecondSpaceController ssc =
                                 org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
                         if (!ssc.isActive() && ssc.isInSecondSpace(dialog.id)) {
                             boolean currentIsSafe = message != null
-                                    && (ssc.isMessageExposed(dialog.id, message.getId())
-                                        || ssc.hasPendingOffModeWork(dialog.id));
+                                    && ((message.isOut() && ssc.hasPendingOffModeWork(dialog.id))
+                                        || ssc.isMessageExposed(dialog.id, message.getId()));
                             if (!currentIsSafe) {
                                 org.telegram.messenger.MessageObject cached = ssc.getLastExposedMessageCached(dialog.id);
                                 message = cached; // may be null → no preview text
