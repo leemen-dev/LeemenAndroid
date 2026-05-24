@@ -10345,10 +10345,16 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             }
         }
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        if (!ssc.isPinInSearchEnabled() || !ssc.hasPassword() || ssc.isActive()) {
+        if (!ssc.isPinInSearchEnabled() || ssc.isActive()) {
             return false;
         }
-        if (!ssc.verifyPassword(text)) {
+        // Without either PIN configured, search-pin is a no-op (the toggle is gated
+        // behind hasRealPassword in settings, but defensively skip here too).
+        if (!ssc.hasRealPassword() && !ssc.hasFakePassword()) {
+            return false;
+        }
+        int matched = ssc.verifyAnyPassword(text);
+        if (matched == SecondSpaceController.MODE_OFF) {
             return false;
         }
         editText.setText("");
@@ -10356,8 +10362,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             actionBar.closeSearchField(true);
         }
         ssc.markShortcutTested();
-        ssc.recordPinVerified();
-        ssc.setActive(true);
+        ssc.recordPinVerified(matched);
+        ssc.setActiveMode(matched);
         return true;
     }
 
@@ -11001,18 +11007,27 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             return raw;
         }
         // Widget picker: ALWAYS strip private-space chats — widgets live on the home screen
-        // and any selection there is permanently visible outside the app.
-        if (initialDialogsType != DIALOGS_TYPE_WIDGET) {
-            // Asymmetric filter (per plan): active mode shows everything (private + regular);
-            // off mode hides private chats unless they have exposed messages.
-            if (ssc.isActive()) {
-                return raw;
+        // and any selection there is permanently visible outside the app. Uses raw membership
+        // (real ∪ fake) regardless of current PS mode.
+        if (initialDialogsType == DIALOGS_TYPE_WIDGET) {
+            ArrayList<TLRPC.Dialog> stripped = new ArrayList<>(raw.size());
+            for (int i = 0; i < raw.size(); i++) {
+                TLRPC.Dialog d = raw.get(i);
+                if (d != null && !ssc.isInSecondSpace(d.id)) {
+                    stripped.add(d);
+                }
             }
-            // Inside the archive view (this fragment is archive itself) hidden chats stay visible,
-            // DialogCell.applyPrivateSpaceMaskBeforeBuild strips their preview/counter/badges.
-            if (folderId == 1) {
-                return raw;
-            }
+            return stripped;
+        }
+        // REAL_ACTIVE: privileged view, everything visible (real + fake + main).
+        if (ssc.isRealActive()) {
+            return raw;
+        }
+        // Archive view (folderId == 1): in OFF mode hidden chats stay visible (masked by
+        // DialogCell). In FAKE_ACTIVE they must NOT — real chats' presence in archive
+        // would leak the existence of the real space.
+        if (folderId == 1 && !ssc.isFakeActive()) {
+            return raw;
         }
         ArrayList<TLRPC.Dialog> filtered = new ArrayList<>(raw.size());
         for (int i = 0; i < raw.size(); i++) {
@@ -11020,10 +11035,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             if (d == null) {
                 continue;
             }
-            // In off-mode, hidden chats are visible iff they have either exposed messages
-            // (decided to be visible outside) or pending off-mode work (user just sent a
-            // message via search and hasn't been prompted yet — must remain reachable).
-            if (!ssc.isInSecondSpace(d.id) || ssc.hasExposedMessages(d.id) || ssc.hasPendingOffModeWork(d.id)) {
+            // Asymmetric isolation: in fake-active mode, real-space chats hide; in off
+            // mode, both spaces' chats hide. Chats with exposed messages or pending off-
+            // mode work stay reachable (user explicitly surfaced them; pending decisions
+            // need a way back to the chat).
+            if (!ssc.isHiddenFromCurrentView(d.id) || ssc.hasExposedMessages(d.id) || ssc.hasPendingOffModeWork(d.id)) {
                 filtered.add(d);
             }
         }

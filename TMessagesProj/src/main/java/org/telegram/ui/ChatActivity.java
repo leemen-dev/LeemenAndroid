@@ -1910,7 +1910,7 @@ public class ChatActivity extends BaseFragment implements
         @Override
         public void onMessageSend(CharSequence message, boolean notify, int scheduleDate, int scheduleRepeatPeriod, long payStars) {
             SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-            if (!ssc.isActive() && ssc.isInSecondSpace(dialog_id)) {
+            if (ssc.isHiddenFromCurrentView(dialog_id)) {
                 // Tag the just-sent message id as pending off-mode work. processSendingText
                 // (already called by ChatActivityEnterView before this callback) has put the
                 // local placeholder into `messages`; we grab the latest own message and add
@@ -1919,12 +1919,21 @@ public class ChatActivity extends BaseFragment implements
                 final long capturedDialogId = dialog_id;
                 AndroidUtilities.runOnUIThread(() -> {
                     if (messages == null) return;
+                    // Tag the latest *un-tagged* outgoing. Rapid back-to-back sends queue
+                    // multiple onMessageSend callbacks 200 ms apart each; without the
+                    // already-pending check every callback would walk the same `messages`
+                    // tail and re-tag the very latest placeholder while older placeholders
+                    // from the same burst stayed unmarked → no eye badge later. Skipping
+                    // already-pending makes each callback claim exactly one fresh message;
+                    // over N rapid sends every one ends up tagged.
                     for (int i = messages.size() - 1; i >= 0; i--) {
                         MessageObject mo = messages.get(i);
-                        if (mo != null && mo.isOut() && !ssc.isMessageExposed(capturedDialogId, mo.getId())) {
-                            ssc.markMessagePending(capturedDialogId, mo.getId());
-                            break;
-                        }
+                        if (mo == null || !mo.isOut()) continue;
+                        int moId = mo.getId();
+                        if (ssc.isMessageExposed(capturedDialogId, moId)) continue;
+                        if (ssc.isMessagePending(capturedDialogId, moId)) continue;
+                        ssc.markMessagePending(capturedDialogId, moId);
+                        break;
                     }
                 });
                 // The preview cache itself is updated synchronously inside
@@ -10174,14 +10183,14 @@ public class ChatActivity extends BaseFragment implements
             actionModeViews.add(actionMode.addItemWithWidth(share, R.drawable.msg_shareout, AndroidUtilities.dp(54), LocaleController.getString(R.string.ShareFile)));
             actionModeViews.add(actionMode.addItemWithWidth(delete, R.drawable.msg_delete, AndroidUtilities.dp(54), LocaleController.getString(R.string.Delete)));
             actionModeViews.add(actionMode.addItemWithWidth(private_space_expose, R.drawable.filled_views, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureActionShort)));
-            actionModeViews.add(actionMode.addItemWithWidth(private_space_hide, R.drawable.msg_secret, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureHide)));
+            actionModeViews.add(actionMode.addItemWithWidth(private_space_hide, R.drawable.msg_stories_stealth, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureHide)));
         } else {
             actionModeViews.add(actionMode.addItemWithWidth(edit, R.drawable.msg_edit, AndroidUtilities.dp(54), LocaleController.getString(R.string.Edit)));
             actionModeViews.add(actionMode.addItemWithWidth(star, R.drawable.msg_fave, AndroidUtilities.dp(54), LocaleController.getString(R.string.AddToFavorites)));
             actionModeViews.add(actionMode.addItemWithWidth(copy, R.drawable.msg_copy, AndroidUtilities.dp(54), LocaleController.getString(R.string.Copy)));
             actionModeViews.add(actionMode.addItemWithWidth(delete, R.drawable.msg_delete, AndroidUtilities.dp(54), LocaleController.getString(R.string.Delete)));
             actionModeViews.add(actionMode.addItemWithWidth(private_space_expose, R.drawable.filled_views, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureActionShort)));
-            actionModeViews.add(actionMode.addItemWithWidth(private_space_hide, R.drawable.msg_secret, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureHide)));
+            actionModeViews.add(actionMode.addItemWithWidth(private_space_hide, R.drawable.msg_stories_stealth, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureHide)));
         }
         actionMode.setItemVisibility(edit, canEditMessagesCount == 1 && selectedMessagesIds[0].size() + selectedMessagesIds[1].size() == 1 ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(copy, !isPeerNoForwards() && selectedMessagesCanCopyIds[0].size() + selectedMessagesCanCopyIds[1].size() != 0 ? View.VISIBLE : View.GONE);
@@ -10189,14 +10198,14 @@ public class ChatActivity extends BaseFragment implements
         actionMode.setItemVisibility(delete, cantDeleteMessagesCount == 0 ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(tag_message, getUserConfig().isPremium() ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(share, View.GONE);
-        // Per-message expose/hide buttons in the action-mode toolbar. Always available when we're
-        // in a hidden chat in PS-on — the bulk handlers are no-ops if a selected message is
-        // already in the target state, so showing both buttons unconditionally is safe.
+        // Per-message expose/hide buttons in the action-mode toolbar. Both items live in the
+        // toolbar only when we're in a hidden chat in PS-on; their per-selection visibility
+        // (only the applicable one shows) is recomputed in addToSelectedMessages so the row
+        // doesn't overflow on narrow phones. Start GONE here — the first selection update
+        // will reveal whichever is applicable.
         {
-            SecondSpaceController psCtrl2 = SecondSpaceController.getInstance(currentAccount);
-            boolean inHiddenChatPsOn = psCtrl2.isActive() && psCtrl2.isInSecondSpace(dialog_id);
-            actionMode.setItemVisibility(private_space_expose, inHiddenChatPsOn ? View.VISIBLE : View.GONE);
-            actionMode.setItemVisibility(private_space_hide, inHiddenChatPsOn ? View.VISIBLE : View.GONE);
+            actionMode.setItemVisibility(private_space_expose, View.GONE);
+            actionMode.setItemVisibility(private_space_hide, View.GONE);
         }
     }
 
@@ -19005,13 +19014,34 @@ public class ChatActivity extends BaseFragment implements
                 {
                     SecondSpaceController psCtrl3 = SecondSpaceController.getInstance(currentAccount);
                     boolean inHidden3 = psCtrl3.isActive() && psCtrl3.isInSecondSpace(dialog_id);
+                    // Make expose/hide buttons mutually exclusive based on selection state so
+                    // the action-mode toolbar doesn't always carry both (the row overflows on
+                    // narrow phones when standard actions are also visible). Show "expose"
+                    // only if at least one selected message can still be exposed (not already
+                    // exposed AND not in pending); show "hide" only if at least one selected
+                    // message is currently visible outside (exposed OR pending).
+                    boolean anyExposable = false;
+                    boolean anyHideable = false;
+                    if (inHidden3) {
+                        for (int psIdx = 0; psIdx < 2 && !(anyExposable && anyHideable); psIdx++) {
+                            for (int psI = 0; psI < selectedMessagesIds[psIdx].size(); psI++) {
+                                int psMid = selectedMessagesIds[psIdx].keyAt(psI);
+                                if (psMid <= 0) continue;
+                                boolean psExposed = psCtrl3.isMessageExposed(dialog_id, psMid);
+                                boolean psPending = psCtrl3.isMessagePending(dialog_id, psMid);
+                                if (psExposed || psPending) anyHideable = true;
+                                if (!psExposed) anyExposable = true;
+                                if (anyExposable && anyHideable) break;
+                            }
+                        }
+                    }
                     ActionBarMenuItem exposeItem = actionBar.createActionMode().getItem(private_space_expose);
                     if (exposeItem != null) {
-                        exposeItem.setVisibility(inHidden3 ? View.VISIBLE : View.GONE);
+                        exposeItem.setVisibility(inHidden3 && anyExposable ? View.VISIBLE : View.GONE);
                     }
                     ActionBarMenuItem hideItem = actionBar.createActionMode().getItem(private_space_hide);
                     if (hideItem != null) {
-                        hideItem.setVisibility(inHidden3 ? View.VISIBLE : View.GONE);
+                        hideItem.setVisibility(inHidden3 && anyHideable ? View.VISIBLE : View.GONE);
                     }
                 }
                 hasUnfavedSelected = false;
@@ -20094,8 +20124,7 @@ public class ChatActivity extends BaseFragment implements
     }
 
     private boolean isSecondSpaceContentSuppressed() {
-        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        return ssc.isInSecondSpace(dialog_id) && !ssc.isActive();
+        return SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(dialog_id);
     }
 
     private final ArrayList<Integer> privateSpacePendingMessageIds = new ArrayList<>();
@@ -20264,17 +20293,22 @@ public class ChatActivity extends BaseFragment implements
 
     private void confirmAndExposeSelectedMessages() {
         if (getParentActivity() == null) return;
-        // Build the list of currently-selected candidate IDs.
+        // Build the list of currently-selected candidate IDs. Include EVERY positive-id
+        // selection, not just messages from the original pending pre-selection — if the
+        // user expanded the selection while in Manage mode, that's an explicit intent to
+        // expose those messages too. Otherwise the user has to exit Manage, re-enter
+        // action mode, and re-select for the non-pending ones to take effect.
         final ArrayList<Integer> toExpose = new ArrayList<>();
         final ArrayList<MessageObject> toExposeMsgs = new ArrayList<>();
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
         for (int idx = 0; idx < 2; idx++) {
             for (int i = 0; i < selectedMessagesIds[idx].size(); i++) {
                 int id = selectedMessagesIds[idx].keyAt(i);
+                if (id <= 0) continue;
+                if (ssc.isMessageExposed(dialog_id, id)) continue; // already exposed → skip
                 MessageObject mo = selectedMessagesIds[idx].valueAt(i);
-                if (privateSpaceExposurePending.contains(id)) {
-                    toExpose.add(id);
-                    toExposeMsgs.add(mo);
-                }
+                toExpose.add(id);
+                toExposeMsgs.add(mo);
             }
         }
         if (toExpose.isEmpty()) {
@@ -20336,7 +20370,10 @@ public class ChatActivity extends BaseFragment implements
         }
     }
 
-    /** Toolbar "hide outside": un-exposes every selected message currently exposed. */
+    /** Toolbar "hide outside": removes the selected messages from off-mode visibility,
+     *  whether they were getting there via the exposed set (explicit decision) or the
+     *  pending set (off-mode send awaiting a call). After this, the messages stop
+     *  showing the eye badge and disappear from the off-mode chat view. */
     private void hideSelectedMessagesBulk() {
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
         int changed = 0;
@@ -20344,12 +20381,18 @@ public class ChatActivity extends BaseFragment implements
             for (int i = 0; i < selectedMessagesIds[idx].size(); i++) {
                 int mid = selectedMessagesIds[idx].keyAt(i);
                 if (mid <= 0) continue;
-                if (ssc.isMessageExposed(dialog_id, mid)) {
+                boolean wasExposed = ssc.isMessageExposed(dialog_id, mid);
+                boolean wasPending = ssc.isMessagePending(dialog_id, mid);
+                if (wasExposed) {
                     ssc.unexposeMessage(dialog_id, mid);
                     MessageObject cached = ssc.getLastExposedMessageCached(dialog_id);
                     if (cached != null && cached.getId() == mid) {
                         ssc.invalidateLastExposedCache(dialog_id);
                     }
+                    changed++;
+                }
+                if (wasPending) {
+                    ssc.unmarkMessagePending(dialog_id, mid);
                     changed++;
                 }
             }
