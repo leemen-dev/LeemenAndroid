@@ -1911,7 +1911,22 @@ public class ChatActivity extends BaseFragment implements
         public void onMessageSend(CharSequence message, boolean notify, int scheduleDate, int scheduleRepeatPeriod, long payStars) {
             SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
             if (!ssc.isActive() && ssc.isInSecondSpace(dialog_id)) {
-                ssc.markPendingOffModeWork(dialog_id);
+                // Tag the just-sent message id as pending off-mode work. processSendingText
+                // (already called by ChatActivityEnterView before this callback) has put the
+                // local placeholder into `messages`; we grab the latest own message and add
+                // its id to the per-message pending set. Its id is negative right now;
+                // messageReceivedByServer will rename it to the positive server id later.
+                final long capturedDialogId = dialog_id;
+                AndroidUtilities.runOnUIThread(() -> {
+                    if (messages == null) return;
+                    for (int i = messages.size() - 1; i >= 0; i--) {
+                        MessageObject mo = messages.get(i);
+                        if (mo != null && mo.isOut() && !ssc.isMessageExposed(capturedDialogId, mo.getId())) {
+                            ssc.markMessagePending(capturedDialogId, mo.getId());
+                            break;
+                        }
+                    }
+                });
                 // The preview cache itself is updated synchronously inside
                 // filterToExposedSecondSpace when didReceiveNewMessages delivers the local
                 // placeholder, so we don't schedule any post-send snapshot here.
@@ -20097,45 +20112,41 @@ public class ChatActivity extends BaseFragment implements
 
     private ArrayList<MessageObject> filterToExposedSecondSpace(ArrayList<MessageObject> messages) {
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        int lastDecided = ssc.getLastDecidedMessageId(dialog_id);
         ArrayList<MessageObject> filtered = new ArrayList<>(messages.size());
-        MessageObject latestExposed = null;
+        MessageObject latestExposedOrPending = null;
         for (int i = 0; i < messages.size(); i++) {
             MessageObject mo = messages.get(i);
             if (mo == null) continue;
             int id = mo.getId();
-            if (ssc.isMessageExposed(dialog_id, id)) {
+            boolean exposed = ssc.isMessageExposed(dialog_id, id);
+            boolean pending = !exposed && ssc.isMessagePending(dialog_id, id);
+            if (exposed) {
                 filtered.add(mo);
-                if (latestExposed == null || id > latestExposed.getId()) {
-                    latestExposed = mo;
+                if (latestExposedOrPending == null || id > latestExposedOrPending.getId()) {
+                    latestExposedOrPending = mo;
                 }
-            } else if (mo.isOut() && id > lastDecided && ssc.hasPendingOffModeWork(dialog_id)) {
-                // The user's own pending (undecided) messages stay visible in the open chat
-                // until they decide later in active mode. Gated on hasPendingOffModeWork so
-                // that messages the user sent in ACTIVE mode (no pending flag was set) stay
-                // hidden when re-entering off mode — only off-mode sends are mid-flow.
-                // INCOMING messages can't reach this branch anyway because of isOut.
+            } else if (pending) {
                 filtered.add(mo);
                 privateSpacePendingMessageIds.add(id);
                 privateSpacePendingMessages.add(mo);
                 if (id > privateSpacePendingMaxId) {
                     privateSpacePendingMaxId = id;
                 }
-                // Cache the user's own pending outgoing so the dialogs-list preview picks it
-                // up the moment they exit the chat — no fragile post-send delay needed.
-                ssc.cacheLastExposedMessage(dialog_id, mo);
+                if (latestExposedOrPending == null || id > latestExposedOrPending.getId()) {
+                    latestExposedOrPending = mo;
+                }
             } else if (mo.isOut() && (id < 0 || mo.isSending() || mo.isSendError())) {
-                // Local outgoing placeholders (negative ids before server confirmation) and
-                // retried-after-failure messages must remain visible — they're the user's own
-                // work-in-progress and dropping them leaves a stuck "sending" spinner and the
-                // typed message vanishing. Server confirmation will assign a positive id larger
-                // than lastDecided and the pending branch above will pick it up on next bind.
+                // Local outgoing placeholder that hasn't been tagged pending yet. onMessageSend
+                // tags it on a runOnUIThread tick AFTER processSendingText has put it here,
+                // so during the brief window between send-fire and our tag the message must
+                // still be visible — otherwise the user watches their own bubble flicker out.
+                // It's the user's own work-in-progress; never an incoming.
                 filtered.add(mo);
                 ssc.cacheLastExposedMessage(dialog_id, mo);
             }
         }
-        if (latestExposed != null) {
-            ssc.cacheLastExposedMessage(dialog_id, latestExposed);
+        if (latestExposedOrPending != null) {
+            ssc.cacheLastExposedMessage(dialog_id, latestExposedOrPending);
         }
         return filtered;
     }
@@ -20157,17 +20168,17 @@ public class ChatActivity extends BaseFragment implements
         if (!ssc.isActive() || !ssc.isInSecondSpace(dialog_id) || !ssc.hasPendingOffModeWork(dialog_id)) {
             return;
         }
-        // Build pending list from currently-loaded messages: anything not yet decided/exposed.
+        // Build pending list directly from the per-message pending set, intersected with
+        // currently-loaded MessageObjects so we have something to render in the picker.
         privateSpacePendingMessageIds.clear();
         privateSpacePendingMessages.clear();
         privateSpacePendingMaxId = 0;
-        int lastDecided = ssc.getLastDecidedMessageId(dialog_id);
+        java.util.Set<Integer> pendingIds = ssc.getPendingMessages(dialog_id);
         for (int i = 0, N = messages.size(); i < N; i++) {
             MessageObject mo = messages.get(i);
             if (mo == null) continue;
             int mid = mo.getId();
-            if (mid <= lastDecided) continue;
-            if (ssc.isMessageExposed(dialog_id, mid)) continue;
+            if (!pendingIds.contains(mid)) continue;
             privateSpacePendingMessageIds.add(mid);
             privateSpacePendingMessages.add(mo);
             if (mid > privateSpacePendingMaxId) {
@@ -20175,8 +20186,9 @@ public class ChatActivity extends BaseFragment implements
             }
         }
         if (privateSpacePendingMessageIds.isEmpty()) {
-            // Nothing actionable — clear the flag so we don't keep checking.
-            ssc.clearPendingOffModeWork(dialog_id);
+            // Pending set is non-empty but none of those ids are in the currently loaded
+            // messages (e.g. user scrolled past, decision dialog must wait until they're
+            // visible again). Don't fire — leave state intact so the next load can prompt.
             return;
         }
         privateSpaceDecisionShown = true;
@@ -20200,18 +20212,16 @@ public class ChatActivity extends BaseFragment implements
             enterExposureSelectionMode(idSnapshot, msgSnapshot);
         });
         builder.setNegativeButton(LocaleController.getString(R.string.PrivateSpaceExposureSkip), (d, w) -> {
-            // "Keep all hidden" — close the case so we don't re-prompt for this batch.
+            // "Hide all" — drop the entire pending set, those messages now stay hidden in off mode.
             SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-            ssc.setLastDecidedMessageId(dialog_id, upTo);
-            ssc.clearPendingOffModeWork(dialog_id);
+            ssc.clearAllPendingMessages(dialog_id);
             privateSpacePendingMessageIds.clear();
             privateSpacePendingMessages.clear();
         });
         builder.setOnCancelListener(d -> {
-            // Treat dismiss-by-back/scrim like Skip so we don't loop the popup forever.
+            // Treat dismiss-by-back/scrim like Hide all so we don't loop the popup forever.
             SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-            ssc.setLastDecidedMessageId(dialog_id, upTo);
-            ssc.clearPendingOffModeWork(dialog_id);
+            ssc.clearAllPendingMessages(dialog_id);
             privateSpacePendingMessageIds.clear();
             privateSpacePendingMessages.clear();
         });
@@ -20309,7 +20319,9 @@ public class ChatActivity extends BaseFragment implements
                 if (!ssc.isMessageExposed(dialog_id, mid)) {
                     ssc.exposeMessage(dialog_id, mid);
                     ssc.cacheLastExposedMessage(dialog_id, selectedMessagesIds[idx].valueAt(i));
-                    ssc.setLastDecidedMessageId(dialog_id, mid);
+                    // If this message was sitting in the pending set, exposing it transfers
+                    // ownership to the exposed set — drop the pending entry.
+                    ssc.unmarkMessagePending(dialog_id, mid);
                     changed++;
                 }
             }
@@ -20352,8 +20364,10 @@ public class ChatActivity extends BaseFragment implements
             MessageObject mo = i < toExposeMsgs.size() ? toExposeMsgs.get(i) : null;
             if (mo != null) ssc.cacheLastExposedMessage(dialog_id, mo);
         }
-        ssc.setLastDecidedMessageId(dialog_id, privateSpaceExposureUpTo);
-        ssc.clearPendingOffModeWork(dialog_id);
+        // Manage flow closed: everything from this pending batch has been decided — either
+        // moved to exposed above, or implicitly hidden (not picked). Drop the entire chat
+        // pending set to close the case.
+        ssc.clearAllPendingMessages(dialog_id);
         privateSpacePendingMessageIds.clear();
         privateSpacePendingMessages.clear();
         privateSpaceExposurePending.clear();
@@ -22212,6 +22226,14 @@ public class ChatActivity extends BaseFragment implements
                 return;
             }
             Integer msgId = (Integer) args[0];
+            // Rename any pending off-mode entry that tracked the now-renamed placeholder.
+            // Telegram mutates the same MessageObject in-place, so this notification is the
+            // only signal that our id-keyed set needs to be updated.
+            Integer renamedNewId = (Integer) args[1];
+            if (renamedNewId != null && !renamedNewId.equals(msgId)) {
+                SecondSpaceController.getInstance(currentAccount)
+                        .replacePendingMessageId(dialog_id, msgId, renamedNewId);
+            }
             MessageObject obj = messagesDict[0].get(msgId);
             if (isThreadChat() && pendingSendMessagesDict.size() > 0) {
                 MessageObject object = pendingSendMessagesDict.get(msgId);
@@ -34220,9 +34242,11 @@ public class ChatActivity extends BaseFragment implements
                     // Persistent eye-icon badge for messages exposed outside Private Space in PS-on.
                     // Uses an independent flag so mention-read clears, search-fade, etc. don't reset it.
                     SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                    int updMid = messageObject == null ? 0 : messageObject.getId();
                     boolean psExposedNow = ssc.isActive()
                             && messageObject != null
-                            && ssc.isMessageExposed(dialog_id, messageObject.getId());
+                            && (ssc.isMessageExposed(dialog_id, updMid)
+                                || ssc.isMessagePending(dialog_id, updMid));
                     cell.setPrivateSpaceExposed(psExposedNow);
                     if (psExposedNow && !ssc.isEyeHintShown()) {
                         ssc.markEyeHintShown();
@@ -36905,14 +36929,15 @@ public class ChatActivity extends BaseFragment implements
                     messageCell.setMessageObject(message, groupedMessages, pinnedBottom, pinnedTop, firstInChat, lastInChatList);
                     messageCell.setSpoilersSuppressed(chatListView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE);
                     // Private Space eye must be applied on every bind, otherwise recycled cells
-                    // carry the previous message's exposed flag until updateVisibleRows runs.
-                    // That manifests as the eye flickering on the wrong messages, the badge
-                    // missing until the user selects something, and Hide-action not visually
-                    // reflecting on selected rows (the flag stays true on recycled cells).
+                    // carry the previous message's flag until updateVisibleRows runs. The eye
+                    // marks messages visible outside PS — that's both explicitly exposed AND
+                    // pending off-mode sends (they're visible to the user in off mode too).
                     {
                         SecondSpaceController psBindCtrl = SecondSpaceController.getInstance(currentAccount);
+                        int psMid = message.getId();
                         messageCell.setPrivateSpaceExposed(psBindCtrl.isActive()
-                                && psBindCtrl.isMessageExposed(dialog_id, message.getId()));
+                                && (psBindCtrl.isMessageExposed(dialog_id, psMid)
+                                    || psBindCtrl.isMessagePending(dialog_id, psMid)));
                     }
                     messageCell.setHighlighted(highlightMessageId != Integer.MAX_VALUE && message.getId() == highlightMessageId);
                     if (messageCell.isHighlighted() && highlightMessageQuote != null) {
@@ -37289,8 +37314,10 @@ public class ChatActivity extends BaseFragment implements
                 // and the eye wouldn't appear until the next updateVisibleRows tick.
                 {
                     SecondSpaceController psAttachCtrl = SecondSpaceController.getInstance(currentAccount);
+                    int psAttMid = message.getId();
                     messageCell.setPrivateSpaceExposed(psAttachCtrl.isActive()
-                            && psAttachCtrl.isMessageExposed(dialog_id, message.getId()));
+                            && (psAttachCtrl.isMessageExposed(dialog_id, psAttMid)
+                                || psAttachCtrl.isMessagePending(dialog_id, psAttMid)));
                 }
 
                 boolean selected = false;
