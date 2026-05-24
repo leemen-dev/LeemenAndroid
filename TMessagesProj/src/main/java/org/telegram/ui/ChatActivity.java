@@ -10155,14 +10155,14 @@ public class ChatActivity extends BaseFragment implements
             }
             actionModeViews.add(actionMode.addItemWithWidth(share, R.drawable.msg_shareout, AndroidUtilities.dp(54), LocaleController.getString(R.string.ShareFile)));
             actionModeViews.add(actionMode.addItemWithWidth(delete, R.drawable.msg_delete, AndroidUtilities.dp(54), LocaleController.getString(R.string.Delete)));
-            actionModeViews.add(actionMode.addItemWithWidth(private_space_expose, R.drawable.msg_seen, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureActionShort)));
+            actionModeViews.add(actionMode.addItemWithWidth(private_space_expose, R.drawable.filled_views, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureActionShort)));
             actionModeViews.add(actionMode.addItemWithWidth(private_space_hide, R.drawable.msg_secret, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureHide)));
         } else {
             actionModeViews.add(actionMode.addItemWithWidth(edit, R.drawable.msg_edit, AndroidUtilities.dp(54), LocaleController.getString(R.string.Edit)));
             actionModeViews.add(actionMode.addItemWithWidth(star, R.drawable.msg_fave, AndroidUtilities.dp(54), LocaleController.getString(R.string.AddToFavorites)));
             actionModeViews.add(actionMode.addItemWithWidth(copy, R.drawable.msg_copy, AndroidUtilities.dp(54), LocaleController.getString(R.string.Copy)));
             actionModeViews.add(actionMode.addItemWithWidth(delete, R.drawable.msg_delete, AndroidUtilities.dp(54), LocaleController.getString(R.string.Delete)));
-            actionModeViews.add(actionMode.addItemWithWidth(private_space_expose, R.drawable.msg_seen, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureActionShort)));
+            actionModeViews.add(actionMode.addItemWithWidth(private_space_expose, R.drawable.filled_views, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureActionShort)));
             actionModeViews.add(actionMode.addItemWithWidth(private_space_hide, R.drawable.msg_secret, AndroidUtilities.dp(54), LocaleController.getString(R.string.PrivateSpaceExposureHide)));
         }
         actionMode.setItemVisibility(edit, canEditMessagesCount == 1 && selectedMessagesIds[0].size() + selectedMessagesIds[1].size() == 1 ? View.VISIBLE : View.GONE);
@@ -10171,28 +10171,14 @@ public class ChatActivity extends BaseFragment implements
         actionMode.setItemVisibility(delete, cantDeleteMessagesCount == 0 ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(tag_message, getUserConfig().isPremium() ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(share, View.GONE);
-        // Per-message expose/hide buttons in the action-mode toolbar. Shown whenever we're in a
-        // hidden chat in PS-on. Visibility per direction: expose-button shown only if at least
-        // one selected message is currently hidden; hide-button only if at least one is exposed.
+        // Per-message expose/hide buttons in the action-mode toolbar. Always available when we're
+        // in a hidden chat in PS-on — the bulk handlers are no-ops if a selected message is
+        // already in the target state, so showing both buttons unconditionally is safe.
         {
             SecondSpaceController psCtrl2 = SecondSpaceController.getInstance(currentAccount);
             boolean inHiddenChatPsOn = psCtrl2.isActive() && psCtrl2.isInSecondSpace(dialog_id);
-            boolean hasExposedSel = false;
-            boolean hasUnexposedSel = false;
-            if (inHiddenChatPsOn) {
-                for (int idx = 0; idx < 2; idx++) {
-                    for (int i = 0; i < selectedMessagesIds[idx].size(); i++) {
-                        int mid = selectedMessagesIds[idx].keyAt(i);
-                        if (mid <= 0) continue;
-                        if (psCtrl2.isMessageExposed(dialog_id, mid)) hasExposedSel = true;
-                        else hasUnexposedSel = true;
-                    }
-                }
-            }
-            boolean exposeVisible = inHiddenChatPsOn && (hasUnexposedSel || isPrivateSpaceExposurePending());
-            boolean hideVisible = inHiddenChatPsOn && hasExposedSel;
-            actionMode.setItemVisibility(private_space_expose, exposeVisible ? View.VISIBLE : View.GONE);
-            actionMode.setItemVisibility(private_space_hide, hideVisible ? View.VISIBLE : View.GONE);
+            actionMode.setItemVisibility(private_space_expose, inHiddenChatPsOn ? View.VISIBLE : View.GONE);
+            actionMode.setItemVisibility(private_space_hide, inHiddenChatPsOn ? View.VISIBLE : View.GONE);
         }
     }
 
@@ -19001,25 +18987,13 @@ public class ChatActivity extends BaseFragment implements
                 {
                     SecondSpaceController psCtrl3 = SecondSpaceController.getInstance(currentAccount);
                     boolean inHidden3 = psCtrl3.isActive() && psCtrl3.isInSecondSpace(dialog_id);
-                    boolean hasExposedSel3 = false, hasUnexposedSel3 = false;
-                    if (inHidden3) {
-                        for (int ix = 0; ix < 2; ix++) {
-                            for (int jx = 0; jx < selectedMessagesIds[ix].size(); jx++) {
-                                int mid = selectedMessagesIds[ix].keyAt(jx);
-                                if (mid <= 0) continue;
-                                if (psCtrl3.isMessageExposed(dialog_id, mid)) hasExposedSel3 = true;
-                                else hasUnexposedSel3 = true;
-                            }
-                        }
-                    }
                     ActionBarMenuItem exposeItem = actionBar.createActionMode().getItem(private_space_expose);
                     if (exposeItem != null) {
-                        boolean v = inHidden3 && (hasUnexposedSel3 || isPrivateSpaceExposurePending());
-                        exposeItem.setVisibility(v ? View.VISIBLE : View.GONE);
+                        exposeItem.setVisibility(inHidden3 ? View.VISIBLE : View.GONE);
                     }
                     ActionBarMenuItem hideItem = actionBar.createActionMode().getItem(private_space_hide);
                     if (hideItem != null) {
-                        hideItem.setVisibility(inHidden3 && hasExposedSel3 ? View.VISIBLE : View.GONE);
+                        hideItem.setVisibility(inHidden3 ? View.VISIBLE : View.GONE);
                     }
                 }
                 hasUnfavedSelected = false;
@@ -20293,6 +20267,27 @@ public class ChatActivity extends BaseFragment implements
                 (d, w) -> finalizeExposureDecision(toExpose, toExposeMsgs));
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         builder.show();
+    }
+
+    /** One-shot bulletin explaining the eye badge on a message bubble. */
+    private void maybeShowPrivateSpaceEyeHint() {
+        if (getParentActivity() == null) return;
+        org.telegram.ui.Components.BulletinFactory.of(this)
+                .createSimpleBulletin(R.raw.info,
+                        LocaleController.getString(R.string.PrivateSpaceEyeHint))
+                .setDuration(7000)
+                .show();
+    }
+
+    /** One-shot bulletin pointing at the action-mode expose/hide buttons in a hidden chat. */
+    private void maybeShowPrivateSpaceToolbarHint() {
+        if (getParentActivity() == null) return;
+        if (!actionBar.isActionModeShowed()) return;
+        org.telegram.ui.Components.BulletinFactory.of(this)
+                .createSimpleBulletin(R.raw.info,
+                        LocaleController.getString(R.string.PrivateSpaceToolbarHint))
+                .setDuration(7000)
+                .show();
     }
 
     /** Toolbar "show outside": exposes every selected message currently hidden. */
@@ -31936,6 +31931,15 @@ public class ChatActivity extends BaseFragment implements
         } else {
             actionBar.showActionMode(true, null, null, null, null, null, 0);
         }
+        // One-shot hint pointing at the new expose/hide toolbar buttons, only when action mode
+        // actually exposes them (PS-on in a hidden chat).
+        {
+            SecondSpaceController psCtrl4 = SecondSpaceController.getInstance(currentAccount);
+            if (psCtrl4.isActive() && psCtrl4.isInSecondSpace(dialog_id) && !psCtrl4.isExposureToolbarHintShown()) {
+                psCtrl4.markExposureToolbarHintShown();
+                AndroidUtilities.runOnUIThread(this::maybeShowPrivateSpaceToolbarHint, 250);
+            }
+        }
         closeMenu();
         chatLayoutManager.setCanScrollVertically(true);
         updatePinnedMessageView(true);
@@ -34205,12 +34209,17 @@ public class ChatActivity extends BaseFragment implements
                 {
                     boolean searchHighlight = highlightMessageId != Integer.MAX_VALUE && messageObject != null && messageObject.getId() == highlightMessageId;
                     cell.setHighlighted(searchHighlight);
-                    // Persistent visual mark for messages exposed outside Private Space in PS-on.
+                    // Persistent eye-icon badge for messages exposed outside Private Space in PS-on.
                     // Uses an independent flag so mention-read clears, search-fade, etc. don't reset it.
                     SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-                    cell.setPrivateSpaceExposed(ssc.isActive()
+                    boolean psExposedNow = ssc.isActive()
                             && messageObject != null
-                            && ssc.isMessageExposed(dialog_id, messageObject.getId()));
+                            && ssc.isMessageExposed(dialog_id, messageObject.getId());
+                    cell.setPrivateSpaceExposed(psExposedNow);
+                    if (psExposedNow && !ssc.isEyeHintShown()) {
+                        ssc.markEyeHintShown();
+                        maybeShowPrivateSpaceEyeHint();
+                    }
                 }
                 if (highlightMessageId != Integer.MAX_VALUE) {
                     startMessageUnselect();

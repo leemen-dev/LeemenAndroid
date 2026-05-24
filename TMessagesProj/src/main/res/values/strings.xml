@@ -2374,6 +2374,8 @@
     <string name="HiddenAccountsListTitle">Hide other accounts</string>
     <string name="HiddenAccountsListInfo">Selected accounts will not appear in the account switcher while Private Space is off. Their notifications and badges are muted. They reappear when you enter Private Space.</string>
     <string name="PrivateSpaceExposureHide">Hide outside</string>
+    <string name="PrivateSpaceEyeHint">The eye icon marks messages that are visible outside Private Space. Long-press a message to hide it again.</string>
+    <string name="PrivateSpaceToolbarHint">Use these buttons to show selected messages outside Private Space or hide them again.</string>
     <string name="PrivateSpaceSequenceDiscardTitle">Discard changes?</string>
     <string name="PrivateSpaceSequenceDiscardMessage">The sequence you edited won\'t be saved. Tap the checkmark to apply it.</string>
     <string name="PrivateSpaceIntroDescription">Hidden chats stay invisible from the main chat list, search recommendations, notifications, and widgets when Private Space is off. Open settings to add chats now.</string>

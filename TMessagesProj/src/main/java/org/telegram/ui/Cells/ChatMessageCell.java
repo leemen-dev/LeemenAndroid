@@ -12372,7 +12372,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         if (drawRadialCheckBackground) {
             return;
         }
-        boolean forcePressed = (isHighlighted || isPressed || isPressed() || privateSpaceExposed) && (!drawPhotoImage || !photoImage.hasBitmapImage());
+        boolean forcePressed = (isHighlighted || isPressed || isPressed()) && (!drawPhotoImage || !photoImage.hasBitmapImage());
         radialProgress.setPressed(forcePressed || buttonPressed != 0, false);
         if (hasMiniProgress != 0) {
             radialProgress.setPressed(forcePressed || miniButtonPressed != 0, true);
@@ -18443,11 +18443,11 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     public boolean isDrawSelectionBackground() {
-        return (isPressed() && isCheckPressed || !isCheckPressed && isPressed || isHighlighted || privateSpaceExposed) && !textIsSelectionMode() && !hasSelectionOverlay() && (currentMessageObject == null || !currentMessageObject.preview);
+        return (isPressed() && isCheckPressed || !isCheckPressed && isPressed || isHighlighted) && !textIsSelectionMode() && !hasSelectionOverlay() && (currentMessageObject == null || !currentMessageObject.preview);
     }
 
-    /** Mark / unmark this cell as "exposed outside Private Space"; renders with the selected-bubble look.
-     *  Independent of search highlight & press state so other code paths don't reset it. */
+    /** Mark / unmark this cell as "exposed outside Private Space"; renders an eye icon
+     *  overlay on the bubble. Independent of search highlight & press state. */
     public void setPrivateSpaceExposed(boolean value) {
         if (privateSpaceExposed == value) return;
         privateSpaceExposed = value;
@@ -20078,7 +20078,44 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             canvas.restoreToCount(restoreToSponosoredAlpha);
         }
 
+        if (privateSpaceExposed && currentBackgroundDrawable != null) {
+            drawPrivateSpaceExposedBadge(canvas);
+        }
+
         canvas.restoreToCount(restore);
+    }
+
+    private static android.graphics.drawable.Drawable privateSpaceEyeDrawable;
+    private static android.graphics.Paint privateSpaceEyeBackgroundPaint;
+
+    private void drawPrivateSpaceExposedBadge(Canvas canvas) {
+        if (currentBackgroundDrawable == null) return;
+        android.graphics.Rect bounds = currentBackgroundDrawable.getBounds();
+        if (privateSpaceEyeDrawable == null) {
+            privateSpaceEyeDrawable = getContext().getResources().getDrawable(R.drawable.filled_views).mutate();
+        }
+        if (privateSpaceEyeBackgroundPaint == null) {
+            privateSpaceEyeBackgroundPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        }
+        int size = AndroidUtilities.dp(18);
+        int pad = AndroidUtilities.dp(2);
+        // Anchor at the top-outside-corner of the bubble: outgoing → top-left of own bubble (since it's
+        // on the right side of the chat); incoming → top-right of bubble (since it's on the left).
+        boolean out = currentMessageObject != null && currentMessageObject.isOutOwner();
+        int cx, cy;
+        cy = bounds.top + AndroidUtilities.dp(2);
+        if (out) {
+            cx = bounds.left - AndroidUtilities.dp(4);
+        } else {
+            cx = bounds.right + AndroidUtilities.dp(4) - size;
+        }
+        int badgeColor = getThemedColor(out ? Theme.key_chat_outAudioSeekbarFill : Theme.key_chat_inAudioSeekbarFill);
+        privateSpaceEyeBackgroundPaint.setColor(badgeColor);
+        canvas.drawCircle(cx + size / 2f, cy + size / 2f, size / 2f + pad, privateSpaceEyeBackgroundPaint);
+        privateSpaceEyeDrawable.setColorFilter(new android.graphics.PorterDuffColorFilter(
+                0xFFFFFFFF, android.graphics.PorterDuff.Mode.SRC_IN));
+        privateSpaceEyeDrawable.setBounds(cx, cy, cx + size, cy + size);
+        privateSpaceEyeDrawable.draw(canvas);
     }
 
     @SuppressLint("WrongCall")

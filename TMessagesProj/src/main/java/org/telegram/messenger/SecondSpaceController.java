@@ -30,6 +30,8 @@ public class SecondSpaceController extends BaseController {
     private static final String PREF_PIN_LAST_OK_MS = "second_space_pin_last_ok_ms";
     private static final String PREF_ENTRY_PASSWORD_HASH = "second_space_entry_password_hash";
     private static final String PREF_HIDDEN_ACCOUNTS = "second_space_hidden_accounts";
+    private static final String PREF_EYE_HINT_SHOWN = "second_space_eye_hint_shown";
+    private static final String PREF_TOOLBAR_HINT_SHOWN = "second_space_toolbar_hint_shown";
 
     /** A single step in the tab-tap gesture sequence. */
     public static final class TabStep {
@@ -497,6 +499,24 @@ public class SecondSpaceController extends BaseController {
         }
     }
 
+    // --- One-shot UX hints ---
+
+    public boolean isEyeHintShown() {
+        return getMessagesController().getMainSettings().getBoolean(PREF_EYE_HINT_SHOWN, false);
+    }
+
+    public void markEyeHintShown() {
+        getMessagesController().getMainSettings().edit().putBoolean(PREF_EYE_HINT_SHOWN, true).apply();
+    }
+
+    public boolean isExposureToolbarHintShown() {
+        return getMessagesController().getMainSettings().getBoolean(PREF_TOOLBAR_HINT_SHOWN, false);
+    }
+
+    public void markExposureToolbarHintShown() {
+        getMessagesController().getMainSettings().edit().putBoolean(PREF_TOOLBAR_HINT_SHOWN, true).apply();
+    }
+
     /** Drop the cached "last exposed" — used when the cached message gets unexposed. */
     public void invalidateLastExposedCache(long dialogId) {
         if (lastExposedMessageCache.remove(dialogId) != null) {
@@ -573,12 +593,15 @@ public class SecondSpaceController extends BaseController {
     public void markPendingOffModeWork(long dialogId) {
         if (pendingOffModeWork.add(dialogId)) {
             persistPendingOffModeWork();
+            // Make the hidden chat appear in the off-mode dialogs list immediately.
+            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
     }
 
     public void clearPendingOffModeWork(long dialogId) {
         if (pendingOffModeWork.remove(dialogId)) {
             persistPendingOffModeWork();
+            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
     }
 
