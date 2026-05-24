@@ -13632,19 +13632,11 @@ public class ChatActivity extends BaseFragment implements
         if (chatLayoutManager == null || paused || chatAdapter.isFrozen || waitingForGetDifference) {
             return;
         }
-        // Hidden chat in off / fake-cross view: never fetch more history. The initial
+        // Hidden chat in off / fake-cross view: don't fetch more history. The initial
         // load (firstLoadMessages, anchored to last exposed) already brought the
-        // visible-from-outside context in; pagination beyond that would fetch hidden
-        // neighbors from the server, even though the messages-load filter strips them
-        // before render. Freeze endReached on both sides so any retry path also stops
-        // asking for more.
+        // visible-from-outside context in. We intentionally do NOT set endReached here —
+        // that would confuse adapter/layout state and cause ghost rows or crashes.
         if (isSecondSpaceContentSuppressed()) {
-            endReached[0] = true;
-            endReached[1] = true;
-            cacheEndReached[0] = true;
-            cacheEndReached[1] = true;
-            forwardEndReached[0] = true;
-            forwardEndReached[1] = true;
             return;
         }
         int firstVisibleItem = RecyclerListView.NO_POSITION;
@@ -20214,6 +20206,12 @@ public class ChatActivity extends BaseFragment implements
                 filtered.add(mo);
             }
         }
+        // Put the latest exposed/pending MessageObject into Telegram's own global
+        // dialogMessagesByIds so that DialogCell preview (via resolveLatestExposedPreview)
+        // can find it without any PS-side MessageObject cache.
+        if (latestExposedOrPending != null) {
+            ssc.ensureExposedInGlobalCache(latestExposedOrPending);
+        }
         return filtered;
     }
 
@@ -22189,17 +22187,10 @@ public class ChatActivity extends BaseFragment implements
             }
 
             if (messages.isEmpty()) {
-                // Hidden chat in off / fake-cross view: when the loaded batch filters
-                // down to empty, don't auto-fetch more — the server would just return
-                // additional hidden context which we'd filter out again. Mark
-                // endReached so the empty state is final from the loader's POV.
                 if (isSecondSpaceContentSuppressed()) {
-                    endReached[0] = true;
-                    endReached[1] = true;
-                    cacheEndReached[0] = true;
-                    cacheEndReached[1] = true;
-                    forwardEndReached[0] = true;
-                    forwardEndReached[1] = true;
+                    // Off-mode hidden chat: batch filtered to empty. Don't auto-fetch
+                    // more — just leave messages empty without touching endReached
+                    // (modifying it would confuse adapter/layout state).
                     loading = false;
                 } else if (!endReached[0] && !loading) {
                     showProgressView(false);
@@ -26253,16 +26244,7 @@ public class ChatActivity extends BaseFragment implements
             }
         }
         if (messages.isEmpty()) {
-            // Hidden chat in off / fake-cross view: don't trigger auto-fetch on empty
-            // result — the server would just return more hidden context. Mirror the
-            // endReached freeze used in the messagesDidLoad-empty branch above.
             if (isSecondSpaceContentSuppressed()) {
-                endReached[0] = true;
-                endReached[1] = true;
-                cacheEndReached[0] = true;
-                cacheEndReached[1] = true;
-                forwardEndReached[0] = true;
-                forwardEndReached[1] = true;
                 loading = false;
             } else if (!endReached[0] && !loading) {
                 if (!chatAdapter.isFiltered) {

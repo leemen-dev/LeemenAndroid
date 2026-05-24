@@ -878,6 +878,15 @@ public class SecondSpaceController extends BaseController implements Notificatio
         getMessagesController().getMainSettings().edit().putBoolean(PREF_TOOLBAR_HINT_SHOWN, true).apply();
     }
 
+    /** Put {@code message} into Telegram's global {@code dialogMessagesByIds} so that
+     *  {@link #resolveLatestExposedPreview(long)} can find it for dialog-list preview.
+     *  PS code holds no MessageObject references itself — this writes into an existing
+     *  Telegram-managed cache that is cleaned on message deletion by MessagesController. */
+    public void ensureExposedInGlobalCache(MessageObject message) {
+        if (message == null || message.getId() == 0) return;
+        getMessagesController().dialogMessagesByIds.put(message.getId(), message);
+    }
+
     public void exposeMessage(long dialogId, int messageId) {
         Set<Integer> set = exposedMessages.get(dialogId);
         if (set == null) {

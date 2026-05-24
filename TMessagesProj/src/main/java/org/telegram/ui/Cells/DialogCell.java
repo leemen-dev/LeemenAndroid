@@ -1048,17 +1048,22 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     private CharSequence formatArchivedDialogNames() {
         final MessagesController messagesController = MessagesController.getInstance(currentAccount);
         ArrayList<TLRPC.Dialog> dialogs = messagesController.getDialogs(currentDialogFolderId);
-        currentDialogFolderDialogsCount = dialogs.size();
         org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
-        boolean maskPrivate = !ssc.isActive();
         SpannableStringBuilder builder = new SpannableStringBuilder();
+        int visibleCount = 0;
         for (int a = 0, N = dialogs.size(); a < N; a++) {
             TLRPC.Dialog dialog = dialogs.get(a);
-            TLRPC.User currentUser = null;
-            TLRPC.Chat currentChat = null;
             if (messagesController.isHiddenByUndo(dialog.id)) {
                 continue;
             }
+            // Fully exclude hidden chats from the archive preview — neither name nor
+            // unread-bold should appear. Chats with exposed messages are intentionally
+            // included (the user chose to surface them).
+            if (ssc.isHiddenFromCurrentView(dialog.id) && !ssc.hasExposedMessages(dialog.id)) {
+                continue;
+            }
+            TLRPC.User currentUser = null;
+            TLRPC.Chat currentChat = null;
             if (DialogObject.isEncryptedDialog(dialog.id)) {
                 TLRPC.EncryptedChat encryptedChat = messagesController.getEncryptedChat(DialogObject.getEncryptedChatId(dialog.id));
                 if (encryptedChat != null) {
@@ -1083,20 +1088,23 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             } else {
                 continue;
             }
+            visibleCount++;
             if (builder.length() > 0) {
                 builder.append(", ");
             }
             int boldStart = builder.length();
             int boldEnd = boldStart + title.length();
             builder.append(title);
-            boolean privateMasked = maskPrivate && ssc.isHiddenFromCurrentView(dialog.id) && !ssc.hasExposedMessages(dialog.id);
-            if (dialog.unread_count > 0 && !privateMasked) {
+            // Hidden chat with exposed: suppress bold — dialog.unread_count includes
+            // non-exposed messages that shouldn't signal activity in the archive row.
+            if (dialog.unread_count > 0 && !ssc.isHiddenFromCurrentView(dialog.id)) {
                 builder.setSpan(new TypefaceSpan(AndroidUtilities.bold(), 0, Theme.getColor(Theme.key_chats_nameArchived, resourcesProvider)), boldStart, boldEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
             if (builder.length() > 150) {
                 break;
             }
         }
+        currentDialogFolderDialogsCount = visibleCount;
         if (MessagesController.getInstance(currentAccount).storiesController.getTotalStoriesCount(true) > 0) {
             int totalCount;
             totalCount = Math.max(1, MessagesController.getInstance(currentAccount).storiesController.getTotalStoriesCount(true));
@@ -3073,15 +3081,15 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         if (ssc.isRealActive() || ssc.getDialogIds().isEmpty()) {
             return storageCount;
         }
-        // Archive folder cell at root: subtract unread of any chat hidden from the current
-        // view (so the archive badge doesn't leak hidden activity). Off mode hides both
-        // spaces' chats; fake-active hides real-space chats.
+        // Archive folder cell at root: subtract unread of ALL hidden chats — even those
+        // with exposed messages. dialog.unread_count includes non-exposed traffic that
+        // shouldn't inflate the archive badge in off / fake-active mode.
         int subtract = 0;
         ArrayList<TLRPC.Dialog> archive = MessagesController.getInstance(currentAccount).dialogsByFolder.get(currentDialogFolderId);
         if (archive != null) {
             for (int i = 0, N = archive.size(); i < N; i++) {
                 TLRPC.Dialog d = archive.get(i);
-                if (d != null && ssc.isHiddenFromCurrentView(d.id) && !ssc.hasExposedMessages(d.id)) {
+                if (d != null && ssc.isHiddenFromCurrentView(d.id)) {
                     subtract += d.unread_count;
                 }
             }
@@ -3093,21 +3101,32 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         if (parentFragment == null) {
             return null;
         }
+        org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
         MessageObject maxMessage = null;
         ArrayList<TLRPC.Dialog> dialogs = parentFragment.getDialogsArray(currentAccount, dialogsType, currentDialogFolderId, false);
         if (dialogs != null && !dialogs.isEmpty()) {
             for (int a = 0, N = dialogs.size(); a < N; a++) {
                 TLRPC.Dialog dialog = dialogs.get(a);
-                LongSparseArray<ArrayList<MessageObject>> dialogMessage = MessagesController.getInstance(currentAccount).dialogMessage;
-                if (dialogMessage != null) {
-                    ArrayList<MessageObject> groupMessages = dialogMessage.get(dialog.id);
-                    MessageObject object = groupMessages != null && !groupMessages.isEmpty() ? groupMessages.get(0) : null;
-                    if (object != null && (maxMessage == null || object.messageOwner.date > maxMessage.messageOwner.date)) {
-                        maxMessage = object;
+                MessageObject object;
+                if (ssc.isHiddenFromCurrentView(dialog.id)) {
+                    // Hidden chat with exposed messages: use the exposed preview, not the
+                    // raw top message (which could be a newer non-exposed message whose
+                    // date / content shouldn't leak into the archive folder preview).
+                    object = ssc.resolveLatestExposedPreview(dialog.id);
+                } else {
+                    LongSparseArray<ArrayList<MessageObject>> dialogMessage = MessagesController.getInstance(currentAccount).dialogMessage;
+                    if (dialogMessage != null) {
+                        ArrayList<MessageObject> groupMessages = dialogMessage.get(dialog.id);
+                        object = groupMessages != null && !groupMessages.isEmpty() ? groupMessages.get(0) : null;
+                    } else {
+                        object = null;
                     }
-                    if (dialog.pinnedNum == 0 && maxMessage != null) {
-                        break;
-                    }
+                }
+                if (object != null && (maxMessage == null || object.messageOwner.date > maxMessage.messageOwner.date)) {
+                    maxMessage = object;
+                }
+                if (dialog.pinnedNum == 0 && maxMessage != null) {
+                    break;
                 }
             }
         }
@@ -6069,12 +6088,29 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             boolean hidden = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(currentDialogId);
 
             int messageHash = message == null ? 0 : message.getId() + message.hashCode();
+            // Archive folder cell: use the PS-filtered top message for the hash so that
+            // hidden-chat messages landing as the raw dialog.top_message don't flip the
+            // comparison and trigger a visual re-layout.
+            if (currentDialogFolderId != 0 && parentFragment != null) {
+                MessageObject folderTop = findFolderTopMessage();
+                messageHash = folderTop == null ? 0 : folderTop.getId() + folderTop.hashCode();
+            }
             Integer printingType = null;
-            long readHash = hidden ? 0L :
-                    dialog.read_inbox_max_id + ((long) dialog.read_outbox_max_id << 8) + ((long) (dialog.unread_count + (dialog.unread_mark ? -1 : 0)) << 16) +
+            long readHash;
+            if (hidden) {
+                readHash = 0L;
+            } else if (currentDialogFolderId != 0) {
+                // Archive folder cell: use the PS-corrected count (hidden chats' unread
+                // already subtracted) so that incoming messages in hidden chats don't
+                // flip readHash and trigger a needUpdate → visible flicker on the
+                // archive row.
+                readHash = computeFolderUnreadCount();
+            } else {
+                readHash = dialog.read_inbox_max_id + ((long) dialog.read_outbox_max_id << 8) + ((long) (dialog.unread_count + (dialog.unread_mark ? -1 : 0)) << 16) +
                     (dialog.unread_reactions_count > 0 ? (1 << 18) : 0) +
                     (dialog.unread_mentions_count > 0 ? (1 << 19) : 0) +
                     (dialog.unread_poll_votes_count > 0 ? (1 << 21) : 0);
+            }
 
             if (!hidden && isForumCell()) {
                 int[] f = MessagesController.getInstance(currentAccount).getTopicsController().getForumUnreadCount(-currentDialogId);
