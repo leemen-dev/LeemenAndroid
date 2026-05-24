@@ -20212,18 +20212,22 @@ public class ChatActivity extends BaseFragment implements
             enterExposureSelectionMode(idSnapshot, msgSnapshot);
         });
         builder.setNegativeButton(LocaleController.getString(R.string.PrivateSpaceExposureSkip), (d, w) -> {
-            // "Hide all" — drop the entire pending set, those messages now stay hidden in off mode.
+            // "Hide all" — chat-wide nuke of outside visibility: wipe both the current pending
+            // batch AND every prior exposed message. The semantic is "from now this chat shows
+            // nothing in off mode", not "ignore only the current batch".
             SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
             ssc.clearAllPendingMessages(dialog_id);
+            ssc.clearAllExposedMessages(dialog_id);
             privateSpacePendingMessageIds.clear();
             privateSpacePendingMessages.clear();
+            // Refresh the open chat so eye badges on previously-exposed cells disappear.
+            updateVisibleRows();
         });
         builder.setOnCancelListener(d -> {
-            // Treat dismiss-by-back/scrim like Hide all so we don't loop the popup forever.
-            SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-            ssc.clearAllPendingMessages(dialog_id);
-            privateSpacePendingMessageIds.clear();
-            privateSpacePendingMessages.clear();
+            // Plain dismiss (back-press / outside tap): do nothing. Pending state stays as is;
+            // a fresh ChatActivity instance (next entry) will fire the popup again. This makes
+            // the dialog truly cancellable — no accidental state mutation just because the
+            // user wanted to look around first.
         });
         builder.show();
     }
@@ -20373,6 +20377,9 @@ public class ChatActivity extends BaseFragment implements
         privateSpaceExposurePending.clear();
         privateSpaceExposureUpTo = 0;
         clearSelectionMode();
+        // Refresh visible cells so the eye badge appears on the newly-exposed messages and
+        // disappears from those that were pending but not picked.
+        updateVisibleRows();
     }
 
     @Override
