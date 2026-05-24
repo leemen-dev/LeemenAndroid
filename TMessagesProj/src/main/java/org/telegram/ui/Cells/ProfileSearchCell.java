@@ -583,7 +583,7 @@ public class ProfileSearchCell extends BaseCell implements NotificationCenter.No
             TLRPC.Dialog dialog = MessagesController.getInstance(currentAccount).dialogs_dict.get(dialog_id);
             int unreadCount = MessagesController.getInstance(currentAccount).getDialogUnreadCount(dialog);
             org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
-            if (!ssc.isActive() && ssc.isInSecondSpace(dialog_id)) {
+            if (ssc.isHiddenFromCurrentView(dialog_id)) {
                 unreadCount = 0;
             }
             if (unreadCount != 0) {

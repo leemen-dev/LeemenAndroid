@@ -1089,7 +1089,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             int boldStart = builder.length();
             int boldEnd = boldStart + title.length();
             builder.append(title);
-            boolean privateMasked = maskPrivate && ssc.isInSecondSpace(dialog.id) && !ssc.hasExposedMessages(dialog.id);
+            boolean privateMasked = maskPrivate && ssc.isHiddenFromCurrentView(dialog.id) && !ssc.hasExposedMessages(dialog.id);
             if (dialog.unread_count > 0 && !privateMasked) {
                 builder.setSpan(new TypefaceSpan(AndroidUtilities.bold(), 0, Theme.getColor(Theme.key_chats_nameArchived, resourcesProvider)), boldStart, boldEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
