@@ -1912,28 +1912,9 @@ public class ChatActivity extends BaseFragment implements
             SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
             if (!ssc.isActive() && ssc.isInSecondSpace(dialog_id)) {
                 ssc.markPendingOffModeWork(dialog_id);
-                // Defensive: after SendMessagesHelper builds the local placeholder and updates
-                // ChatActivity.messages, grab the latest outgoing one and cache it as a preview
-                // hint. didReceiveNewMessages → filterToExposedSecondSpace already does this, but
-                // there are timing paths (fresh dialogs with empty dialogMessage on bind) where
-                // the snapshot must be taken explicitly to make sure the dialogs-list preview
-                // updates the moment the user exits via system back.
-                final long capturedDialogId = dialog_id;
-                AndroidUtilities.runOnUIThread(() -> {
-                    if (messages != null) {
-                        MessageObject latestOwn = null;
-                        for (int i = messages.size() - 1; i >= 0; i--) {
-                            MessageObject mo = messages.get(i);
-                            if (mo != null && mo.isOut()) {
-                                latestOwn = mo;
-                                break;
-                            }
-                        }
-                        if (latestOwn != null) {
-                            ssc.cacheLastExposedMessage(capturedDialogId, latestOwn);
-                        }
-                    }
-                }, 50);
+                // The preview cache itself is updated synchronously inside
+                // filterToExposedSecondSpace when didReceiveNewMessages delivers the local
+                // placeholder, so we don't schedule any post-send snapshot here.
             }
             if (chatListItemAnimator != null) {
                 chatActivityEnterViewAnimateFromTop = chatActivityEnterView.getBackgroundTop();
@@ -20139,6 +20120,11 @@ public class ChatActivity extends BaseFragment implements
                 if (id > privateSpacePendingMaxId) {
                     privateSpacePendingMaxId = id;
                 }
+                // Cache the user's own pending outgoing so the dialogs-list preview picks it
+                // up the moment they exit the chat — no fragile post-send delay needed.
+                if (mo.isOut()) {
+                    ssc.cacheLastExposedMessage(dialog_id, mo);
+                }
             } else if (mo.isOut() && (id < 0 || mo.isSending() || mo.isSendError())) {
                 // Local outgoing placeholders (negative ids before server confirmation) and
                 // retried-after-failure messages must remain visible — they're the user's own
@@ -20146,6 +20132,7 @@ public class ChatActivity extends BaseFragment implements
                 // typed message vanishing. Server confirmation will assign a positive id larger
                 // than lastDecided and the pending branch above will pick it up on next bind.
                 filtered.add(mo);
+                ssc.cacheLastExposedMessage(dialog_id, mo);
             }
         }
         if (latestExposed != null) {
