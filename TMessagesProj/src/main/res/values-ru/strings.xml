@@ -306,6 +306,8 @@
     <string name="HiddenAccountsListTitle">Скрыть другие аккаунты</string>
     <string name="HiddenAccountsListInfo">Выбранные аккаунты не будут видны в переключателе пока скрытое пространство выключено. Их уведомления и счётчик отключаются. Они снова появятся когда вы войдёте в скрытое пространство.</string>
     <string name="PrivateSpaceExposureHide">Скрыть снаружи</string>
+    <string name="PrivateSpaceEyeHint">Иконка глаза отмечает сообщения, видимые вне скрытого пространства. Выделите сообщение чтобы снова скрыть.</string>
+    <string name="PrivateSpaceToolbarHint">Эти кнопки показывают выбранные сообщения вне скрытого пространства или прячут их обратно.</string>
     <string name="PrivateSpaceSequenceDiscardTitle">Отменить изменения?</string>
     <string name="PrivateSpaceSequenceDiscardMessage">Отредактированная последовательность не сохранится. Нажмите галочку чтобы применить.</string>
     <string name="PrivateSpacePinInSearch">PIN в поле поиска</string>
