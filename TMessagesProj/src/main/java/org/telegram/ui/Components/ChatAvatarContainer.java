@@ -1057,7 +1057,7 @@ public class ChatAvatarContainer extends FrameLayout implements NotificationCent
         // the other side typing should not leak through the deniable surface.
         if (printString != null) {
             org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
-            if (!ssc.isActive() && ssc.isInSecondSpace(parentFragment.getDialogId())) {
+            if (ssc.isHiddenFromCurrentView(parentFragment.getDialogId())) {
                 printString = null;
             }
         }

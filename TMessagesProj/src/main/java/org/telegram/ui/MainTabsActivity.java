@@ -844,14 +844,17 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         }
         // Match — fire entry.
         tabEventBuffer.clear();
-        Runnable enter = () -> {
-            ssc.markShortcutTested();
-            ssc.setActive(true);
-        };
-        if (ssc.hasPassword() && !ssc.isPinPromptSkippable()) {
-            presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_ENTER).setOnSuccess(enter));
+        Runnable afterEnter = ssc::markShortcutTested;
+        boolean anyPin = ssc.hasRealPassword() || ssc.hasFakePassword();
+        if (anyPin && !ssc.isPinPromptSkippable()) {
+            // PasscodeActivity sets activeMode based on which PIN was entered.
+            presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_ENTER).setOnSuccess(afterEnter));
+        } else if (anyPin) {
+            ssc.setActiveMode(ssc.getPinLastVerifiedMode());
+            afterEnter.run();
         } else {
-            enter.run();
+            ssc.setActive(true);
+            afterEnter.run();
         }
     }
 

@@ -150,7 +150,6 @@ public class QuickShareSelectorOverlayLayout extends View {
         dialogs.add(selfUserId);
 
         final org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
-        final boolean filterPrivate = !ssc.isActive();
         if (config.suggestContacts) {
             final java.util.List<TLRPC.TL_topPeer> hints = MediaDataController.getInstance(currentAccount).hints;
             for (TLRPC.TL_topPeer peer : hints) {
@@ -159,7 +158,7 @@ public class QuickShareSelectorOverlayLayout extends View {
                 }
 
                 long did = peer.peer.user_id;
-                if (filterPrivate && ssc.isInSecondSpace(did)) {
+                if (ssc.isHiddenFromCurrentView(did)) {
                     continue;
                 }
                 TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(peer.peer.user_id);
@@ -183,7 +182,7 @@ public class QuickShareSelectorOverlayLayout extends View {
             if (dialog.id == selfUserId) {
                 continue;
             }
-            if (filterPrivate && ssc.isInSecondSpace(dialog.id)) {
+            if (ssc.isHiddenFromCurrentView(dialog.id)) {
                 continue;
             }
             if (!DialogObject.isEncryptedDialog(dialog.id)) {

@@ -6289,7 +6289,7 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
             // Hide private-space bots from quick-recommendations in attach panel; reachable via explicit search only.
             java.util.List<TLRPC.TL_topPeer> all = MediaDataController.getInstance(currentAccount).inlineBots;
             org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
-            if (ssc.isActive() || ssc.getDialogIds().isEmpty()) {
+            if (ssc.isRealActive() || ssc.getDialogIds().isEmpty()) {
                 return all;
             }
             java.util.ArrayList<TLRPC.TL_topPeer> filtered = new java.util.ArrayList<>(all.size());
@@ -6297,7 +6297,7 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
                 TLRPC.TL_topPeer peer = all.get(i);
                 if (peer == null || peer.peer == null) continue;
                 long did = peer.peer.user_id;
-                if (did != 0 && ssc.isInSecondSpace(did)) continue;
+                if (did != 0 && ssc.isHiddenFromCurrentView(did)) continue;
                 filtered.add(peer);
             }
             return filtered;

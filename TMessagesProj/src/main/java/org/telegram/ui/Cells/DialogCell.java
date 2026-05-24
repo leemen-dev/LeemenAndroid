@@ -1133,10 +1133,10 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     private void applyPrivateSpaceMaskBeforeBuild() {
         if (currentDialogId == 0) return;
         org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
-        if (ssc.isActive() || !ssc.isInSecondSpace(currentDialogId)) {
+        if (!ssc.isHiddenFromCurrentView(currentDialogId)) {
             return;
         }
-        // Off-mode rendering of a chat that lives in private space: strip every visual cue
+        // Hidden-from-current-view chat: strip every visual cue
         // that could betray activity. Mask is intentionally over-aggressive because
         // `update()` re-assigns several of these fields BEFORE buildLayout runs.
         draftMessage = null;
@@ -1219,7 +1219,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             printingString = MessagesController.getInstance(currentAccount).getPrintingString(currentDialogId, getTopicId(), true);
             if (printingString != null) {
                 org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
-                if (!ssc.isActive() && ssc.isInSecondSpace(currentDialogId)) {
+                if (ssc.isHiddenFromCurrentView(currentDialogId)) {
                     printingString = null;
                 }
             }
@@ -3068,16 +3068,18 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     private int computeFolderUnreadCount() {
         org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
         int storageCount = org.telegram.messenger.MessagesStorage.getInstance(currentAccount).getArchiveUnreadCount();
-        if (ssc.isActive() || ssc.getDialogIds().isEmpty()) {
+        if (ssc.isRealActive() || ssc.getDialogIds().isEmpty()) {
             return storageCount;
         }
-        // In off mode, archive folder cell at root must not leak unread of hidden chats.
+        // Archive folder cell at root: subtract unread of any chat hidden from the current
+        // view (so the archive badge doesn't leak hidden activity). Off mode hides both
+        // spaces' chats; fake-active hides real-space chats.
         int subtract = 0;
         ArrayList<TLRPC.Dialog> archive = MessagesController.getInstance(currentAccount).dialogsByFolder.get(currentDialogFolderId);
         if (archive != null) {
             for (int i = 0, N = archive.size(); i < N; i++) {
                 TLRPC.Dialog d = archive.get(i);
-                if (d != null && ssc.isInSecondSpace(d.id) && !ssc.hasExposedMessages(d.id)) {
+                if (d != null && ssc.isHiddenFromCurrentView(d.id) && !ssc.hasExposedMessages(d.id)) {
                     subtract += d.unread_count;
                 }
             }
@@ -3167,7 +3169,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                         // active-mode outgoing) is replaced with the cached preview hint.
                         org.telegram.messenger.SecondSpaceController ssc =
                                 org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
-                        if (!ssc.isActive() && ssc.isInSecondSpace(dialog.id)) {
+                        if (ssc.isHiddenFromCurrentView(dialog.id)) {
                             boolean currentIsSafe = message != null
                                     && (ssc.isMessageExposed(dialog.id, message.getId())
                                         || ssc.isMessagePending(dialog.id, message.getId()));
@@ -5990,11 +5992,12 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     }
 
     public MessageObject getMessage() {
-        // Hidden chat rendered off-mode: never expose the real top message to external callers
-        // (e.g. FilteredSearchView click handlers, which would otherwise leak through).
+        // Chat hidden in the current view (off-mode or cross-space): never leak the real top
+        // message to external callers (e.g. FilteredSearchView click handlers, which would
+        // otherwise reveal hidden-chat content even when the cell itself was masked).
         if (currentDialogId != 0) {
             org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
-            if (!ssc.isActive() && ssc.isInSecondSpace(currentDialogId)) {
+            if (ssc.isHiddenFromCurrentView(currentDialogId)) {
                 return ssc.getLastExposedMessageCached(currentDialogId);
             }
         }
