@@ -1912,6 +1912,28 @@ public class ChatActivity extends BaseFragment implements
             SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
             if (!ssc.isActive() && ssc.isInSecondSpace(dialog_id)) {
                 ssc.markPendingOffModeWork(dialog_id);
+                // Defensive: after SendMessagesHelper builds the local placeholder and updates
+                // ChatActivity.messages, grab the latest outgoing one and cache it as a preview
+                // hint. didReceiveNewMessages → filterToExposedSecondSpace already does this, but
+                // there are timing paths (fresh dialogs with empty dialogMessage on bind) where
+                // the snapshot must be taken explicitly to make sure the dialogs-list preview
+                // updates the moment the user exits via system back.
+                final long capturedDialogId = dialog_id;
+                AndroidUtilities.runOnUIThread(() -> {
+                    if (messages != null) {
+                        MessageObject latestOwn = null;
+                        for (int i = messages.size() - 1; i >= 0; i--) {
+                            MessageObject mo = messages.get(i);
+                            if (mo != null && mo.isOut()) {
+                                latestOwn = mo;
+                                break;
+                            }
+                        }
+                        if (latestOwn != null) {
+                            ssc.cacheLastExposedMessage(capturedDialogId, latestOwn);
+                        }
+                    }
+                }, 50);
             }
             if (chatListItemAnimator != null) {
                 chatActivityEnterViewAnimateFromTop = chatActivityEnterView.getBackgroundTop();

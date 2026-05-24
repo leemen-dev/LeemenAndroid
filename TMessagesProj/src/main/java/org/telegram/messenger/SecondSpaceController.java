@@ -493,7 +493,11 @@ public class SecondSpaceController extends BaseController {
             return;
         }
         MessageObject existing = lastExposedMessageCache.get(dialogId);
-        if (existing == null || message.getId() > existing.getId()) {
+        // Replace cache when (a) nothing cached yet, (b) new message has higher id (server
+        // confirmed something newer), or (c) new is a local outgoing placeholder — id < 0 but
+        // represents the user's freshest action and should override an older positive-id cache.
+        boolean localOutgoing = message.getId() < 0 && message.isOut();
+        if (existing == null || message.getId() > existing.getId() || localOutgoing) {
             lastExposedMessageCache.put(dialogId, message);
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
