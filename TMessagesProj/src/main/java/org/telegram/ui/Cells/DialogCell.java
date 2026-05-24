@@ -1147,15 +1147,17 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         pollVotesMentionCount = 0;
         hasUnmutedTopics = false;
         lastUnreadState = false;
-        // Preview text: keep the real `message` set by update() when it's safe to display —
-        // either explicitly exposed, or sitting in the per-message pending set (an off-mode
-        // send awaiting decision). Anything else (incoming or active-mode outgoing) falls
-        // back to the cached preview hint, which may be null → blank preview.
+        // Preview text: keep the real `message` set by update() when it's safe — either
+        // explicitly exposed, or sitting in the per-message pending set. Otherwise resolve
+        // the latest exposed message via Telegram's own per-account message-by-id cache
+        // ({@code MessagesController.dialogMessagesByIds}); PS code never holds message
+        // bodies, but reading from the existing global cache is fine and lets the cell
+        // preview the message the user explicitly chose to surface.
         boolean keepReal = message != null
                 && (ssc.isMessageExposed(currentDialogId, message.getId())
                     || ssc.isMessagePending(currentDialogId, message.getId()));
         if (!keepReal) {
-            message = ssc.getLastExposedMessageCached(currentDialogId);
+            message = ssc.resolveLatestExposedPreview(currentDialogId);
         }
         if (message != null) {
             lastMessageDate = message.messageOwner.date;
@@ -3174,8 +3176,10 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                                     && (ssc.isMessageExposed(dialog.id, message.getId())
                                         || ssc.isMessagePending(dialog.id, message.getId()));
                             if (!currentIsSafe) {
-                                org.telegram.messenger.MessageObject cached = ssc.getLastExposedMessageCached(dialog.id);
-                                message = cached; // may be null → no preview text
+                                // Fall back to the latest exposed message resolved via
+                                // Telegram's global by-id cache. May be null when the
+                                // chat hasn't been opened this session (cache empty).
+                                message = ssc.resolveLatestExposedPreview(dialog.id);
                                 groupMessages = null;
                             }
                         }
@@ -5992,13 +5996,20 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     }
 
     public MessageObject getMessage() {
-        // Chat hidden in the current view (off-mode or cross-space): never leak the real top
-        // message to external callers (e.g. FilteredSearchView click handlers, which would
-        // otherwise reveal hidden-chat content even when the cell itself was masked).
+        // Chat hidden in the current view (off-mode or cross-space): never leak the real
+        // top message to external callers (e.g. FilteredSearchView click handlers). Return
+        // the locally-held `message` when the mask has already swapped it for an exposed
+        // / pending one; otherwise resolve the latest exposed via Telegram's global cache.
         if (currentDialogId != 0) {
             org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
             if (ssc.isHiddenFromCurrentView(currentDialogId)) {
-                return ssc.getLastExposedMessageCached(currentDialogId);
+                if (message != null) {
+                    int mid = message.getId();
+                    if (ssc.isMessageExposed(currentDialogId, mid) || ssc.isMessagePending(currentDialogId, mid)) {
+                        return message;
+                    }
+                }
+                return ssc.resolveLatestExposedPreview(currentDialogId);
             }
         }
         return message;

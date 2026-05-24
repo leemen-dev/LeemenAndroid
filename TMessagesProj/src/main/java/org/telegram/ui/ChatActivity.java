@@ -2987,8 +2987,7 @@ public class ChatActivity extends BaseFragment implements
                 // before the messagesDidLoad filter strips it.
                 SecondSpaceController psCtrlInit = SecondSpaceController.getInstance(currentAccount);
                 if (psCtrlInit.isHiddenFromCurrentView(dialog_id)) {
-                    MessageObject lastExposedInit = psCtrlInit.getLastExposedMessageCached(dialog_id);
-                    int safeAnchor = lastExposedInit != null ? lastExposedInit.getId() : 0;
+                    int safeAnchor = psCtrlInit.getLatestExposedMessageId(dialog_id);
                     if (startLoadFromMessageId != safeAnchor) {
                         startLoadFromMessageId = safeAnchor;
                         // Also reset the saved-scroll bookkeeping so we don't attempt offset
@@ -13633,6 +13632,21 @@ public class ChatActivity extends BaseFragment implements
         if (chatLayoutManager == null || paused || chatAdapter.isFrozen || waitingForGetDifference) {
             return;
         }
+        // Hidden chat in off / fake-cross view: never fetch more history. The initial
+        // load (firstLoadMessages, anchored to last exposed) already brought the
+        // visible-from-outside context in; pagination beyond that would fetch hidden
+        // neighbors from the server, even though the messages-load filter strips them
+        // before render. Freeze endReached on both sides so any retry path also stops
+        // asking for more.
+        if (isSecondSpaceContentSuppressed()) {
+            endReached[0] = true;
+            endReached[1] = true;
+            cacheEndReached[0] = true;
+            cacheEndReached[1] = true;
+            forwardEndReached[0] = true;
+            forwardEndReached[1] = true;
+            return;
+        }
         int firstVisibleItem = RecyclerListView.NO_POSITION;
         int lastVisibleItem = RecyclerListView.NO_POSITION;
         int visibleItemCount = 0;
@@ -20198,11 +20212,7 @@ public class ChatActivity extends BaseFragment implements
                 // still be visible — otherwise the user watches their own bubble flicker out.
                 // It's the user's own work-in-progress; never an incoming.
                 filtered.add(mo);
-                ssc.cacheLastExposedMessage(dialog_id, mo);
             }
-        }
-        if (latestExposedOrPending != null) {
-            ssc.cacheLastExposedMessage(dialog_id, latestExposedOrPending);
         }
         return filtered;
     }
@@ -20383,7 +20393,6 @@ public class ChatActivity extends BaseFragment implements
                 if (mid <= 0) continue;
                 if (!ssc.isMessageExposed(dialog_id, mid)) {
                     ssc.exposeMessage(dialog_id, mid);
-                    ssc.cacheLastExposedMessage(dialog_id, selectedMessagesIds[idx].valueAt(i));
                     // If this message was sitting in the pending set, exposing it transfers
                     // ownership to the exposed set — drop the pending entry.
                     ssc.unmarkMessagePending(dialog_id, mid);
@@ -20412,10 +20421,6 @@ public class ChatActivity extends BaseFragment implements
                 boolean wasPending = ssc.isMessagePending(dialog_id, mid);
                 if (wasExposed) {
                     ssc.unexposeMessage(dialog_id, mid);
-                    MessageObject cached = ssc.getLastExposedMessageCached(dialog_id);
-                    if (cached != null && cached.getId() == mid) {
-                        ssc.invalidateLastExposedCache(dialog_id);
-                    }
                     changed++;
                 }
                 if (wasPending) {
@@ -20435,8 +20440,6 @@ public class ChatActivity extends BaseFragment implements
         for (int i = 0; i < toExpose.size(); i++) {
             int id = toExpose.get(i);
             ssc.exposeMessage(dialog_id, id);
-            MessageObject mo = i < toExposeMsgs.size() ? toExposeMsgs.get(i) : null;
-            if (mo != null) ssc.cacheLastExposedMessage(dialog_id, mo);
         }
         // Manage flow closed: everything from this pending batch has been decided — either
         // moved to exposed above, or implicitly hidden (not picked). Drop the entire chat
@@ -22186,7 +22189,19 @@ public class ChatActivity extends BaseFragment implements
             }
 
             if (messages.isEmpty()) {
-                if (!endReached[0] && !loading) {
+                // Hidden chat in off / fake-cross view: when the loaded batch filters
+                // down to empty, don't auto-fetch more — the server would just return
+                // additional hidden context which we'd filter out again. Mark
+                // endReached so the empty state is final from the loader's POV.
+                if (isSecondSpaceContentSuppressed()) {
+                    endReached[0] = true;
+                    endReached[1] = true;
+                    cacheEndReached[0] = true;
+                    cacheEndReached[1] = true;
+                    forwardEndReached[0] = true;
+                    forwardEndReached[1] = true;
+                    loading = false;
+                } else if (!endReached[0] && !loading) {
                     showProgressView(false);
                     if (chatListView != null) {
                         chatListView.setEmptyView(null);
@@ -26238,7 +26253,18 @@ public class ChatActivity extends BaseFragment implements
             }
         }
         if (messages.isEmpty()) {
-            if (!endReached[0] && !loading) {
+            // Hidden chat in off / fake-cross view: don't trigger auto-fetch on empty
+            // result — the server would just return more hidden context. Mirror the
+            // endReached freeze used in the messagesDidLoad-empty branch above.
+            if (isSecondSpaceContentSuppressed()) {
+                endReached[0] = true;
+                endReached[1] = true;
+                cacheEndReached[0] = true;
+                cacheEndReached[1] = true;
+                forwardEndReached[0] = true;
+                forwardEndReached[1] = true;
+                loading = false;
+            } else if (!endReached[0] && !loading) {
                 if (!chatAdapter.isFiltered) {
                     showProgressView(false);
                 }
