@@ -544,6 +544,20 @@ public class SecondSpaceController extends BaseController {
         }
     }
 
+    /** Drop every exposed marker for a chat in one go. Used by the "Hide all" decision flow
+     *  which nukes off-mode visibility for the whole chat regardless of how each message got
+     *  there (previous explicit decision or current off-mode work). */
+    public void clearAllExposedMessages(long dialogId) {
+        Set<Integer> removed = exposedMessages.remove(dialogId);
+        if (removed != null && !removed.isEmpty()) {
+            persistExposed();
+            // The cached preview hint may point at one of the just-removed messages; invalidate
+            // so the dialogs-list preview falls back to nothing rather than a stale exposed msg.
+            invalidateLastExposedCache(dialogId);
+            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+        }
+    }
+
     // --- Search history scoping (per chat) ---
     //
     // Recent-search entries are mode-scoped: a dialog searched in ACTIVE mode is marked
