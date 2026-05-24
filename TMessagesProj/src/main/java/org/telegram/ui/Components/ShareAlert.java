@@ -2904,7 +2904,6 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
             ArrayList<TLRPC.Dialog> archivedDialogs = new ArrayList<>();
             ArrayList<TLRPC.Dialog> allDialogs = MessagesController.getInstance(currentAccount).getAllDialogs();
             org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
-            boolean filterPrivate = !ssc.isActive();
             for (int a = 0; a < allDialogs.size(); a++) {
                 TLRPC.Dialog dialog = allDialogs.get(a);
                 if (!(dialog instanceof TLRPC.TL_dialog)) {
@@ -2913,7 +2912,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 if (dialog.id == selfUserId) {
                     continue;
                 }
-                if (filterPrivate && ssc.isInSecondSpace(dialog.id)) {
+                if (ssc.isHiddenFromCurrentView(dialog.id)) {
                     continue;
                 }
                 if (!DialogObject.isEncryptedDialog(dialog.id)) {

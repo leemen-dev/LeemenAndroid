@@ -813,8 +813,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 presentFragment(new SecondSpaceSettingsActivity());
                 break;
             case 101: {
-                Runnable enter = () -> {
-                    SecondSpaceController.getInstance(currentAccount).setActive(true);
+                SecondSpaceController ssc101 = SecondSpaceController.getInstance(currentAccount);
+                Runnable afterEnter = () -> {
+                    // Mode is set either by PasscodeActivity (PIN path) or by the no-PIN
+                    // / skip-path branches below. This runnable handles only post-entry UI.
                     if (getParentLayout() != null) {
                         for (org.telegram.ui.ActionBar.BaseFragment f : getParentLayout().getFragmentStack()) {
                             if (f instanceof MainTabsActivity) {
@@ -824,11 +826,17 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                         }
                     }
                 };
-                SecondSpaceController ssc101 = SecondSpaceController.getInstance(currentAccount);
-                if (ssc101.hasPassword() && !ssc101.isPinPromptSkippable()) {
-                    presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_ENTER).setOnSuccess(enter));
+                boolean anyPin = ssc101.hasRealPassword() || ssc101.hasFakePassword();
+                if (anyPin && !ssc101.isPinPromptSkippable()) {
+                    presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_ENTER).setOnSuccess(afterEnter));
+                } else if (anyPin) {
+                    // Skip window still open — re-enter the last verified mode.
+                    ssc101.setActiveMode(ssc101.getPinLastVerifiedMode());
+                    afterEnter.run();
                 } else {
-                    enter.run();
+                    // No PIN configured at all → enter real (legacy passwordless path).
+                    ssc101.setActive(true);
+                    afterEnter.run();
                 }
                 break;
             }

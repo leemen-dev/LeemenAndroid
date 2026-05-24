@@ -290,7 +290,9 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
     public static java.util.List<TLRPC.TL_topPeer> getVisibleHintsForAccount(int account) {
         java.util.List<TLRPC.TL_topPeer> all = MediaDataController.getInstance(account).hints;
         org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(account);
-        if (ssc.isActive() || ssc.getDialogIds().isEmpty()) {
+        // Real-active sees everything; off and fake-active filter via isHiddenFromCurrentView
+        // (which hides both spaces in off, and real-space chats in fake-active).
+        if (ssc.isRealActive() || ssc.getDialogIds().isEmpty()) {
             return all;
         }
         java.util.ArrayList<TLRPC.TL_topPeer> filtered = new java.util.ArrayList<>(all.size());
@@ -302,7 +304,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
             long did = peer.peer.user_id != 0 ? peer.peer.user_id
                     : peer.peer.channel_id != 0 ? -peer.peer.channel_id
                     : peer.peer.chat_id != 0 ? -peer.peer.chat_id : 0;
-            if (did != 0 && ssc.isInSecondSpace(did)) {
+            if (did != 0 && ssc.isHiddenFromCurrentView(did)) {
                 continue;
             }
             filtered.add(peer);
@@ -472,11 +474,10 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                     usersMap.put(user.id, user);
                 }
                 SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-                boolean ssActive = ssc.isActive();
                 for (int a = 0; a < res.messages.size(); a++) {
                     TLRPC.Message message = res.messages.get(a);
                     long msgDialogId = MessageObject.getDialogId(message);
-                    if (!ssActive && ssc.isInSecondSpace(msgDialogId) && !ssc.isMessageExposed(msgDialogId, message.id)) {
+                    if (ssc.isHiddenFromCurrentView(msgDialogId) && !ssc.isMessageExposed(msgDialogId, message.id)) {
                         messageObjects.add(null);
                         continue;
                     }
@@ -628,11 +629,10 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                     usersMap.put(user.id, user);
                 }
                 SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-                boolean ssActive = ssc.isActive();
                 for (int a = 0; a < res.messages.size(); a++) {
                     TLRPC.Message message = res.messages.get(a);
                     long dialogId = MessageObject.getDialogId(message);
-                    if (!ssActive && ssc.isInSecondSpace(dialogId) && !ssc.isMessageExposed(dialogId, message.id)) {
+                    if (ssc.isHiddenFromCurrentView(dialogId) && !ssc.isMessageExposed(dialogId, message.id)) {
                         messageObjects.add(null);
                         continue;
                     }
