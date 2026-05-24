@@ -20109,11 +20109,12 @@ public class ChatActivity extends BaseFragment implements
                 if (latestExposed == null || id > latestExposed.getId()) {
                     latestExposed = mo;
                 }
-            } else if (id > lastDecided) {
-                // Pending (undecided) messages stay visible to the user IN THE OPEN CHAT until
-                // they decide what to do with them later in active mode. Without this, the user
-                // would type a message in off mode (entering via search), hit send, and watch
-                // their own message vanish — confusing and breaks the chat flow.
+            } else if (mo.isOut() && id > lastDecided) {
+                // The user's own pending (undecided) messages stay visible in the open chat
+                // until they decide later in active mode. Without this, the user would type a
+                // message in off mode (entering via search), hit send, and watch their own
+                // message vanish. INCOMING messages with id > lastDecided must NOT pass through
+                // here — that would leak partner replies into the off-mode hidden chat view.
                 filtered.add(mo);
                 privateSpacePendingMessageIds.add(id);
                 privateSpacePendingMessages.add(mo);
@@ -20122,9 +20123,7 @@ public class ChatActivity extends BaseFragment implements
                 }
                 // Cache the user's own pending outgoing so the dialogs-list preview picks it
                 // up the moment they exit the chat — no fragile post-send delay needed.
-                if (mo.isOut()) {
-                    ssc.cacheLastExposedMessage(dialog_id, mo);
-                }
+                ssc.cacheLastExposedMessage(dialog_id, mo);
             } else if (mo.isOut() && (id < 0 || mo.isSending() || mo.isSendError())) {
                 // Local outgoing placeholders (negative ids before server confirmation) and
                 // retried-after-failure messages must remain visible — they're the user's own
