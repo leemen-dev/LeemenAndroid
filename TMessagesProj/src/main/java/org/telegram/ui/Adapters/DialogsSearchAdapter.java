@@ -477,6 +477,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                     TLRPC.Message message = res.messages.get(a);
                     long msgDialogId = MessageObject.getDialogId(message);
                     if (!ssActive && ssc.isInSecondSpace(msgDialogId) && !ssc.isMessageExposed(msgDialogId, message.id)) {
+                        messageObjects.add(null);
                         continue;
                     }
                     MessageObject messageObject = new MessageObject(currentAccount, message, usersMap, chatsMap, false, true);
@@ -504,7 +505,11 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                             if (maxId != 0 && message.id <= maxId) {
                                 continue;
                             }
-                            searchForumResultMessages.add(messageObjects.get(a));
+                            MessageObject msg = messageObjects.get(a);
+                            if (msg == null) {
+                                continue;
+                            }
+                            searchForumResultMessages.add(msg);
                         }
                         searchWas = true;
                         localMessagesSearchEndReached = res.messages.size() != 20;
@@ -628,6 +633,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                     TLRPC.Message message = res.messages.get(a);
                     long dialogId = MessageObject.getDialogId(message);
                     if (!ssActive && ssc.isInSecondSpace(dialogId) && !ssc.isMessageExposed(dialogId, message.id)) {
+                        messageObjects.add(null);
                         continue;
                     }
                     MessageObject messageObject = new MessageObject(currentAccount, message, usersMap, chatsMap, false, true);
@@ -669,6 +675,9 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                                 continue;
                             }
                             MessageObject msg = messageObjects.get(a);
+                            if (msg == null) {
+                                continue;
+                            }
                             if (!searchForumResultMessages.isEmpty()) {
                                 boolean foundDuplicate = false;
                                 for (int i = 0; i < searchForumResultMessages.size(); ++i) {
