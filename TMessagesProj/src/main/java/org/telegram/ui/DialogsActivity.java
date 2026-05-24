@@ -3635,14 +3635,37 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     if (initialDialogsType == DIALOGS_TYPE_FORWARD) {
                         return 0;
                     }
+                    SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
                     if (tabId == filterTabsView.getDefaultTabId()) {
-                        return getMessagesStorage().getMainUnreadCount();
+                        int count = getMessagesStorage().getMainUnreadCount();
+                        // Subtract unread from hidden chats (off / fake-active) so the default
+                        // tab badge doesn't leak hidden activity.
+                        if (!ssc.isRealActive() && !ssc.getDialogIds().isEmpty()) {
+                            int sub = 0;
+                            for (Long did : ssc.getDialogIds()) {
+                                TLRPC.Dialog d = getMessagesController().dialogs_dict.get(did);
+                                if (d != null && ssc.isHiddenFromCurrentView(did) && !ssc.hasExposedMessages(did)) {
+                                    sub += d.unread_count;
+                                }
+                            }
+                            count = Math.max(0, count - sub);
+                        }
+                        return count;
                     }
                     ArrayList<MessagesController.DialogFilter> dialogFilters = getMessagesController().getDialogFilters();
                     if (tabId < 0 || tabId >= dialogFilters.size()) {
                         return 0;
                     }
-                    return getMessagesController().getDialogFilters().get(tabId).unreadCount;
+                    MessagesController.DialogFilter filter = dialogFilters.get(tabId);
+                    int filterUnread = filter.unreadCount;
+                    // filter.dialogs is the filter's pre-built dialog list (includes hidden
+                    // chats). Subtract unread of those hidden in current view to keep the
+                    // tab badge consistent with the on-screen list.
+                    int sub = ssc.hiddenUnreadCountIn(filter.dialogs);
+                    if (sub > 0) {
+                        filterUnread = Math.max(0, filterUnread - sub);
+                    }
+                    return filterUnread;
                 }
 
                 @Override
@@ -11023,12 +11046,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (ssc.isRealActive()) {
             return raw;
         }
-        // Archive view (folderId == 1): in OFF mode hidden chats stay visible (masked by
-        // DialogCell). In FAKE_ACTIVE they must NOT — real chats' presence in archive
-        // would leak the existence of the real space.
-        if (folderId == 1 && !ssc.isFakeActive()) {
-            return raw;
-        }
+        // Archive view (folderId == 1) goes through the same filter as the root list: hidden
+        // chats without exposed messages are dropped entirely. The earlier "show in archive,
+        // mask in DialogCell" mode leaked existence and caused repaint flicker on any new
+        // message arrival in a hidden chat sitting in archive.
         ArrayList<TLRPC.Dialog> filtered = new ArrayList<>(raw.size());
         for (int i = 0; i < raw.size(); i++) {
             TLRPC.Dialog d = raw.get(i);

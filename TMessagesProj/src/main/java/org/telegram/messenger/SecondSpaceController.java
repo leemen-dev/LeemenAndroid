@@ -7,6 +7,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.telegram.tgnet.TLRPC;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -151,7 +152,18 @@ public class SecondSpaceController extends BaseController implements Notificatio
         // mode, exits chat before the round-trip completes, server confirms → ChatActivity
         // is gone → no rename happens, pending set still holds the stale negative id,
         // re-entering the chat in active mode shows the message without the eye badge.
-        getNotificationCenter().addObserver(this, NotificationCenter.messageReceivedByServer);
+        //
+        // addObserver is main-thread-only in DEBUG builds, and getInstance() can be triggered
+        // from any thread (push paths, MessagesStorage callbacks, NotificationsController
+        // background work). Defer registration to the main thread.
+        AndroidUtilities.runOnUIThread(() -> {
+            getNotificationCenter().addObserver(this, NotificationCenter.messageReceivedByServer);
+            // Drop tracking (exposed, pending, last-exposed cache) for messages that get
+            // deleted out from under us. Without this, deleted-from-off-mode messages
+            // linger in the dialog cell preview (stale cached MessageObject) until the
+            // chat is opened again to repopulate the cache.
+            getNotificationCenter().addObserver(this, NotificationCenter.messagesDeleted);
+        });
     }
 
     @Override
@@ -172,6 +184,58 @@ public class SecondSpaceController extends BaseController implements Notificatio
             if (owningDialog != null) {
                 replacePendingMessageId(owningDialog, oldId, newId);
             }
+        } else if (id == NotificationCenter.messagesDeleted) {
+            // args: (ArrayList<Integer> mids, long channelId, ...). channelId > 0 → channel
+            // deletion, dialog_id = -channelId. channelId == 0 → non-channel deletion;
+            // non-channel mids are globally unique within a user account, so a single
+            // dialog among our tracked set will own each deleted mid.
+            @SuppressWarnings("unchecked")
+            ArrayList<Integer> mids = args.length > 0 && args[0] instanceof ArrayList ? (ArrayList<Integer>) args[0] : null;
+            if (mids == null || mids.isEmpty()) return;
+            long channelId = args.length > 1 && args[1] instanceof Long ? (Long) args[1] : 0L;
+            if (channelId > 0) {
+                purgeDeletedFromTracking(-channelId, mids);
+            } else {
+                // Walk the union of tracked dialog ids (exposed + pending + cache) so we
+                // don't miss a dialog that's only tracked through cache. Snapshot first
+                // to avoid ConcurrentModificationException — purge writes back into the
+                // maps via persist*.
+                java.util.HashSet<Long> tracked = new java.util.HashSet<>();
+                tracked.addAll(exposedMessages.keySet());
+                tracked.addAll(pendingMessages.keySet());
+                tracked.addAll(lastExposedMessageCache.keySet());
+                for (Long did : tracked) {
+                    purgeDeletedFromTracking(did, mids);
+                }
+            }
+        }
+    }
+
+    /** Drop {@code mids} from {@code dialogId}'s exposed / pending sets, and invalidate
+     *  the cached last-exposed preview if it pointed at one of the deleted ids.
+     *  Idempotent — sets / cache may not contain the ids at all (in which case it's
+     *  a cheap no-op). Fires {@code dialogsNeedReload} when state changed. */
+    private void purgeDeletedFromTracking(long dialogId, ArrayList<Integer> mids) {
+        boolean cacheAffected = false;
+        MessageObject cached = lastExposedMessageCache.get(dialogId);
+        for (int i = 0, n = mids.size(); i < n; i++) {
+            int mid = mids.get(i);
+            // unexposeMessage / unmarkMessagePending each persist + notify; calling
+            // both per id avoids needing to inline the bookkeeping here.
+            if (isMessageExposed(dialogId, mid)) {
+                unexposeMessage(dialogId, mid);
+            }
+            if (isMessagePending(dialogId, mid)) {
+                unmarkMessagePending(dialogId, mid);
+            }
+            if (cached != null && cached.getId() == mid) {
+                cacheAffected = true;
+            }
+        }
+        if (cacheAffected) {
+            // Don't try to pick a "next" exposed message — we don't hold MessageObjects
+            // for ids we haven't seen recently. Clear and let the next chat open repopulate.
+            invalidateLastExposedCache(dialogId);
         }
     }
 
@@ -618,6 +682,23 @@ public class SecondSpaceController extends BaseController implements Notificatio
         return activeMode == MODE_FAKE
                 ? Collections.unmodifiableSet(fakeDialogIds)
                 : Collections.unmodifiableSet(dialogIds);
+    }
+
+    /** Sum of {@code unread_count} for chats in {@code dialogs} that are hidden from the
+     *  current view AND have no exposed messages. Use to subtract from any tab / folder
+     *  badge so off-mode (or fake-active) counters don't leak hidden activity. Returns 0
+     *  in real-active mode (privileged view, nothing to hide). */
+    public int hiddenUnreadCountIn(java.util.List<TLRPC.Dialog> dialogs) {
+        if (activeMode == MODE_REAL || dialogs == null || dialogs.isEmpty()) return 0;
+        if (this.dialogIds.isEmpty() && fakeDialogIds.isEmpty()) return 0;
+        int sub = 0;
+        for (int i = 0, n = dialogs.size(); i < n; i++) {
+            TLRPC.Dialog d = dialogs.get(i);
+            if (d != null && isHiddenFromCurrentView(d.id) && !hasExposedMessages(d.id)) {
+                sub += d.unread_count;
+            }
+        }
+        return sub;
     }
 
     // --- Mode ---
