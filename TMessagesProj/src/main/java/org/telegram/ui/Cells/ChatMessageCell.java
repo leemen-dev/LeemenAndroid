@@ -20109,8 +20109,11 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         } else {
             cx = bounds.right + AndroidUtilities.dp(4) - size;
         }
-        int badgeColor = getThemedColor(out ? Theme.key_chat_outAudioSeekbarFill : Theme.key_chat_inAudioSeekbarFill);
-        privateSpaceEyeBackgroundPaint.setColor(badgeColor);
+        // Fixed dark badge + white eye on both sides. Theme-derived bubble colors (e.g. the
+        // audio-seekbar fill) can be white on outgoing bubbles in many themes, which made the
+        // badge disappear into the chat wallpaper for own messages. A constant dark fill is
+        // always visible against any bubble/wallpaper combination.
+        privateSpaceEyeBackgroundPaint.setColor(0xE6000000);
         canvas.drawCircle(cx + size / 2f, cy + size / 2f, size / 2f + pad, privateSpaceEyeBackgroundPaint);
         privateSpaceEyeDrawable.setColorFilter(new android.graphics.PorterDuffColorFilter(
                 0xFFFFFFFF, android.graphics.PorterDuff.Mode.SRC_IN));

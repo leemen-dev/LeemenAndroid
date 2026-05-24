@@ -36905,6 +36905,16 @@ public class ChatActivity extends BaseFragment implements
                     messageCell.setShowTopic(true);
                     messageCell.setMessageObject(message, groupedMessages, pinnedBottom, pinnedTop, firstInChat, lastInChatList);
                     messageCell.setSpoilersSuppressed(chatListView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE);
+                    // Private Space eye must be applied on every bind, otherwise recycled cells
+                    // carry the previous message's exposed flag until updateVisibleRows runs.
+                    // That manifests as the eye flickering on the wrong messages, the badge
+                    // missing until the user selects something, and Hide-action not visually
+                    // reflecting on selected rows (the flag stays true on recycled cells).
+                    {
+                        SecondSpaceController psBindCtrl = SecondSpaceController.getInstance(currentAccount);
+                        messageCell.setPrivateSpaceExposed(psBindCtrl.isActive()
+                                && psBindCtrl.isMessageExposed(dialog_id, message.getId()));
+                    }
                     messageCell.setHighlighted(highlightMessageId != Integer.MAX_VALUE && message.getId() == highlightMessageId);
                     if (messageCell.isHighlighted() && highlightMessageQuote != null) {
                         final long now = System.currentTimeMillis();
