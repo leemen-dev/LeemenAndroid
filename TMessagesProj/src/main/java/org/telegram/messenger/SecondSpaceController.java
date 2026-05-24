@@ -86,7 +86,6 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private final Set<Long> fakeDialogIds = new HashSet<>();
     private final Map<Long, Set<Integer>> exposedMessages = new HashMap<>();
     private final Map<Long, Integer> lastDecidedMessageId = new HashMap<>();
-    private final Map<Long, MessageObject> lastExposedMessageCache = new HashMap<>();
     /** Per-chat set of message ids the user sent while in OFF mode, still awaiting a decision.
      *  Off-mode-only sends go here directly so they can never be confused with normal active-
      *  mode sends — those simply don't get tracked. */
@@ -196,14 +195,12 @@ public class SecondSpaceController extends BaseController implements Notificatio
             if (channelId > 0) {
                 purgeDeletedFromTracking(-channelId, mids);
             } else {
-                // Walk the union of tracked dialog ids (exposed + pending + cache) so we
-                // don't miss a dialog that's only tracked through cache. Snapshot first
+                // Walk the union of tracked dialog ids (exposed + pending). Snapshot first
                 // to avoid ConcurrentModificationException — purge writes back into the
                 // maps via persist*.
                 java.util.HashSet<Long> tracked = new java.util.HashSet<>();
                 tracked.addAll(exposedMessages.keySet());
                 tracked.addAll(pendingMessages.keySet());
-                tracked.addAll(lastExposedMessageCache.keySet());
                 for (Long did : tracked) {
                     purgeDeletedFromTracking(did, mids);
                 }
@@ -211,31 +208,19 @@ public class SecondSpaceController extends BaseController implements Notificatio
         }
     }
 
-    /** Drop {@code mids} from {@code dialogId}'s exposed / pending sets, and invalidate
-     *  the cached last-exposed preview if it pointed at one of the deleted ids.
-     *  Idempotent — sets / cache may not contain the ids at all (in which case it's
-     *  a cheap no-op). Fires {@code dialogsNeedReload} when state changed. */
+    /** Drop {@code mids} from {@code dialogId}'s exposed / pending sets. Idempotent —
+     *  sets may not contain the ids at all (cheap no-op). Each remove persists + fires
+     *  {@code dialogsNeedReload}, so the dialog cell repaints without the now-deleted
+     *  message in any tracking surface. */
     private void purgeDeletedFromTracking(long dialogId, ArrayList<Integer> mids) {
-        boolean cacheAffected = false;
-        MessageObject cached = lastExposedMessageCache.get(dialogId);
         for (int i = 0, n = mids.size(); i < n; i++) {
             int mid = mids.get(i);
-            // unexposeMessage / unmarkMessagePending each persist + notify; calling
-            // both per id avoids needing to inline the bookkeeping here.
             if (isMessageExposed(dialogId, mid)) {
                 unexposeMessage(dialogId, mid);
             }
             if (isMessagePending(dialogId, mid)) {
                 unmarkMessagePending(dialogId, mid);
             }
-            if (cached != null && cached.getId() == mid) {
-                cacheAffected = true;
-            }
-        }
-        if (cacheAffected) {
-            // Don't try to pick a "next" exposed message — we don't hold MessageObjects
-            // for ids we haven't seen recently. Clear and let the next chat open repopulate.
-            invalidateLastExposedCache(dialogId);
         }
     }
 
@@ -632,12 +617,11 @@ public class SecondSpaceController extends BaseController implements Notificatio
     public void removeFromCurrentSpace(long dialogId) {
         Set<Long> target = currentDialogSet();
         if (target.remove(dialogId)) {
-            // Exposure / pending / cached-preview state is per-chat (shared store), so it
-            // only makes sense to drop when the chat leaves PS membership entirely.
+            // Exposure / pending state is per-chat (shared store), so it only makes
+            // sense to drop when the chat leaves PS membership entirely.
             if (!isInSecondSpace(dialogId)) {
                 exposedMessages.remove(dialogId);
                 lastDecidedMessageId.remove(dialogId);
-                lastExposedMessageCache.remove(dialogId);
                 pendingMessages.remove(dialogId);
                 persistExposed();
                 persistLastDecided();
@@ -840,23 +824,40 @@ public class SecondSpaceController extends BaseController implements Notificatio
         return set != null && !set.isEmpty();
     }
 
-    public MessageObject getLastExposedMessageCached(long dialogId) {
-        return lastExposedMessageCache.get(dialogId);
+    /** Highest message id currently marked exposed for {@code dialogId}, or 0 when none.
+     *  Returned as a bare integer — callers wanting the actual {@link MessageObject}
+     *  should resolve it through {@link #resolveLatestExposedPreview(long)} or directly
+     *  via {@code MessagesController.dialogMessagesByIds}, not through any PS-specific
+     *  cache (we intentionally don't hold message bodies). */
+    public int getLatestExposedMessageId(long dialogId) {
+        Set<Integer> set = exposedMessages.get(dialogId);
+        if (set == null || set.isEmpty()) return 0;
+        int max = Integer.MIN_VALUE;
+        for (Integer id : set) {
+            if (id != null && id > max) max = id;
+        }
+        return max == Integer.MIN_VALUE ? 0 : max;
     }
 
-    public void cacheLastExposedMessage(long dialogId, MessageObject message) {
-        if (message == null) {
-            return;
-        }
-        MessageObject existing = lastExposedMessageCache.get(dialogId);
-        // Replace cache when (a) nothing cached yet, (b) new message has higher id (server
-        // confirmed something newer), or (c) new is a local outgoing placeholder — id < 0 but
-        // represents the user's freshest action and should override an older positive-id cache.
-        boolean localOutgoing = message.getId() < 0 && message.isOut();
-        if (existing == null || message.getId() > existing.getId() || localOutgoing) {
-            lastExposedMessageCache.put(dialogId, message);
-            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
-        }
+    /** Resolve the latest-exposed {@link MessageObject} for {@code dialogId} by looking
+     *  it up in Telegram's per-account {@code dialogMessagesByIds} cache. PS code never
+     *  stores message bodies itself — this is a pure read of state that exists for
+     *  reasons unrelated to private space.
+     *
+     *  Returns {@code null} when (a) no exposed ids tracked, (b) the cache has been
+     *  evicted (e.g. app restart, never-opened-in-this-session chat), or (c) channel
+     *  message-id collision lands on a message in a different dialog. Callers must
+     *  tolerate {@code null} as a "no preview right now" signal. */
+    public MessageObject resolveLatestExposedPreview(long dialogId) {
+        int id = getLatestExposedMessageId(dialogId);
+        if (id == 0) return null;
+        MessageObject mo = getMessagesController().dialogMessagesByIds.get(id);
+        if (mo == null) return null;
+        // dialogMessagesByIds is keyed by raw message id (no channel-id discriminator),
+        // so a hit on a same-id message belonging to a different dialog is theoretically
+        // possible for channels. Verify ownership before surfacing.
+        if (mo.getDialogId() != dialogId) return null;
+        return mo;
     }
 
     // --- One-shot UX hints ---
@@ -875,13 +876,6 @@ public class SecondSpaceController extends BaseController implements Notificatio
 
     public void markExposureToolbarHintShown() {
         getMessagesController().getMainSettings().edit().putBoolean(PREF_TOOLBAR_HINT_SHOWN, true).apply();
-    }
-
-    /** Drop the cached "last exposed" — used when the cached message gets unexposed. */
-    public void invalidateLastExposedCache(long dialogId) {
-        if (lastExposedMessageCache.remove(dialogId) != null) {
-            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
-        }
     }
 
     public void exposeMessage(long dialogId, int messageId) {
@@ -914,9 +908,6 @@ public class SecondSpaceController extends BaseController implements Notificatio
         Set<Integer> removed = exposedMessages.remove(dialogId);
         if (removed != null && !removed.isEmpty()) {
             persistExposed();
-            // The cached preview hint may point at one of the just-removed messages; invalidate
-            // so the dialogs-list preview falls back to nothing rather than a stale exposed msg.
-            invalidateLastExposedCache(dialogId);
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
     }
