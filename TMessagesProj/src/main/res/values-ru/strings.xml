@@ -360,7 +360,7 @@
     <string name="PrivateSpaceExposurePopupBody_many">Вы отправили %1$d сообщений в этом чате, пока скрытое пространство было выключено. Выберите, какие сообщения останутся видны вне скрытого пространства, или оставьте все скрытыми.</string>
     <string name="PrivateSpaceExposurePopupBody_other">Вы отправили %1$d сообщений в этом чате, пока скрытое пространство было выключено. Выберите, какие сообщения останутся видны вне скрытого пространства, или оставьте все скрытыми.</string>
     <string name="PrivateSpaceExposureManage">Выбрать</string>
-    <string name="PrivateSpaceExposureSkip">Оставить скрытыми</string>
+    <string name="PrivateSpaceExposureSkip">Скрыть всё</string>
     <string name="PrivateSpaceExposureActionShort">Показать вне</string>
     <string name="PrivateSpaceExposureConfirm">Показать вне</string>
     <string name="PrivateSpaceExposureConfirmBody_one">Сделать %1$d выбранное сообщение видимым вне скрытого пространства?</string>

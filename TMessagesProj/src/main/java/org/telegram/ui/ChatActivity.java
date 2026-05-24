@@ -20109,12 +20109,12 @@ public class ChatActivity extends BaseFragment implements
                 if (latestExposed == null || id > latestExposed.getId()) {
                     latestExposed = mo;
                 }
-            } else if (mo.isOut() && id > lastDecided) {
+            } else if (mo.isOut() && id > lastDecided && ssc.hasPendingOffModeWork(dialog_id)) {
                 // The user's own pending (undecided) messages stay visible in the open chat
-                // until they decide later in active mode. Without this, the user would type a
-                // message in off mode (entering via search), hit send, and watch their own
-                // message vanish. INCOMING messages with id > lastDecided must NOT pass through
-                // here — that would leak partner replies into the off-mode hidden chat view.
+                // until they decide later in active mode. Gated on hasPendingOffModeWork so
+                // that messages the user sent in ACTIVE mode (no pending flag was set) stay
+                // hidden when re-entering off mode — only off-mode sends are mid-flow.
+                // INCOMING messages can't reach this branch anyway because of isOut.
                 filtered.add(mo);
                 privateSpacePendingMessageIds.add(id);
                 privateSpacePendingMessages.add(mo);
@@ -37282,6 +37282,15 @@ public class ChatActivity extends BaseFragment implements
                             group.messages.get(i).updateTranslation();
                         }
                     }
+                }
+
+                // Same Private-Space eye sync as in onBindViewHolder: a recycled cell that
+                // gets re-attached without a fresh bind would otherwise carry stale state
+                // and the eye wouldn't appear until the next updateVisibleRows tick.
+                {
+                    SecondSpaceController psAttachCtrl = SecondSpaceController.getInstance(currentAccount);
+                    messageCell.setPrivateSpaceExposed(psAttachCtrl.isActive()
+                            && psAttachCtrl.isMessageExposed(dialog_id, message.getId()));
                 }
 
                 boolean selected = false;
