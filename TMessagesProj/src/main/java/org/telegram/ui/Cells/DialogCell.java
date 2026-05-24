@@ -1148,12 +1148,12 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         hasUnmutedTopics = false;
         lastUnreadState = false;
         // Preview text: keep the real `message` set by update() when it's safe to display —
-        // either explicitly exposed, or the user's own outgoing work-in-progress in a chat
-        // that carries the pending-off-mode-work flag (they typed it themselves via search).
-        // Otherwise fall back to the cached preview hint, which may be null → blank preview.
+        // either explicitly exposed, or sitting in the per-message pending set (an off-mode
+        // send awaiting decision). Anything else (incoming or active-mode outgoing) falls
+        // back to the cached preview hint, which may be null → blank preview.
         boolean keepReal = message != null
-                && ((message.isOut() && ssc.hasPendingOffModeWork(currentDialogId))
-                    || ssc.isMessageExposed(currentDialogId, message.getId()));
+                && (ssc.isMessageExposed(currentDialogId, message.getId())
+                    || ssc.isMessagePending(currentDialogId, message.getId()));
         if (!keepReal) {
             message = ssc.getLastExposedMessageCached(currentDialogId);
         }
@@ -3161,18 +3161,16 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                         clearingDialog = MessagesController.getInstance(currentAccount).isClearingDialog(dialog.id);
                         groupMessages = MessagesController.getInstance(currentAccount).dialogMessage.get(dialog.id);
                         message = groupMessages != null && groupMessages.size() > 0 ? groupMessages.get(0) : null;
-                        // Hidden chat in PS off-mode: treat as safe to display when (a) the
-                        // message is explicitly exposed, or (b) it's the user's own outgoing
-                        // message in a chat with pending off-mode work (they typed it via
-                        // search and expect to see their own activity). Incoming messages
-                        // must NOT pass through just because pending is set — that would leak
-                        // partner replies into the off-mode preview.
+                        // Hidden chat in PS off-mode: treat as safe to display when the message
+                        // is explicitly exposed or sitting in the per-message pending set
+                        // (off-mode send awaiting decision). Anything else (incoming or
+                        // active-mode outgoing) is replaced with the cached preview hint.
                         org.telegram.messenger.SecondSpaceController ssc =
                                 org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
                         if (!ssc.isActive() && ssc.isInSecondSpace(dialog.id)) {
                             boolean currentIsSafe = message != null
-                                    && ((message.isOut() && ssc.hasPendingOffModeWork(dialog.id))
-                                        || ssc.isMessageExposed(dialog.id, message.getId()));
+                                    && (ssc.isMessageExposed(dialog.id, message.getId())
+                                        || ssc.isMessagePending(dialog.id, message.getId()));
                             if (!currentIsSafe) {
                                 org.telegram.messenger.MessageObject cached = ssc.getLastExposedMessageCached(dialog.id);
                                 message = cached; // may be null → no preview text

@@ -21,6 +21,7 @@ public class SecondSpaceController extends BaseController {
     private static final String PREF_LAST_DECIDED = "second_space_last_decided";
     private static final String PREF_SHOW_ENTRY_BUTTON = "second_space_show_entry_button";
     private static final String PREF_PENDING_OFF_MODE = "second_space_pending_off_mode";
+    private static final String PREF_PENDING_MESSAGES = "second_space_pending_messages";
     private static final String PREF_PRIVATE_SEARCHES = "second_space_private_searches";
     private static final String PREF_PASSWORD_HASH = "second_space_password_hash";
     private static final String PREF_TAB_SEQUENCE = "second_space_tab_sequence";
@@ -70,7 +71,10 @@ public class SecondSpaceController extends BaseController {
     private final Map<Long, Set<Integer>> exposedMessages = new HashMap<>();
     private final Map<Long, Integer> lastDecidedMessageId = new HashMap<>();
     private final Map<Long, MessageObject> lastExposedMessageCache = new HashMap<>();
-    private final Set<Long> pendingOffModeWork = new HashSet<>();
+    /** Per-chat set of message ids the user sent while in OFF mode, still awaiting a decision.
+     *  Off-mode-only sends go here directly so they can never be confused with normal active-
+     *  mode sends — those simply don't get tracked. */
+    private final Map<Long, Set<Integer>> pendingMessages = new HashMap<>();
     private final Set<Long> privateSearchDialogs = new HashSet<>();
     private String passwordHash;
     private final java.util.List<TabStep> tabSequence = new java.util.ArrayList<>();
@@ -93,15 +97,7 @@ public class SecondSpaceController extends BaseController {
         loadDialogIds(prefs.getString(PREF_DIALOG_IDS, ""));
         loadExposed(prefs.getString(PREF_EXPOSED, ""));
         loadLastDecided(prefs.getString(PREF_LAST_DECIDED, ""));
-        String pendingCsv = prefs.getString(PREF_PENDING_OFF_MODE, "");
-        if (!TextUtils.isEmpty(pendingCsv)) {
-            for (String s : pendingCsv.split(",")) {
-                try {
-                    pendingOffModeWork.add(Long.parseLong(s));
-                } catch (NumberFormatException ignored) {
-                }
-            }
-        }
+        loadPendingMessages(prefs.getString(PREF_PENDING_MESSAGES, ""));
         String searchCsv = prefs.getString(PREF_PRIVATE_SEARCHES, "");
         if (!TextUtils.isEmpty(searchCsv)) {
             for (String s : searchCsv.split(",")) {
@@ -368,11 +364,6 @@ public class SecondSpaceController extends BaseController {
 
     public void addToSecondSpace(long dialogId) {
         if (dialogIds.add(dialogId)) {
-            TLRPC.Dialog dialog = getMessagesController().dialogs_dict.get(dialogId);
-            if (dialog != null && dialog.top_message > 0 && !lastDecidedMessageId.containsKey(dialogId)) {
-                lastDecidedMessageId.put(dialogId, dialog.top_message);
-                persistLastDecided();
-            }
             persistDialogIds();
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
@@ -383,9 +374,11 @@ public class SecondSpaceController extends BaseController {
             exposedMessages.remove(dialogId);
             lastDecidedMessageId.remove(dialogId);
             lastExposedMessageCache.remove(dialogId);
+            pendingMessages.remove(dialogId);
             persistDialogIds();
             persistExposed();
             persistLastDecided();
+            persistPendingMessages();
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
     }
@@ -584,40 +577,124 @@ public class SecondSpaceController extends BaseController {
         getMessagesController().getMainSettings().edit().putString(PREF_PRIVATE_SEARCHES, sb.toString()).apply();
     }
 
-    // --- Pending off-mode work (per chat flag) ---
+    // --- Pending off-mode messages (per chat, per message id) ---
     //
-    // Set when user sends a message in a private-space chat while OFF mode is on
-    // (i.e. via search-by-name). On the next entry of the same chat in ACTIVE mode,
-    // the decision dialog "what to do with these messages" should fire.
+    // A message lands here ONLY when the user explicitly sends it while in OFF mode in a
+    // hidden chat. Active-mode sends are NEVER tracked here, so they can't leak into the
+    // off-mode view via a fuzzy "is this newer than my last decision?" check.
+    //
+    // Lifecycle of an id in this set:
+    //   1. User sends in off-mode → ChatActivity.onMessageSend grabs the local placeholder
+    //      and calls markMessagePending(dialogId, placeholderId)  (placeholderId < 0).
+    //   2. Server confirms the message → messageReceivedByServer fires with (oldId, newId).
+    //      ChatActivity hook calls replacePendingMessageId so the set now holds newId.
+    //   3. User enters PS-on, decision dialog fires showing exactly these messages.
+    //      - "Hide all" / dismiss → clearAllPendingMessages(dialogId)
+    //      - "Show outside"      → for each: exposeMessage + unmarkMessagePending
+    //      - "Manage" + selection→ for selected: exposeMessage + unmarkMessagePending,
+    //                              for rest: unmarkMessagePending (they become hidden)
 
+    /** True if the chat currently has any off-mode sends waiting for a decision. */
     public boolean hasPendingOffModeWork(long dialogId) {
-        return pendingOffModeWork.contains(dialogId);
+        Set<Integer> set = pendingMessages.get(dialogId);
+        return set != null && !set.isEmpty();
     }
 
-    public void markPendingOffModeWork(long dialogId) {
-        if (pendingOffModeWork.add(dialogId)) {
-            persistPendingOffModeWork();
-            // Make the hidden chat appear in the off-mode dialogs list immediately.
+    public boolean isMessagePending(long dialogId, int messageId) {
+        Set<Integer> set = pendingMessages.get(dialogId);
+        return set != null && set.contains(messageId);
+    }
+
+    public Set<Integer> getPendingMessages(long dialogId) {
+        Set<Integer> set = pendingMessages.get(dialogId);
+        return set == null ? Collections.emptySet() : Collections.unmodifiableSet(set);
+    }
+
+    public void markMessagePending(long dialogId, int messageId) {
+        Set<Integer> set = pendingMessages.get(dialogId);
+        if (set == null) {
+            set = new HashSet<>();
+            pendingMessages.put(dialogId, set);
+        }
+        if (set.add(messageId)) {
+            persistPendingMessages();
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
     }
 
+    public void unmarkMessagePending(long dialogId, int messageId) {
+        Set<Integer> set = pendingMessages.get(dialogId);
+        if (set != null && set.remove(messageId)) {
+            if (set.isEmpty()) {
+                pendingMessages.remove(dialogId);
+            }
+            persistPendingMessages();
+            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+        }
+    }
+
+    public void clearAllPendingMessages(long dialogId) {
+        if (pendingMessages.remove(dialogId) != null) {
+            persistPendingMessages();
+            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+        }
+    }
+
+    /** Telegram replaces a placeholder's negative local id with the server-assigned positive
+     *  id at confirmation time (mutates the same MessageObject). Anything tracking that id
+     *  must follow the rename — otherwise the set holds a phantom negative id and the now-
+     *  positive-id message looks "not pending" to the filter. */
+    public void replacePendingMessageId(long dialogId, int oldId, int newId) {
+        if (oldId == newId) return;
+        Set<Integer> set = pendingMessages.get(dialogId);
+        if (set != null && set.remove(oldId)) {
+            set.add(newId);
+            persistPendingMessages();
+            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+        }
+    }
+
+    /** Backwards-compat alias used by the existing decision-flow paths that conceptually
+     *  mean "wipe the chat-level pending state". With the new model that's just clearing
+     *  every pending message id for the chat. */
     public void clearPendingOffModeWork(long dialogId) {
-        if (pendingOffModeWork.remove(dialogId)) {
-            persistPendingOffModeWork();
-            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+        clearAllPendingMessages(dialogId);
+    }
+
+    private void loadPendingMessages(String json) {
+        if (TextUtils.isEmpty(json)) return;
+        try {
+            JSONObject obj = new JSONObject(json);
+            Iterator<String> keys = obj.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                long dialogId = Long.parseLong(key);
+                JSONArray arr = obj.getJSONArray(key);
+                Set<Integer> set = new HashSet<>(arr.length());
+                for (int i = 0; i < arr.length(); i++) {
+                    set.add(arr.getInt(i));
+                }
+                if (!set.isEmpty()) {
+                    pendingMessages.put(dialogId, set);
+                }
+            }
+        } catch (Exception ignored) {
         }
     }
 
-    private void persistPendingOffModeWork() {
-        StringBuilder sb = new StringBuilder();
-        boolean first = true;
-        for (Long id : pendingOffModeWork) {
-            if (!first) sb.append(',');
-            sb.append(id);
-            first = false;
+    private void persistPendingMessages() {
+        try {
+            JSONObject obj = new JSONObject();
+            for (Map.Entry<Long, Set<Integer>> e : pendingMessages.entrySet()) {
+                JSONArray arr = new JSONArray();
+                for (Integer id : e.getValue()) {
+                    arr.put(id);
+                }
+                obj.put(String.valueOf(e.getKey()), arr);
+            }
+            getMessagesController().getMainSettings().edit().putString(PREF_PENDING_MESSAGES, obj.toString()).apply();
+        } catch (Exception ignored) {
         }
-        getMessagesController().getMainSettings().edit().putString(PREF_PENDING_OFF_MODE, sb.toString()).apply();
     }
 
     // --- Decision marker (banner trigger) ---
