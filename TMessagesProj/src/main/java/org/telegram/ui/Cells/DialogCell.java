@@ -6124,6 +6124,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         public int lastTopicsCount;
         public boolean lastDrawnPinned;
         public boolean lastDrawnHasCall;
+        public boolean lastDrawnHidden;
 
 
         public float typingProgres;
@@ -6218,6 +6219,8 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             int draftHash = draftMessage == null ? 0 : draftMessage.message.hashCode() + (draftMessage.reply_to != null ? (draftMessage.reply_to.reply_to_msg_id << 16) : 0);
             boolean hasCall = !hidden && chat != null && chat.call_active && chat.call_not_empty;
             boolean translated = !hidden && MessagesController.getInstance(currentAccount).getTranslateController().isTranslatingDialog(currentDialogId);
+            org.telegram.messenger.SecondSpaceController sscHelper = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+            boolean currentHidden = sscHelper.isActive() && sscHelper.isInSecondSpace(currentDialogId);
             if (lastDrawnSizeHash == sizeHash &&
                     lastDrawnMessageId == messageHash &&
                     lastDrawnTranslated == translated &&
@@ -6229,6 +6232,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                     draftHash == lastDrawnDraftHash &&
                     lastDrawnPinned == drawPin &&
                     lastDrawnHasCall == hasCall &&
+                    lastDrawnHidden == currentHidden &&
                     DialogCell.this.draftVoice == draftVoice) {
                 return false;
             }
@@ -6264,6 +6268,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             lastTopicsCount = topicCount;
             lastDrawnPinned = drawPin;
             lastDrawnHasCall = hasCall;
+            lastDrawnHidden = currentHidden;
             lastDrawnTranslated = translated;
 
             return true;
