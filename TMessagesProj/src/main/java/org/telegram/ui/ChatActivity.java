@@ -21776,6 +21776,11 @@ public class ChatActivity extends BaseFragment implements
                     }
                 }
             }
+            if (isSecondSpaceContentSuppressed()) {
+                endReached[0] = false;
+                cacheEndReached[0] = false;
+                loading = false;
+            }
         } else if (id == NotificationCenter.invalidateMotionBackground) {
             if (chatListView != null) {
                 chatListView.invalidateViews();
@@ -23358,8 +23363,13 @@ public class ChatActivity extends BaseFragment implements
             if (did == dialog_id) {
                 ArrayList<MessageObject> loadedMessages = (ArrayList<MessageObject>) args[1];
                 LongSparseArray<SparseArray<ArrayList<MessageObject>>> replyMessageOwners = (LongSparseArray<SparseArray<ArrayList<MessageObject>>>) args[2];
+                SecondSpaceController sscReply = SecondSpaceController.getInstance(currentAccount);
+                boolean suppressReplies = isSecondSpaceContentSuppressed();
                 for (int a = 0, N = loadedMessages.size(); a < N; a++) {
                     MessageObject obj = loadedMessages.get(a);
+                    if (suppressReplies && !sscReply.isMessageExposed(dialog_id, obj.getId()) && !sscReply.isMessagePending(dialog_id, obj.getId())) {
+                        continue;
+                    }
                     repliesMessagesDict.put(obj.getId(), obj);
                 }
                 if (replyMessageOwners != null) {
