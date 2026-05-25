@@ -3182,12 +3182,12 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                     ttlPeriod = dialog.ttl_period;
                     if (mask == 0) {
                         clearingDialog = MessagesController.getInstance(currentAccount).isClearingDialog(dialog.id);
+                        // Snapshot the previous frame's message before overwriting — used
+                        // as fallback when the global cache evicts the exposed message
+                        // (e.g. a new incoming message displaces it as dialog top).
+                        MessageObject previousMessage = message;
                         groupMessages = MessagesController.getInstance(currentAccount).dialogMessage.get(dialog.id);
                         message = groupMessages != null && groupMessages.size() > 0 ? groupMessages.get(0) : null;
-                        // Hidden chat in PS off-mode: treat as safe to display when the message
-                        // is explicitly exposed or sitting in the per-message pending set
-                        // (off-mode send awaiting decision). Anything else (incoming or
-                        // active-mode outgoing) is replaced with the cached preview hint.
                         org.telegram.messenger.SecondSpaceController ssc =
                                 org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
                         if (ssc.isHiddenFromCurrentView(dialog.id)) {
@@ -3195,10 +3195,14 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                                     && (ssc.isMessageExposed(dialog.id, message.getId())
                                         || ssc.isMessagePending(dialog.id, message.getId()));
                             if (!currentIsSafe) {
-                                // Fall back to the latest exposed message resolved via
-                                // Telegram's global by-id cache. May be null when the
-                                // chat hasn't been opened this session (cache empty).
                                 message = ssc.resolveLatestExposedPreview(dialog.id);
+                                if (message == null && ssc.hasExposedMessages(dialog.id) && previousMessage != null) {
+                                    // Global cache evicted — a new incoming message
+                                    // displaced the exposed top. Re-ensure the previous
+                                    // frame's exposed message in cache and keep using it.
+                                    message = previousMessage;
+                                    ssc.ensureExposedInGlobalCache(previousMessage);
+                                }
                                 groupMessages = null;
                             }
                         }
