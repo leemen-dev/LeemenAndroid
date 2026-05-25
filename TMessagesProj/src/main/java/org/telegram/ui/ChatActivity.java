@@ -19069,10 +19069,6 @@ public class ChatActivity extends BaseFragment implements
                     if (hideItem != null) {
                         hideItem.setVisibility(inHidden3 && anyHideable ? View.VISIBLE : View.GONE);
                     }
-                    if (inHidden3 && anyExposable && anyHideable) {
-                        if (starItem != null) starItem.setVisibility(View.GONE);
-                        if (forwardItem != null) forwardItem.setVisibility(View.GONE);
-                    }
                 }
                 hasUnfavedSelected = false;
                 for (int a = 0; a < 2; a++) {
@@ -20301,23 +20297,34 @@ public class ChatActivity extends BaseFragment implements
     }
 
     private void enterExposureSelectionMode(ArrayList<Integer> idSnapshot, ArrayList<MessageObject> msgSnapshot) {
-        // Collect valid candidates first so we can pass last=true on the final addToSelectedMessages
-        // (so its action-mode-show/refresh branch runs exactly once at the end).
-        ArrayList<MessageObject> valid = new ArrayList<>(idSnapshot.size());
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        // Auto-expose pending messages so the user sees them as already visible outside.
+        // Only the "hide" button will be active in action mode — to undo if needed.
         for (int i = 0; i < idSnapshot.size(); i++) {
             int id = idSnapshot.get(i);
+            if (!ssc.isMessageExposed(dialog_id, id)) {
+                ssc.exposeMessage(dialog_id, id);
+                if (i < msgSnapshot.size() && msgSnapshot.get(i) != null) {
+                    ssc.ensureInGlobalCache(msgSnapshot.get(i));
+                }
+            }
+            ssc.unmarkMessagePending(dialog_id, id);
+        }
+        privateSpaceExposurePending.clear();
+        // Collect valid candidates for selection
+        ArrayList<MessageObject> valid = new ArrayList<>(idSnapshot.size());
+        for (int i = 0; i < idSnapshot.size(); i++) {
             MessageObject mo = i < msgSnapshot.size() ? msgSnapshot.get(i) : null;
             if (mo == null) continue;
             int idx = mo.getDialogId() == mergeDialogId ? 1 : 0;
-            if (selectedMessagesIds[idx].indexOfKey(id) < 0) {
+            if (selectedMessagesIds[idx].indexOfKey(idSnapshot.get(i)) < 0) {
                 valid.add(mo);
             }
         }
         if (valid.isEmpty()) {
+            updateVisibleRows();
             return;
         }
-        // Explicitly enter Telegram's action mode (the same code path long-press uses), otherwise
-        // addToSelectedMessages would do nothing visible until the user manually long-pressed something.
         createActionMode();
         actionBar.showActionMode(true, null, null, null, null, null, 0);
         for (int i = 0; i < valid.size(); i++) {
