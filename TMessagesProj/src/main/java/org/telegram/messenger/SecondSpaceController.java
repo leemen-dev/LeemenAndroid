@@ -678,7 +678,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
         int sub = 0;
         for (int i = 0, n = dialogs.size(); i < n; i++) {
             TLRPC.Dialog d = dialogs.get(i);
-            if (d != null && isHiddenFromCurrentView(d.id) && !hasExposedMessages(d.id) && !hasPendingOffModeWork(d.id)) {
+            if (d != null && isHiddenFromCurrentView(d.id)) {
                 sub += d.unread_count;
             }
         }
