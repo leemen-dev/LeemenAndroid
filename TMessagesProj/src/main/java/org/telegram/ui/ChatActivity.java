@@ -20206,6 +20206,17 @@ public class ChatActivity extends BaseFragment implements
                 filtered.add(mo);
             }
         }
+        // Strip reply previews that reference hidden (non-exposed, non-pending) messages
+        // so the reply header doesn't leak hidden content in OFF mode.
+        for (int i = 0; i < filtered.size(); i++) {
+            MessageObject mo = filtered.get(i);
+            if (mo.replyMessageObject != null) {
+                int replyId = mo.replyMessageObject.getId();
+                if (!ssc.isMessageExposed(dialog_id, replyId) && !ssc.isMessagePending(dialog_id, replyId)) {
+                    mo.replyMessageObject = null;
+                }
+            }
+        }
         // Put the latest exposed/pending MessageObject into Telegram's own global
         // dialogMessagesByIds so that DialogCell preview (via resolveLatestExposedPreview)
         // can find it without any PS-side MessageObject cache.
@@ -20492,13 +20503,6 @@ public class ChatActivity extends BaseFragment implements
                 args[13] = 0;
                 startLoadFromMessageId = 0;
                 startLoadFromMessageIdSaved = 0;
-                endReached[0] = true;
-                endReached[1] = true;
-                cacheEndReached[0] = true;
-                cacheEndReached[1] = true;
-                forwardEndReached[0] = true;
-                forwardEndReached[1] = true;
-                loading = false;
             } else {
                 // ACTIVE mode entry into a hidden chat: if off-mode work is pending, prompt.
                 AndroidUtilities.runOnUIThread(this::maybeShowPrivateSpaceDecisionDialog);
