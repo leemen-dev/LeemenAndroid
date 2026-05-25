@@ -577,6 +577,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private ActionBarMenuSubItem readItem;
     @Nullable
     private ActionBarMenuSubItem blockItem;
+    @Nullable
+    private ActionBarMenuSubItem psToggleHideItem;
 
     private float additionalFloatingTranslation;
     private float floatingButtonPanOffset;
@@ -671,6 +673,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private int canUnarchiveCount;
     private int forumCount;
     private boolean canDeletePsaSelected;
+    private int canHideCount;
+    private int canUnhideCount;
 
     private int folderId;
 
@@ -685,6 +689,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private final static int pin2 = 108;
     private final static int add_to_folder = 109;
     private final static int remove_from_folder = 110;
+    private final static int ps_toggle_hide = 111;
 
     private final static int ARCHIVE_ITEM_STATE_PINNED = 0;
     private final static int ARCHIVE_ITEM_STATE_SHOWED = 1;
@@ -4017,6 +4022,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         undoView.showWithAction(did, UndoView.ACTION_REMOVED_FROM_FOLDER, neverShow.size(), filter, null, null);
                     }
                     hideActionMode(false);
+                } else if (id == ps_toggle_hide) {
+                    performSelectedDialogsAction(selectedDialogs, id, false, false);
                 } else if (id == pin || id == read || id == delete || id == clear || id == mute || id == archive || id == block || id == archive2 || id == pin2) {
                     performSelectedDialogsAction(selectedDialogs, id, true, false);
                 }
@@ -6689,6 +6696,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         readItem = otherItem.addSubItem(read, R.drawable.msg_markread, LocaleController.getString(R.string.MarkAsRead));
         clearItem = otherItem.addSubItem(clear, R.drawable.msg_clear, LocaleController.getString(R.string.ClearHistory));
         blockItem = otherItem.addSubItem(block, R.drawable.msg_block, LocaleController.getString(R.string.BlockUser));
+        psToggleHideItem = otherItem.addSubItem(ps_toggle_hide, R.drawable.msg_stories_stealth, "");
 
         muteItem.setOnLongClickListener(e -> {
             performSelectedDialogsAction(selectedDialogs, mute, true, true);
@@ -9001,7 +9009,20 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
         int count = selectedDialogs.size();
         int pinnedActionCount = 0;
-        if (action == archive || action == archive2) {
+        if (action == ps_toggle_hide) {
+            org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+            boolean hiding = canHideCount > 0;
+            for (int a = 0; a < count; a++) {
+                long did = selectedDialogs.get(a);
+                if (hiding) {
+                    ssc.addToSecondSpace(did);
+                } else {
+                    ssc.removeFromSecondSpace(did);
+                }
+            }
+            hideActionMode(false);
+            return;
+        } else if (action == archive || action == archive2) {
             ArrayList<Long> copy = new ArrayList<>(selectedDialogs);
             getMessagesController().addDialogToFolder(copy, canUnarchiveCount == 0 ? 1 : 0, -1, null, 0);
             if (canUnarchiveCount == 0) {
@@ -9569,6 +9590,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         canReadCount = 0;
         forumCount = 0;
         canClearCacheCount = 0;
+        canHideCount = 0;
+        canUnhideCount = 0;
         int cantBlockCount = 0;
         canReportSpamCount = 0;
         if (hide) {
@@ -9604,6 +9627,17 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 canUnarchiveCount++;
             } else if (selectedDialog != selfUserId && selectedDialog != 777000 && !getMessagesController().isPromoDialog(selectedDialog, false)) {
                 canArchiveCount++;
+            }
+
+            {
+                org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+                if (ssc.isActive() && selectedDialog != selfUserId && selectedDialog != 777000) {
+                    if (ssc.isInSecondSpace(selectedDialog)) {
+                        canUnhideCount++;
+                    } else {
+                        canHideCount++;
+                    }
+                }
             }
 
             if (!DialogObject.isUserDialog(selectedDialog) || selectedDialog == selfUserId || selectedDialog == UserObject.VERIFY) {
@@ -9738,6 +9772,18 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 blockItem.setVisibility(View.GONE);
             } else {
                 blockItem.setVisibility(View.VISIBLE);
+            }
+        }
+        if (psToggleHideItem != null) {
+            if (canHideCount + canUnhideCount != count || (canHideCount > 0 && canUnhideCount > 0)) {
+                psToggleHideItem.setVisibility(View.GONE);
+            } else {
+                psToggleHideItem.setVisibility(View.VISIBLE);
+                if (canUnhideCount > 0) {
+                    psToggleHideItem.setTextAndIcon(LocaleController.getString(R.string.PrivateSpaceUnhide), R.drawable.filled_views);
+                } else {
+                    psToggleHideItem.setTextAndIcon(LocaleController.getString(R.string.PrivateSpaceHide), R.drawable.msg_stories_stealth);
+                }
             }
         }
         if (removeFromFolderItem != null) {
@@ -11060,6 +11106,22 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             // mode, both spaces' chats hide. Chats with exposed messages or pending off-
             // mode work stay reachable (user explicitly surfaced them; pending decisions
             // need a way back to the chat).
+            if (d instanceof TLRPC.TL_dialogFolder) {
+                int fid = ((TLRPC.TL_dialogFolder) d).folder.id;
+                ArrayList<TLRPC.Dialog> inner = getMessagesController().getDialogs(fid);
+                boolean hasVisible = false;
+                for (int j = 0, M = inner.size(); j < M; j++) {
+                    TLRPC.Dialog fd = inner.get(j);
+                    if (fd != null && (!ssc.isHiddenFromCurrentView(fd.id) || ssc.hasExposedMessages(fd.id) || ssc.hasPendingOffModeWork(fd.id))) {
+                        hasVisible = true;
+                        break;
+                    }
+                }
+                if (hasVisible) {
+                    filtered.add(d);
+                }
+                continue;
+            }
             if (!ssc.isHiddenFromCurrentView(d.id) || ssc.hasExposedMessages(d.id) || ssc.hasPendingOffModeWork(d.id)) {
                 filtered.add(d);
             }

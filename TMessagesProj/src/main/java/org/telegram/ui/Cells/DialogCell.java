@@ -594,6 +594,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable botVerification;
 
     private int drawScam;
+    private boolean drawHidden;
 
     private boolean isSelected;
 
@@ -1241,6 +1242,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         drawVerified = false;
         drawBotVerified = false;
         drawPremium = false;
+        drawHidden = false;
         drawForwardIcon = false;
         drawGiftIcon = false;
         drawScam = 0;
@@ -1474,6 +1476,11 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                         botVerification.set(dialogBotVerificationIcon, false);
                     }
                 }
+            }
+
+            {
+                org.telegram.messenger.SecondSpaceController sscLayout = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+                drawHidden = sscLayout.isActive() && sscLayout.isInSecondSpace(currentDialogId);
             }
 
             int lastDate = lastMessageDate;
@@ -2295,6 +2302,13 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         }
         if (drawBotVerified) {
             nameWidth -= dp(21);
+        }
+        if (drawHidden) {
+            int w = dp(6) + dp(16);
+            nameWidth -= w;
+            if (LocaleController.isRTL) {
+                nameLeft += w;
+            }
         }
         if (namePaddingEnd > 0) {
             nameWidth -= namePaddingEnd;
@@ -4445,6 +4459,26 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 }
                 setDrawableBounds((drawScam == 1 ? Theme.dialogs_scamDrawable : Theme.dialogs_fakeDrawable), nameMuteLeft, y);
                 (drawScam == 1 ? Theme.dialogs_scamDrawable : Theme.dialogs_fakeDrawable).draw(canvas);
+            }
+
+            if (drawHidden) {
+                Drawable d = getContext().getResources().getDrawable(R.drawable.msg_stories_stealth).mutate();
+                d.setColorFilter(new android.graphics.PorterDuffColorFilter(
+                        Theme.getColor(Theme.key_chats_muteIcon, resourcesProvider),
+                        android.graphics.PorterDuff.Mode.SRC_IN));
+                float y = dp(useForceThreeLines || SharedConfig.useThreeLinesLayout ? 13.5f : 16.5f);
+                if ((!(useForceThreeLines || SharedConfig.useThreeLinesLayout) || isForumCell()) && hasTags()) {
+                    y -= dp(9);
+                }
+                int iconSize = dp(16);
+                int left;
+                if (LocaleController.isRTL) {
+                    left = nameLeft - dp(6) - iconSize;
+                } else {
+                    left = (int) (nameLeft + (nameLayout != null ? nameLayout.getWidth() : 0) + dp(6));
+                }
+                d.setBounds(left, (int) y, left + iconSize, (int) y + iconSize);
+                d.draw(canvas);
             }
 
             if (drawReorder || reorderIconProgress != 0) {

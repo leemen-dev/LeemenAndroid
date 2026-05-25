@@ -288,10 +288,14 @@ public class CallLogActivity extends BaseFragment implements NotificationCenter.
 				return;
 			}
 			ArrayList<MessageObject> arr = (ArrayList<MessageObject>) args[1];
+			org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
 			for (MessageObject msg : arr) {
 				if (msg.messageOwner.action instanceof TLRPC.TL_messageActionPhoneCall) {
 					long fromId = msg.getFromChatId();
 					long userID = fromId == getUserConfig().getClientUserId() ? msg.messageOwner.peer_id.user_id : fromId;
+					if (ssc.isHiddenFromCurrentView(userID)) {
+						continue;
+					}
 					int callType = fromId == getUserConfig().getClientUserId() ? TYPE_OUT : TYPE_IN;
 					TLRPC.PhoneCallDiscardReason reason = msg.messageOwner.action.reason;
 					if (callType == TYPE_IN && (reason instanceof TLRPC.TL_phoneCallDiscardReasonMissed || reason instanceof TLRPC.TL_phoneCallDiscardReasonBusy)) {
@@ -324,6 +328,13 @@ public class CallLogActivity extends BaseFragment implements NotificationCenter.
 					long fromId = msg.getFromChatId();
 					final Set<Long> userIds = action.other_participants.stream().map(DialogObject::getPeerDialogId).collect(Collectors.toSet());
 					userIds.add(fromId == getUserConfig().getClientUserId() ? msg.messageOwner.peer_id.user_id : fromId);
+					boolean hasHidden = false;
+					for (long uid : userIds) {
+						if (ssc.isHiddenFromCurrentView(uid)) { hasHidden = true; break; }
+					}
+					if (hasHidden) {
+						continue;
+					}
 					int callType = fromId == getUserConfig().getClientUserId() ? TYPE_OUT : TYPE_IN;
 					if (callType == TYPE_IN && action.missed) {
 						callType = TYPE_MISSED_IN;
@@ -1331,6 +1342,7 @@ public class CallLogActivity extends BaseFragment implements NotificationCenter.
 				MessagesController.getInstance(currentAccount).putChats(msgs.chats, false);
 				endReached = msgs.messages.isEmpty();
 				CallLogRow currentRow = !calls.isEmpty() ? calls.get(calls.size() - 1) : null;
+				org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
 				for (int a = 0; a < msgs.messages.size(); a++) {
 					TLRPC.Message msg = msgs.messages.get(a);
 					if (msg.action == null || msg.action instanceof TLRPC.TL_messageActionHistoryClear) {
@@ -1338,12 +1350,22 @@ public class CallLogActivity extends BaseFragment implements NotificationCenter.
 					}
 					long fromId = MessageObject.getFromChatId(msg);
 					long userID = fromId == getUserConfig().getClientUserId() ? msg.peer_id.user_id : fromId;
+					if (ssc.isHiddenFromCurrentView(userID)) {
+						continue;
+					}
 					final Set<Long> userIds = new HashSet<>();
 					int callType = MessageObject.getFromChatId(msg) == getUserConfig().getClientUserId() ? TYPE_OUT : TYPE_IN;
 					if (msg.action instanceof TLRPC.TL_messageActionConferenceCall) {
 						final TLRPC.TL_messageActionConferenceCall action = (TLRPC.TL_messageActionConferenceCall) msg.action;
 						userIds.add(userID);
 						userIds.addAll(action.other_participants.stream().map(DialogObject::getPeerDialogId).collect(Collectors.toSet()));
+						boolean hasHidden = false;
+						for (long uid : userIds) {
+							if (ssc.isHiddenFromCurrentView(uid)) { hasHidden = true; break; }
+						}
+						if (hasHidden) {
+							continue;
+						}
 						if (callType == TYPE_IN && action.missed) {
 							callType = TYPE_MISSED_IN;
 						}

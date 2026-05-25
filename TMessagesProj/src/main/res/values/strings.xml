@@ -2417,6 +2417,8 @@
     <string name="PrivateSpaceExposureManage">Manage</string>
     <string name="PrivateSpaceExposureSkip">Hide all</string>
     <string name="PrivateSpaceExposureActionShort">Show outside</string>
+    <string name="PrivateSpaceHide">Hide chat</string>
+    <string name="PrivateSpaceUnhide">Unhide chat</string>
     <string name="PrivateSpaceExposureConfirm">Show outside</string>
     <string name="PrivateSpaceExposureConfirmBody_one">Make %1$d selected message visible outside Private Space?</string>
     <string name="PrivateSpaceExposureConfirmBody_few">Make %1$d selected messages visible outside Private Space?</string>
