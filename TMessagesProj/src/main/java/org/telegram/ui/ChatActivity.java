@@ -19069,6 +19069,10 @@ public class ChatActivity extends BaseFragment implements
                     if (hideItem != null) {
                         hideItem.setVisibility(inHidden3 && anyHideable ? View.VISIBLE : View.GONE);
                     }
+                    if (inHidden3 && anyExposable && anyHideable) {
+                        if (starItem != null) starItem.setVisibility(View.GONE);
+                        if (forwardItem != null) forwardItem.setVisibility(View.GONE);
+                    }
                 }
                 hasUnfavedSelected = false;
                 for (int a = 0; a < 2; a++) {

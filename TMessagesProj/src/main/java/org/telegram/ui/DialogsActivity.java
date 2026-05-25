@@ -9035,7 +9035,17 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 }
             }
             hideActionMode(false);
-            updateVisibleRows(0);
+            if (viewPages != null) {
+                for (ViewPage viewPage : viewPages) {
+                    if (viewPage == null || viewPage.listView == null) continue;
+                    for (int i = 0; i < viewPage.listView.getChildCount(); i++) {
+                        View child = viewPage.listView.getChildAt(i);
+                        if (child instanceof DialogCell) {
+                            ((DialogCell) child).buildLayout();
+                        }
+                    }
+                }
+            }
             return;
         } else if (action == archive || action == archive2) {
             ArrayList<Long> copy = new ArrayList<>(selectedDialogs);
