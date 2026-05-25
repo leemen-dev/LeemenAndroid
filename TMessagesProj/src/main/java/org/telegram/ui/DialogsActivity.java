@@ -3644,7 +3644,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                             int sub = 0;
                             for (Long did : ssc.getDialogIds()) {
                                 TLRPC.Dialog d = getMessagesController().dialogs_dict.get(did);
-                                if (d != null && ssc.isHiddenFromCurrentView(did) && !ssc.hasExposedMessages(did)) {
+                                if (d != null && ssc.isHiddenFromCurrentView(did) && !ssc.hasExposedMessages(did) && !ssc.hasPendingOffModeWork(did)) {
                                     sub += d.unread_count;
                                 }
                             }

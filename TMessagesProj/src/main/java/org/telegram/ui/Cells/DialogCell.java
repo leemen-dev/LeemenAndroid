@@ -1059,7 +1059,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             // Fully exclude hidden chats from the archive preview — neither name nor
             // unread-bold should appear. Chats with exposed messages are intentionally
             // included (the user chose to surface them).
-            if (ssc.isHiddenFromCurrentView(dialog.id) && !ssc.hasExposedMessages(dialog.id)) {
+            if (ssc.isHiddenFromCurrentView(dialog.id) && !ssc.hasExposedMessages(dialog.id) && !ssc.hasPendingOffModeWork(dialog.id)) {
                 continue;
             }
             TLRPC.User currentUser = null;
@@ -3193,9 +3193,15 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                                         || ssc.isMessagePending(dialog.id, message.getId()));
                             if (!currentIsSafe) {
                                 message = ssc.resolveLatestSafePreview(dialog.id);
-                                if (message == null && (ssc.hasExposedMessages(dialog.id) || ssc.hasPendingOffModeWork(dialog.id)) && previousMessage != null) {
-                                    message = previousMessage;
-                                    ssc.ensureExposedInGlobalCache(previousMessage);
+                                if (previousMessage != null
+                                        && (ssc.isMessageExposed(dialog.id, previousMessage.getId())
+                                            || ssc.isMessagePending(dialog.id, previousMessage.getId()))) {
+                                    if (message == null || previousMessage.getId() > message.getId()) {
+                                        message = previousMessage;
+                                    }
+                                }
+                                if (message != null) {
+                                    ssc.ensureInGlobalCache(message);
                                 }
                                 groupMessages = null;
                             }

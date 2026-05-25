@@ -678,7 +678,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
         int sub = 0;
         for (int i = 0, n = dialogs.size(); i < n; i++) {
             TLRPC.Dialog d = dialogs.get(i);
-            if (d != null && isHiddenFromCurrentView(d.id) && !hasExposedMessages(d.id)) {
+            if (d != null && isHiddenFromCurrentView(d.id) && !hasExposedMessages(d.id) && !hasPendingOffModeWork(d.id)) {
                 sub += d.unread_count;
             }
         }
@@ -913,10 +913,10 @@ public class SecondSpaceController extends BaseController implements Notificatio
     }
 
     /** Put {@code message} into Telegram's global {@code dialogMessagesByIds} so that
-     *  {@link #resolveLatestExposedPreview(long)} can find it for dialog-list preview.
-     *  PS code holds no MessageObject references itself — this writes into an existing
-     *  Telegram-managed cache that is cleaned on message deletion by MessagesController. */
-    public void ensureExposedInGlobalCache(MessageObject message) {
+     *  resolve methods can find it for dialog-list preview. Works for both exposed and
+     *  pending messages — the name is historical. PS code holds no MessageObject
+     *  references itself — this writes into an existing Telegram-managed cache. */
+    public void ensureInGlobalCache(MessageObject message) {
         if (message == null || message.getId() == 0) return;
         getMessagesController().dialogMessagesByIds.put(message.getId(), message);
     }

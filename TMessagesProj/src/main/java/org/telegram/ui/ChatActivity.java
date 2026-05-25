@@ -20210,7 +20210,7 @@ public class ChatActivity extends BaseFragment implements
         // dialogMessagesByIds so that DialogCell preview (via resolveLatestExposedPreview)
         // can find it without any PS-side MessageObject cache.
         if (latestExposedOrPending != null) {
-            ssc.ensureExposedInGlobalCache(latestExposedOrPending);
+            ssc.ensureInGlobalCache(latestExposedOrPending);
         }
         return filtered;
     }
@@ -20393,7 +20393,7 @@ public class ChatActivity extends BaseFragment implements
                     ssc.exposeMessage(dialog_id, mid);
                     // Put into Telegram's global cache so dialog-list preview resolves
                     // without a PS-owned MessageObject store.
-                    ssc.ensureExposedInGlobalCache(selectedMessagesIds[idx].valueAt(i));
+                    ssc.ensureInGlobalCache(selectedMessagesIds[idx].valueAt(i));
                     // If this message was sitting in the pending set, exposing it transfers
                     // ownership to the exposed set — drop the pending entry.
                     ssc.unmarkMessagePending(dialog_id, mid);
@@ -20442,7 +20442,7 @@ public class ChatActivity extends BaseFragment implements
             int id = toExpose.get(i);
             ssc.exposeMessage(dialog_id, id);
             if (i < toExposeMsgs.size()) {
-                ssc.ensureExposedInGlobalCache(toExposeMsgs.get(i));
+                ssc.ensureInGlobalCache(toExposeMsgs.get(i));
             }
         }
         // Manage flow closed: everything from this pending batch has been decided — either
@@ -28082,7 +28082,8 @@ public class ChatActivity extends BaseFragment implements
             pinned_msg_id = 0;
         }
         if (pinnedMessageObject != null && isSecondSpaceContentSuppressed()
-                && !SecondSpaceController.getInstance(currentAccount).isMessageExposed(dialog_id, pinnedMessageObject.getId())) {
+                && !SecondSpaceController.getInstance(currentAccount).isMessageExposed(dialog_id, pinnedMessageObject.getId())
+                && !SecondSpaceController.getInstance(currentAccount).isMessagePending(dialog_id, pinnedMessageObject.getId())) {
             pinnedMessageObject = null;
             pinned_msg_id = 0;
         }

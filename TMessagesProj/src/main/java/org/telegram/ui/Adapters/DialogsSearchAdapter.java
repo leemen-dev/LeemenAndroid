@@ -477,7 +477,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 for (int a = 0; a < res.messages.size(); a++) {
                     TLRPC.Message message = res.messages.get(a);
                     long msgDialogId = MessageObject.getDialogId(message);
-                    if (ssc.isHiddenFromCurrentView(msgDialogId) && !ssc.isMessageExposed(msgDialogId, message.id)) {
+                    if (ssc.isHiddenFromCurrentView(msgDialogId) && !ssc.isMessageExposed(msgDialogId, message.id) && !ssc.isMessagePending(msgDialogId, message.id)) {
                         messageObjects.add(null);
                         continue;
                     }
@@ -632,7 +632,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 for (int a = 0; a < res.messages.size(); a++) {
                     TLRPC.Message message = res.messages.get(a);
                     long dialogId = MessageObject.getDialogId(message);
-                    if (ssc.isHiddenFromCurrentView(dialogId) && !ssc.isMessageExposed(dialogId, message.id)) {
+                    if (ssc.isHiddenFromCurrentView(dialogId) && !ssc.isMessageExposed(dialogId, message.id) && !ssc.isMessagePending(dialogId, message.id)) {
                         messageObjects.add(null);
                         continue;
                     }
