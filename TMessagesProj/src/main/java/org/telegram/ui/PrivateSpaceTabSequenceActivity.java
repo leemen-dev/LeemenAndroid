@@ -48,7 +48,6 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
     private static final int INDEX_PROFILE = 4;
 
     public static final int TARGET_REAL = 0;
-    public static final int TARGET_DECOY = 1;
 
     private static final int DONE_BUTTON = 1;
 
@@ -81,9 +80,7 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
             return false;
         }
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        List<SecondSpaceController.TabStep> saved = target == TARGET_DECOY
-                ? ssc.getDecoyTabSequence()
-                : ssc.getTabSequence();
+        List<SecondSpaceController.TabStep> saved = ssc.getTabSequence();
         steps.addAll(saved);
         originalSteps.addAll(saved);
         return super.onFragmentCreate();
@@ -175,26 +172,10 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
         }
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
         if (!steps.isEmpty() && getParentActivity() != null) {
-            List<SecondSpaceController.TabStep> otherSeq = target == TARGET_DECOY
-                    ? ssc.getTabSequence()
-                    : ssc.getDecoyTabSequence();
-            if (!otherSeq.isEmpty() && SecondSpaceController.sameSequence(steps, otherSeq)) {
-                AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
-                b.setTitle(LocaleController.getString(R.string.PrivateSpaceSequenceTitle));
-                b.setMessage(LocaleController.getString(R.string.PrivateSpaceSequenceCollision));
-                b.setPositiveButton(LocaleController.getString(R.string.OK), null);
-                b.show();
-                return;
-            }
         }
-        boolean isDecoy = target == TARGET_DECOY;
-        boolean hadShortcutBefore = isDecoy ? ssc.hasConfiguredDecoyShortcut() : ssc.hasConfiguredShortcut();
-        if (isDecoy) {
-            ssc.setDecoyTabSequence(steps);
-        } else {
-            ssc.setTabSequence(steps);
-        }
-        boolean tested = isDecoy ? ssc.isDecoyShortcutTested() : ssc.isShortcutTested();
+        boolean hadShortcutBefore = ssc.hasConfiguredShortcut();
+        ssc.setTabSequence(steps);
+        boolean tested = ssc.isShortcutTested();
         if (!steps.isEmpty() && !tested && getParentActivity() != null) {
             AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
             b.setTitle(LocaleController.getString(R.string.PrivateSpaceSequenceConfirmTitle));

@@ -819,17 +819,15 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             return;
         }
         java.util.List<org.telegram.messenger.SecondSpaceController.TabStep> realSeq = ssc.getTabSequence();
-        java.util.List<org.telegram.messenger.SecondSpaceController.TabStep> decoySeq = ssc.getDecoyTabSequence();
-        if (realSeq.isEmpty() && decoySeq.isEmpty()) {
+        if (realSeq.isEmpty()) {
             return;
         }
         long now = android.os.SystemClock.uptimeMillis();
         tabEventBuffer.addLast(new long[]{tabIndex, longPress ? 1L : 0L, now});
-        int maxLen = Math.max(realSeq.size(), decoySeq.size());
-        while (tabEventBuffer.size() > maxLen) {
+        while (tabEventBuffer.size() > realSeq.size()) {
             tabEventBuffer.removeFirst();
         }
-        if (!realSeq.isEmpty() && matchesTail(realSeq, now)) {
+        if (matchesTail(realSeq, now)) {
             tabEventBuffer.clear();
             Runnable afterEnter = ssc::markShortcutTested;
             boolean hasPin = ssc.hasRealPassword();
@@ -842,12 +840,6 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
                 ssc.setActive(true);
                 afterEnter.run();
             }
-            return;
-        }
-        if (!decoySeq.isEmpty() && matchesTail(decoySeq, now)) {
-            tabEventBuffer.clear();
-            ssc.setActiveMode(org.telegram.messenger.SecondSpaceController.MODE_FAKE);
-            ssc.markDecoyShortcutTested();
         }
     }
 

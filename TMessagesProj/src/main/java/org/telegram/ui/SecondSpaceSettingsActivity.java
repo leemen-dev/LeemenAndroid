@@ -64,9 +64,6 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     private int passwordRow;
     private int passwordTimeoutRow;
     private int passwordInfoRow;
-    private int decoySequenceShadowRow;
-    private int decoySequenceRow;
-    private int decoySequenceInfoRow;
     private int sequenceShadowRow;
     private int sequenceRow;
     private int sequenceInfoRow;
@@ -143,8 +140,6 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                 onPasswordRowClick();
             } else if (position == passwordTimeoutRow) {
                 showPinTimeoutPicker();
-            } else if (position == decoySequenceRow) {
-                presentFragment(new PrivateSpaceTabSequenceActivity(PrivateSpaceTabSequenceActivity.TARGET_DECOY));
             } else if (position == sequenceRow) {
                 presentFragment(new PrivateSpaceTabSequenceActivity());
             } else if (position == pinInSearchRow) {
@@ -400,17 +395,6 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             passwordTimeoutRow = -1;
         }
         passwordInfoRow = rowCount++;
-        // Decoy sequence row: only inside real-mode settings — the fake-mode user
-        // must not know a decoy mechanism exists (deniability).
-        if (ssc.isRealActive()) {
-            decoySequenceShadowRow = rowCount++;
-            decoySequenceRow = rowCount++;
-            decoySequenceInfoRow = rowCount++;
-        } else {
-            decoySequenceShadowRow = -1;
-            decoySequenceRow = -1;
-            decoySequenceInfoRow = -1;
-        }
         sequenceShadowRow = rowCount++;
         sequenceRow = rowCount++;
         sequenceInfoRow = rowCount++;
@@ -547,8 +531,6 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceShowEntryButtonInfo));
                     } else if (position == passwordInfoRow) {
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpacePinInfo));
-                    } else if (position == decoySequenceInfoRow) {
-                        privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceDecoySequenceInfo));
                     } else if (position == sequenceInfoRow) {
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceSequenceInfo));
                     } else if (position == pinInSearchInfoRow) {
@@ -607,12 +589,6 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                                 ? LocaleController.getString(R.string.PrivateSpacePinTimeoutOff)
                                 : LocaleController.formatString(R.string.PrivateSpacePinTimeoutMinutes, m);
                         cell.setTextAndValue(LocaleController.getString(R.string.PrivateSpacePinTimeoutTitle), value, false);
-                    } else if (position == decoySequenceRow) {
-                        int n = ssc.getDecoyTabSequence().size();
-                        String value = n == 0
-                                ? LocaleController.getString(R.string.PrivateSpaceSequenceRowOff)
-                                : LocaleController.formatString(R.string.PrivateSpaceSequenceRowOn, n);
-                        cell.setTextAndValue(LocaleController.getString(R.string.PrivateSpaceDecoySequenceTitle), value, false);
                     } else if (position == sequenceRow) {
                         int n = ssc.getTabSequence().size();
                         String value = n == 0
@@ -644,9 +620,6 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             if (position == passwordRow) return VIEW_VALUE;
             if (position == passwordTimeoutRow) return VIEW_VALUE;
             if (position == passwordInfoRow) return VIEW_INFO;
-            if (position == decoySequenceShadowRow) return VIEW_SHADOW;
-            if (position == decoySequenceRow) return VIEW_VALUE;
-            if (position == decoySequenceInfoRow) return VIEW_INFO;
             if (position == sequenceShadowRow) return VIEW_SHADOW;
             if (position == sequenceRow) return VIEW_VALUE;
             if (position == sequenceInfoRow) return VIEW_INFO;

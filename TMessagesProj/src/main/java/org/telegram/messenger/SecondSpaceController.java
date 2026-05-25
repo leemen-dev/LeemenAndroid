@@ -34,17 +34,9 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private static final String PREF_HIDDEN_ACCOUNTS = "second_space_hidden_accounts";
     private static final String PREF_EYE_HINT_SHOWN = "second_space_eye_hint_shown";
     private static final String PREF_TOOLBAR_HINT_SHOWN = "second_space_toolbar_hint_shown";
-    // Decoy (fake) space — own tap sequence, membership, hidden-account list.
-    // Entry is via a separate tap sequence (no PIN); real-space PIN system is independent.
-    private static final String PREF_FAKE_PASSWORD_HASH = "second_space_fake_password_hash";
-    private static final String PREF_FAKE_DIALOG_IDS = "second_space_fake_dialogs";
-    private static final String PREF_FAKE_HIDDEN_ACCOUNTS = "second_space_fake_hidden_accounts";
-    private static final String PREF_DECOY_TAB_SEQUENCE = "second_space_decoy_tab_sequence";
-    private static final String PREF_DECOY_SHORTCUT_TESTED = "second_space_decoy_shortcut_tested";
 
     public static final int MODE_OFF = 0;
     public static final int MODE_REAL = 1;
-    public static final int MODE_FAKE = 2;
 
     /** A single step in the tab-tap gesture sequence. */
     public static final class TabStep {
@@ -79,11 +71,8 @@ public class SecondSpaceController extends BaseController implements Notificatio
         return localInstance;
     }
 
-    /** Real-space chat membership. Kept under the original {@code dialogIds} name so the
-     *  many references throughout the project keep compiling. */
+    /** Private-space chat membership. */
     private final Set<Long> dialogIds = new HashSet<>();
-    /** Fake (decoy) space chat membership. */
-    private final Set<Long> fakeDialogIds = new HashSet<>();
     private final Map<Long, Set<Integer>> exposedMessages = new HashMap<>();
     private final Map<Long, Integer> lastDecidedMessageId = new HashMap<>();
     /** Per-chat set of message ids the user sent while in OFF mode, still awaiting a decision.
@@ -93,24 +82,17 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private final Set<Long> privateSearchDialogs = new HashSet<>();
     private String passwordHash;
     private final java.util.List<TabStep> tabSequence = new java.util.ArrayList<>();
-    private final java.util.List<TabStep> decoyTabSequence = new java.util.ArrayList<>();
     private boolean pinInSearchEnabled;
     private boolean shortcutTested;
-    private boolean decoyShortcutTested;
     private int pinTimeoutMinutes;
     private long pinLastVerifiedAt;
-    /** Active mode: {@link #MODE_OFF}, {@link #MODE_REAL}, or {@link #MODE_FAKE}.
+    /** Active mode: {@link #MODE_OFF} or {@link #MODE_REAL}.
      *  Non-persistent — always {@code MODE_OFF} on next launch (deniability). */
     private int activeMode = MODE_OFF;
     private String entryPasswordHash;
-    /** Real-space hidden-other-accounts list — accounts whose tray notifications / switcher
-     *  presence are suppressed while *this* account's real space is NOT the active mode
-     *  (i.e. in OFF and FAKE modes). Kept under the original {@code hiddenAccounts} name. */
+    /** Hidden-other-accounts list — accounts whose tray notifications / switcher
+     *  presence are suppressed while private space is not active (i.e. in OFF mode). */
     private final Set<Integer> hiddenAccounts = new HashSet<>();
-    /** Fake-space hidden-other-accounts list. Suppressed while NOT in FAKE mode (i.e. in
-     *  OFF and REAL). Configured from inside fake mode by whoever happens to be using
-     *  the decoy. */
-    private final Set<Integer> fakeHiddenAccounts = new HashSet<>();
 
     private boolean entryButtonVisible;
 
@@ -120,7 +102,6 @@ public class SecondSpaceController extends BaseController implements Notificatio
         // activeMode is intentionally non-persistent: always starts MODE_OFF on app launch (deniability)
         entryButtonVisible = prefs.getBoolean(PREF_SHOW_ENTRY_BUTTON, true);
         loadDialogIds(dialogIds, prefs.getString(PREF_DIALOG_IDS, ""));
-        loadDialogIds(fakeDialogIds, prefs.getString(PREF_FAKE_DIALOG_IDS, ""));
         loadExposed(prefs.getString(PREF_EXPOSED, ""));
         loadLastDecided(prefs.getString(PREF_LAST_DECIDED, ""));
         loadPendingMessages(prefs.getString(PREF_PENDING_MESSAGES, ""));
@@ -134,19 +115,13 @@ public class SecondSpaceController extends BaseController implements Notificatio
             }
         }
         passwordHash = prefs.getString(PREF_PASSWORD_HASH, "");
-        if (prefs.contains(PREF_FAKE_PASSWORD_HASH)) {
-            prefs.edit().remove(PREF_FAKE_PASSWORD_HASH).apply();
-        }
         loadTabSequence(prefs.getString(PREF_TAB_SEQUENCE, ""));
-        loadDecoyTabSequence(prefs.getString(PREF_DECOY_TAB_SEQUENCE, ""));
         pinInSearchEnabled = prefs.getBoolean(PREF_PIN_IN_SEARCH, false);
         shortcutTested = prefs.getBoolean(PREF_SHORTCUT_TESTED, false);
-        decoyShortcutTested = prefs.getBoolean(PREF_DECOY_SHORTCUT_TESTED, false);
         pinTimeoutMinutes = prefs.getInt(PREF_PIN_TIMEOUT_MIN, 0);
         pinLastVerifiedAt = prefs.getLong(PREF_PIN_LAST_OK_MS, 0L);
         entryPasswordHash = prefs.getString(PREF_ENTRY_PASSWORD_HASH, "");
         loadHiddenAccounts(hiddenAccounts, prefs.getString(PREF_HIDDEN_ACCOUNTS, ""), num);
-        loadHiddenAccounts(fakeHiddenAccounts, prefs.getString(PREF_FAKE_HIDDEN_ACCOUNTS, ""), num);
         // We need to track placeholder-id → server-id renames globally, not just while a
         // ChatActivity for that dialog happens to be open. Otherwise: user sends in off
         // mode, exits chat before the round-trip completes, server confirms → ChatActivity
@@ -381,68 +356,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
         return !tabSequence.isEmpty() || pinInSearchEnabled;
     }
 
-    // --- Decoy tap sequence ---
-
-    private void loadDecoyTabSequence(String json) {
-        decoyTabSequence.clear();
-        if (TextUtils.isEmpty(json)) return;
-        try {
-            JSONArray arr = new JSONArray(json);
-            for (int i = 0; i < arr.length(); i++) {
-                JSONObject obj = arr.getJSONObject(i);
-                decoyTabSequence.add(new TabStep(obj.getInt("t"), obj.getBoolean("l")));
-            }
-        } catch (Exception ignored) {
-        }
-    }
-
-    public java.util.List<TabStep> getDecoyTabSequence() {
-        return Collections.unmodifiableList(decoyTabSequence);
-    }
-
-    public void setDecoyTabSequence(java.util.List<TabStep> steps) {
-        boolean changed = !sameSequence(decoyTabSequence, steps);
-        decoyTabSequence.clear();
-        if (steps != null) decoyTabSequence.addAll(steps);
-        try {
-            JSONArray arr = new JSONArray();
-            for (TabStep s : decoyTabSequence) {
-                JSONObject o = new JSONObject();
-                o.put("t", s.tabIndex);
-                o.put("l", s.longPress);
-                arr.put(o);
-            }
-            getMessagesController().getMainSettings().edit().putString(PREF_DECOY_TAB_SEQUENCE, arr.toString()).apply();
-        } catch (Exception ignored) {
-        }
-        if (changed) {
-            clearDecoyShortcutTested();
-        }
-    }
-
-    public boolean hasConfiguredDecoyShortcut() {
-        return !decoyTabSequence.isEmpty();
-    }
-
-    public boolean isDecoyShortcutTested() {
-        return decoyShortcutTested;
-    }
-
-    public void markDecoyShortcutTested() {
-        if (!decoyShortcutTested) {
-            decoyShortcutTested = true;
-            getMessagesController().getMainSettings().edit().putBoolean(PREF_DECOY_SHORTCUT_TESTED, true).apply();
-        }
-    }
-
-    public void clearDecoyShortcutTested() {
-        if (decoyShortcutTested) {
-            decoyShortcutTested = false;
-            getMessagesController().getMainSettings().edit().putBoolean(PREF_DECOY_SHORTCUT_TESTED, false).apply();
-        }
-    }
-
-    // --- Password (PIN) — always targets the real space ---
+    // --- Password (PIN) ---
 
     public boolean hasPassword() {
         return !TextUtils.isEmpty(passwordHash);
@@ -532,37 +446,24 @@ public class SecondSpaceController extends BaseController implements Notificatio
     }
 
     // --- Chat membership ---
-    //
-    // Two parallel sets: {@code dialogIds} for the real space, {@code fakeDialogIds} for
-    // the decoy. The legacy {@link #isInSecondSpace(long)} and {@link #getDialogIds()}
-    // return the UNION so that filters which mean «this chat is private (any space)»
-    // keep working unchanged across the codebase. Code that genuinely needs to know
-    // WHICH space a chat lives in uses {@link #isInRealSpace(long)} / {@link #isInFakeSpace(long)}.
 
     public boolean isInSecondSpace(long dialogId) {
-        return dialogIds.contains(dialogId) || fakeDialogIds.contains(dialogId);
+        return dialogIds.contains(dialogId);
     }
 
     public boolean isInRealSpace(long dialogId) {
         return dialogIds.contains(dialogId);
     }
 
-    public boolean isInFakeSpace(long dialogId) {
-        return fakeDialogIds.contains(dialogId);
-    }
-
-    /** True iff {@code dialogId} is hidden from whichever view the user currently sees
-     *  (per the asymmetric isolation rule: real-active sees everything, fake-active hides
-     *  real-space chats, off hides both spaces' chats). */
+    /** True iff {@code dialogId} is hidden from whichever view the user currently sees.
+     *  MODE_REAL sees everything; MODE_OFF hides private-space chats. */
     public boolean isHiddenFromCurrentView(long dialogId) {
         switch (activeMode) {
             case MODE_REAL:
                 return false;
-            case MODE_FAKE:
-                return dialogIds.contains(dialogId);
             case MODE_OFF:
             default:
-                return dialogIds.contains(dialogId) || fakeDialogIds.contains(dialogId);
+                return dialogIds.contains(dialogId);
         }
     }
 
@@ -571,14 +472,11 @@ public class SecondSpaceController extends BaseController implements Notificatio
     }
 
     public void removeFromSecondSpace(long dialogId) {
-        boolean changed = dialogIds.remove(dialogId);
-        changed |= fakeDialogIds.remove(dialogId);
-        if (changed) {
+        if (dialogIds.remove(dialogId)) {
             exposedMessages.remove(dialogId);
             lastDecidedMessageId.remove(dialogId);
             pendingMessages.remove(dialogId);
             persistDialogIds();
-            persistFakeDialogIds();
             persistExposed();
             persistLastDecided();
             persistPendingMessages();
@@ -586,89 +484,49 @@ public class SecondSpaceController extends BaseController implements Notificatio
         }
     }
 
-    /** Add {@code dialogId} to the currently-active space's chat list. Defaults to the
-     *  real space when no space is active (settings UI is guarded to only open while
-     *  inside a space, but the fallback keeps this defensive). */
+    /** Add {@code dialogId} to the private space chat list. */
     public void addToCurrentSpace(long dialogId) {
-        Set<Long> target = currentDialogSet();
-        boolean changed = target.add(dialogId);
-        boolean otherChanged = false;
-        // In MODE_REAL: mutual exclusivity — adding to real removes from fake.
-        // In MODE_FAKE: never touch dialogIds — decoy-mode actions must not
-        // affect real-space membership (an attacker could otherwise move a
-        // real-space chat into decoy and read its messages).
-        if (activeMode != MODE_FAKE) {
-            Set<Long> other = target == dialogIds ? fakeDialogIds : dialogIds;
-            otherChanged = other.remove(dialogId);
-        }
-        if (changed || otherChanged) {
+        if (dialogIds.add(dialogId)) {
             persistDialogIds();
-            persistFakeDialogIds();
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
     }
 
     public void removeFromCurrentSpace(long dialogId) {
-        Set<Long> target = currentDialogSet();
-        if (target.remove(dialogId)) {
-            // Exposure / pending state is per-chat (shared store), so it only makes
-            // sense to drop when the chat leaves PS membership entirely.
-            if (!isInSecondSpace(dialogId)) {
-                exposedMessages.remove(dialogId);
-                lastDecidedMessageId.remove(dialogId);
-                pendingMessages.remove(dialogId);
-                persistExposed();
-                persistLastDecided();
-                persistPendingMessages();
-            }
-            if (target == dialogIds) persistDialogIds(); else persistFakeDialogIds();
+        if (dialogIds.remove(dialogId)) {
+            exposedMessages.remove(dialogId);
+            lastDecidedMessageId.remove(dialogId);
+            pendingMessages.remove(dialogId);
+            persistDialogIds();
+            persistExposed();
+            persistLastDecided();
+            persistPendingMessages();
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
     }
 
-    private Set<Long> currentDialogSet() {
-        return activeMode == MODE_FAKE ? fakeDialogIds : dialogIds;
-    }
-
-    /** Union of both spaces' chat ids. Used by filters / iterators that need to act on
-     *  «any private chat» (badge subtraction, off-mode hide list, widget filter). */
+    /** All private-space chat ids. */
     public Set<Long> getDialogIds() {
-        if (fakeDialogIds.isEmpty()) {
-            return Collections.unmodifiableSet(dialogIds);
-        }
-        if (dialogIds.isEmpty()) {
-            return Collections.unmodifiableSet(fakeDialogIds);
-        }
-        Set<Long> union = new HashSet<>(dialogIds.size() + fakeDialogIds.size());
-        union.addAll(dialogIds);
-        union.addAll(fakeDialogIds);
-        return Collections.unmodifiableSet(union);
+        return Collections.unmodifiableSet(dialogIds);
     }
 
-    /** Chats in the real space only. */
+    /** Alias for {@link #getDialogIds()}. */
     public Set<Long> getRealSpaceDialogIds() {
         return Collections.unmodifiableSet(dialogIds);
     }
 
-    /** Chats in the fake space only. */
-    public Set<Long> getFakeSpaceDialogIds() {
-        return Collections.unmodifiableSet(fakeDialogIds);
-    }
-
     /** Chats in the currently-active space (for settings UI). */
     public Set<Long> getCurrentSpaceDialogIds() {
-        return activeMode == MODE_FAKE
-                ? Collections.unmodifiableSet(fakeDialogIds)
-                : Collections.unmodifiableSet(dialogIds);
+        return Collections.unmodifiableSet(dialogIds);
     }
 
     /** Sum of {@code unread_count} for chats in {@code dialogs} that are hidden from the
      *  current view AND have no exposed messages. Use to subtract from any tab / folder
-     *  badge so off-mode (or fake-active) counters don't leak hidden activity. Returns 0
-     *  in real-active mode (privileged view, nothing to hide). */
+     *  badge so off-mode counters don't leak hidden activity. Returns 0
+     *  in MODE_REAL (privileged view, nothing to hide). */
     public int hiddenUnreadCountIn(java.util.List<TLRPC.Dialog> dialogs) {
         if (activeMode == MODE_REAL || dialogs == null || dialogs.isEmpty()) return 0;
-        if (this.dialogIds.isEmpty() && fakeDialogIds.isEmpty()) return 0;
+        if (this.dialogIds.isEmpty()) return 0;
         int sub = 0;
         for (int i = 0, n = dialogs.size(); i < n; i++) {
             TLRPC.Dialog d = dialogs.get(i);
@@ -689,23 +547,17 @@ public class SecondSpaceController extends BaseController implements Notificatio
         return activeMode == MODE_REAL;
     }
 
-    public boolean isFakeActive() {
-        return activeMode == MODE_FAKE;
-    }
-
     public int getActiveMode() {
         return activeMode;
     }
 
-    /** Backwards-compatible toggle: {@code true} → {@link #MODE_REAL}, {@code false} →
-     *  {@link #MODE_OFF}. Callers that explicitly need to enter the fake space use
-     *  {@link #setActiveMode(int)}. */
+    /** Toggle: {@code true} → {@link #MODE_REAL}, {@code false} → {@link #MODE_OFF}. */
     public void setActive(boolean value) {
         setActiveMode(value ? MODE_REAL : MODE_OFF);
     }
 
     public void setActiveMode(int mode) {
-        if (mode != MODE_OFF && mode != MODE_REAL && mode != MODE_FAKE) {
+        if (mode != MODE_OFF && mode != MODE_REAL) {
             return;
         }
         int oldMode = activeMode;
@@ -745,23 +597,12 @@ public class SecondSpaceController extends BaseController implements Notificatio
     }
 
     /** Set of OTHER accounts to hide from the device's UI when this account is in {@code mode}.
-     *  Real-active is privileged (sees everything); off + fake-active hide the union of both
-     *  spaces' hide lists so that whatever the casual viewer / decoy attacker sees, nothing
-     *  the real user marked sensitive leaks through. */
+     *  MODE_REAL is privileged (sees everything); MODE_OFF hides the accounts in the hide list. */
     private Set<Integer> activeHiddenAccountsForMode(int mode) {
         if (mode == MODE_REAL) {
             return Collections.emptySet();
         }
-        if (hiddenAccounts.isEmpty()) {
-            return new HashSet<>(fakeHiddenAccounts);
-        }
-        if (fakeHiddenAccounts.isEmpty()) {
-            return new HashSet<>(hiddenAccounts);
-        }
-        Set<Integer> union = new HashSet<>(hiddenAccounts.size() + fakeHiddenAccounts.size());
-        union.addAll(hiddenAccounts);
-        union.addAll(fakeHiddenAccounts);
-        return union;
+        return new HashSet<>(hiddenAccounts);
     }
 
     // --- Entry button visibility ---
@@ -1123,10 +964,6 @@ public class SecondSpaceController extends BaseController implements Notificatio
         persistLongCsv(dialogIds, PREF_DIALOG_IDS);
     }
 
-    private void persistFakeDialogIds() {
-        persistLongCsv(fakeDialogIds, PREF_FAKE_DIALOG_IDS);
-    }
-
     private void persistLongCsv(Set<Long> ids, String key) {
         StringBuilder sb = new StringBuilder();
         boolean first = true;
@@ -1188,37 +1025,22 @@ public class SecondSpaceController extends BaseController implements Notificatio
 
     // --- Hidden other accounts ---
     //
-    // Each PS has its own hide-list of OTHER account ids: {@code hiddenAccounts} for the
-    // real space, {@code fakeHiddenAccounts} for the fake space. Visibility rule (see
-    // {@link #activeHiddenAccountsForMode(int)}): real-active is privileged (nothing
-    // hidden); off and fake-active hide the union of both lists. This keeps the real
-    // user's deniability list active for an attacker who landed in fake, while still
-    // letting the fake user configure their own decoy hide-list.
+    // Hide-list of OTHER account ids. Visibility rule: MODE_REAL is privileged (nothing
+    // hidden); MODE_OFF hides the accounts in the list.
 
     public boolean isAccountHidden(int otherAccountNum) {
-        // UI-facing checker: returns membership in the CURRENT mode's hide-list, so the
-        // settings activity check-state always reflects the space the user is editing.
-        return currentHiddenAccountSet().contains(otherAccountNum);
+        return hiddenAccounts.contains(otherAccountNum);
     }
 
     public void setAccountHidden(int otherAccountNum, boolean hidden) {
         if (otherAccountNum == currentAccount) return;
-        Set<Integer> target = currentHiddenAccountSet();
-        boolean changed = hidden ? target.add(otherAccountNum) : target.remove(otherAccountNum);
+        boolean changed = hidden ? hiddenAccounts.add(otherAccountNum) : hiddenAccounts.remove(otherAccountNum);
         if (!changed) return;
-        if (target == fakeHiddenAccounts) {
-            persistFakeHiddenAccounts();
-        } else {
-            persistHiddenAccounts();
-        }
+        persistHiddenAccounts();
         getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceModeChanged);
         if (currentAccount != UserConfig.selectedAccount) {
             return;
         }
-        // Apply the change to the tray *only* when the toggled list is currently active.
-        boolean affectsCurrentView = activeHiddenAccountsForMode(activeMode).contains(otherAccountNum)
-                == hidden; // i.e. the toggle's outcome matches what the current mode would do
-        // Simpler: recompute, see if the account ends up hidden right now, sync notifications.
         boolean shouldHideNow = activeHiddenAccountsForMode(activeMode).contains(otherAccountNum);
         if (shouldHideNow) {
             NotificationsController.getInstance(otherAccountNum).hideNotifications();
@@ -1228,34 +1050,19 @@ public class SecondSpaceController extends BaseController implements Notificatio
         NotificationsController.getInstance(currentAccount).updateBadge();
     }
 
-    private Set<Integer> currentHiddenAccountSet() {
-        return activeMode == MODE_FAKE ? fakeHiddenAccounts : hiddenAccounts;
-    }
-
     public Set<Integer> getHiddenAccounts() {
         return Collections.unmodifiableSet(hiddenAccounts);
     }
 
-    public Set<Integer> getFakeHiddenAccounts() {
-        return Collections.unmodifiableSet(fakeHiddenAccounts);
-    }
-
-    /** Called from logout cleanup — drop a deactivated account from BOTH hide-lists. */
+    /** Called from logout cleanup — drop a deactivated account from the hide-list. */
     public void onOtherAccountLoggedOut(int otherAccountNum) {
         if (hiddenAccounts.remove(otherAccountNum)) {
             persistHiddenAccounts();
-        }
-        if (fakeHiddenAccounts.remove(otherAccountNum)) {
-            persistFakeHiddenAccounts();
         }
     }
 
     private void persistHiddenAccounts() {
         persistIntCsv(hiddenAccounts, PREF_HIDDEN_ACCOUNTS);
-    }
-
-    private void persistFakeHiddenAccounts() {
-        persistIntCsv(fakeHiddenAccounts, PREF_FAKE_HIDDEN_ACCOUNTS);
     }
 
     private void persistIntCsv(Set<Integer> ids, String key) {
@@ -1271,8 +1078,8 @@ public class SecondSpaceController extends BaseController implements Notificatio
 
     /**
      * Whether an account should be hidden from the currently selected account's UI.
-     * Per-mode: real-active reveals everything; off and fake-active hide the union of
-     * both spaces' hide-lists. Returns {@code false} for self.
+     * MODE_REAL reveals everything; MODE_OFF hides accounts in the hide-list.
+     * Returns {@code false} for self.
      */
     public static boolean isHiddenFromSelectedAccount(int targetAccountNum) {
         int selected = UserConfig.selectedAccount;
