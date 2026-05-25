@@ -276,6 +276,7 @@ public class DialogsAdapter extends RecyclerListView.SelectionAdapter implements
         boolean isForumCell;
         private boolean pinned;
         private boolean isFolder;
+        private boolean isHidden;
         TL_chatlists.TL_chatlists_chatlistUpdates chatlistUpdates;
         private int emptyType;
 
@@ -314,6 +315,8 @@ public class DialogsAdapter extends RecyclerListView.SelectionAdapter implements
                 }
                 isFolder = dialog.isFolder;
                 isForumCell = MessagesController.getInstance(currentAccount).isForum(dialog.id);
+                org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+                isHidden = ssc.isActive() && ssc.isInSecondSpace(dialog.id);
             }
         }
 
@@ -513,7 +516,9 @@ public class DialogsAdapter extends RecyclerListView.SelectionAdapter implements
 
             @Override
             public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-                return oldItems.get(oldItemPosition).viewType == newItems.get(newItemPosition).viewType;
+                ItemInternal a = oldItems.get(oldItemPosition);
+                ItemInternal b = newItems.get(newItemPosition);
+                return a.viewType == b.viewType && a.isHidden == b.isHidden;
             }
         };
         if (itemInternals.size() < 50 || !ALLOW_UPDATE_IN_BACKGROUND) {
@@ -1363,7 +1368,15 @@ public class DialogsAdapter extends RecyclerListView.SelectionAdapter implements
 
         protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
             int size = itemInternals.size();
-            boolean hasArchive = folderId == 0 && dialogsType == 0 && MessagesController.getInstance(currentAccount).dialogs_dict.get(DialogObject.makeFolderDialogId(1)) != null;
+            boolean hasArchive = false;
+            if (folderId == 0 && dialogsType == 0) {
+                for (int i = 0, n = itemInternals.size(); i < n; i++) {
+                    if (itemInternals.get(i).dialog instanceof TLRPC.TL_dialogFolder) {
+                        hasArchive = true;
+                        break;
+                    }
+                }
+            }
             View parent = (View) getParent();
             int height;
             int blurOffset = 0;
