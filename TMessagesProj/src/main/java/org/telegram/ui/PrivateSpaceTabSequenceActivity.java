@@ -47,12 +47,24 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
     private static final int INDEX_CALLS = 3;
     private static final int INDEX_PROFILE = 4;
 
+    public static final int TARGET_REAL = 0;
+    public static final int TARGET_DECOY = 1;
+
     private static final int DONE_BUTTON = 1;
 
+    private final int target;
     private RecyclerListView listView;
     private ListAdapter adapter;
     private final ArrayList<SecondSpaceController.TabStep> steps = new ArrayList<>();
     private final ArrayList<SecondSpaceController.TabStep> originalSteps = new ArrayList<>();
+
+    public PrivateSpaceTabSequenceActivity() {
+        this(TARGET_REAL);
+    }
+
+    public PrivateSpaceTabSequenceActivity(int target) {
+        this.target = target;
+    }
 
     private int rowHeader;
     private int rowStepStart;
@@ -68,7 +80,10 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
         if (!SecondSpaceController.getInstance(currentAccount).isActive()) {
             return false;
         }
-        List<SecondSpaceController.TabStep> saved = SecondSpaceController.getInstance(currentAccount).getTabSequence();
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        List<SecondSpaceController.TabStep> saved = target == TARGET_DECOY
+                ? ssc.getDecoyTabSequence()
+                : ssc.getTabSequence();
         steps.addAll(saved);
         originalSteps.addAll(saved);
         return super.onFragmentCreate();
@@ -159,9 +174,28 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
             return;
         }
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        boolean hadShortcutBefore = ssc.hasConfiguredShortcut();
-        ssc.setTabSequence(steps);
-        if (!steps.isEmpty() && !ssc.isShortcutTested() && getParentActivity() != null) {
+        if (!steps.isEmpty() && getParentActivity() != null) {
+            List<SecondSpaceController.TabStep> otherSeq = target == TARGET_DECOY
+                    ? ssc.getTabSequence()
+                    : ssc.getDecoyTabSequence();
+            if (!otherSeq.isEmpty() && SecondSpaceController.sameSequence(steps, otherSeq)) {
+                AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
+                b.setTitle(LocaleController.getString(R.string.PrivateSpaceSequenceTitle));
+                b.setMessage(LocaleController.getString(R.string.PrivateSpaceSequenceCollision));
+                b.setPositiveButton(LocaleController.getString(R.string.OK), null);
+                b.show();
+                return;
+            }
+        }
+        boolean isDecoy = target == TARGET_DECOY;
+        boolean hadShortcutBefore = isDecoy ? ssc.hasConfiguredDecoyShortcut() : ssc.hasConfiguredShortcut();
+        if (isDecoy) {
+            ssc.setDecoyTabSequence(steps);
+        } else {
+            ssc.setTabSequence(steps);
+        }
+        boolean tested = isDecoy ? ssc.isDecoyShortcutTested() : ssc.isShortcutTested();
+        if (!steps.isEmpty() && !tested && getParentActivity() != null) {
             AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
             b.setTitle(LocaleController.getString(R.string.PrivateSpaceSequenceConfirmTitle));
             b.setMessage(LocaleController.getString(hadShortcutBefore
@@ -180,13 +214,7 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
     }
 
     private static boolean sameSequence(List<SecondSpaceController.TabStep> a, List<SecondSpaceController.TabStep> b) {
-        if (a.size() != b.size()) return false;
-        for (int i = 0; i < a.size(); i++) {
-            SecondSpaceController.TabStep sa = a.get(i);
-            SecondSpaceController.TabStep sb = b.get(i);
-            if (sa.tabIndex != sb.tabIndex || sa.longPress != sb.longPress) return false;
-        }
-        return true;
+        return SecondSpaceController.sameSequence(a, b);
     }
 
     /** A sequence is valid if it contains ≥1 long-press OR ≥3 short taps. */

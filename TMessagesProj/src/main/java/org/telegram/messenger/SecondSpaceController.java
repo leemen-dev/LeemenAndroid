@@ -34,13 +34,13 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private static final String PREF_HIDDEN_ACCOUNTS = "second_space_hidden_accounts";
     private static final String PREF_EYE_HINT_SHOWN = "second_space_eye_hint_shown";
     private static final String PREF_TOOLBAR_HINT_SHOWN = "second_space_toolbar_hint_shown";
-    // Fake (decoy) space — separate PIN, membership, hidden-account list. Sequence /
-    // pin-in-search / entry button / pin-timeout / shortcut-tested stay shared between
-    // real and fake spaces — they describe HOW to reach a space, the PIN at the gate
-    // is what discriminates which space gets unlocked.
+    // Decoy (fake) space — own tap sequence, membership, hidden-account list.
+    // Entry is via a separate tap sequence (no PIN); real-space PIN system is independent.
     private static final String PREF_FAKE_PASSWORD_HASH = "second_space_fake_password_hash";
     private static final String PREF_FAKE_DIALOG_IDS = "second_space_fake_dialogs";
     private static final String PREF_FAKE_HIDDEN_ACCOUNTS = "second_space_fake_hidden_accounts";
+    private static final String PREF_DECOY_TAB_SEQUENCE = "second_space_decoy_tab_sequence";
+    private static final String PREF_DECOY_SHORTCUT_TESTED = "second_space_decoy_shortcut_tested";
 
     public static final int MODE_OFF = 0;
     public static final int MODE_REAL = 1;
@@ -92,14 +92,11 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private final Map<Long, Set<Integer>> pendingMessages = new HashMap<>();
     private final Set<Long> privateSearchDialogs = new HashSet<>();
     private String passwordHash;
-    /** Optional fake-PIN. Empty when not configured. Same SHA-256 hash format as the real
-     *  PIN. Configured / cleared from the real-mode settings activity; the fake-mode UI
-     *  can change its own value once entered (it sees only the fake PIN, no awareness of
-     *  the real one). */
-    private String fakePasswordHash;
     private final java.util.List<TabStep> tabSequence = new java.util.ArrayList<>();
+    private final java.util.List<TabStep> decoyTabSequence = new java.util.ArrayList<>();
     private boolean pinInSearchEnabled;
     private boolean shortcutTested;
+    private boolean decoyShortcutTested;
     private int pinTimeoutMinutes;
     private long pinLastVerifiedAt;
     /** Active mode: {@link #MODE_OFF}, {@link #MODE_REAL}, or {@link #MODE_FAKE}.
@@ -137,10 +134,14 @@ public class SecondSpaceController extends BaseController implements Notificatio
             }
         }
         passwordHash = prefs.getString(PREF_PASSWORD_HASH, "");
-        fakePasswordHash = prefs.getString(PREF_FAKE_PASSWORD_HASH, "");
+        if (prefs.contains(PREF_FAKE_PASSWORD_HASH)) {
+            prefs.edit().remove(PREF_FAKE_PASSWORD_HASH).apply();
+        }
         loadTabSequence(prefs.getString(PREF_TAB_SEQUENCE, ""));
+        loadDecoyTabSequence(prefs.getString(PREF_DECOY_TAB_SEQUENCE, ""));
         pinInSearchEnabled = prefs.getBoolean(PREF_PIN_IN_SEARCH, false);
         shortcutTested = prefs.getBoolean(PREF_SHORTCUT_TESTED, false);
+        decoyShortcutTested = prefs.getBoolean(PREF_DECOY_SHORTCUT_TESTED, false);
         pinTimeoutMinutes = prefs.getInt(PREF_PIN_TIMEOUT_MIN, 0);
         pinLastVerifiedAt = prefs.getLong(PREF_PIN_LAST_OK_MS, 0L);
         entryPasswordHash = prefs.getString(PREF_ENTRY_PASSWORD_HASH, "");
@@ -252,37 +253,18 @@ public class SecondSpaceController extends BaseController implements Notificatio
         getMessagesController().getMainSettings().edit().putInt(PREF_PIN_TIMEOUT_MIN, pinTimeoutMinutes).apply();
     }
 
-    /** In-session memory of the last-verified mode. Non-persistent on purpose — the skip
-     *  is only meaningful within an active app session; restarts always re-prompt. */
-    private int pinLastVerifiedMode = MODE_OFF;
-
-    /** Should the PIN prompt be skipped right now because of a recent successful entry?
-     *  Returns {@code true} only when the mode is known (current session) AND the timeout
-     *  window hasn't elapsed. {@link #getPinLastVerifiedMode()} reveals which mode to
-     *  enter when callers honor the skip. */
     public boolean isPinPromptSkippable() {
         if (pinTimeoutMinutes <= 0 || pinLastVerifiedAt <= 0) return false;
-        if (pinLastVerifiedMode == MODE_OFF) return false;
         long deadlineMs = pinLastVerifiedAt + pinTimeoutMinutes * 60_000L;
         return System.currentTimeMillis() < deadlineMs;
     }
 
-    public int getPinLastVerifiedMode() {
-        return pinLastVerifiedMode;
-    }
-
     public void recordPinVerified() {
-        recordPinVerified(MODE_REAL);
-    }
-
-    public void recordPinVerified(int mode) {
         pinLastVerifiedAt = System.currentTimeMillis();
-        pinLastVerifiedMode = mode;
         getMessagesController().getMainSettings().edit().putLong(PREF_PIN_LAST_OK_MS, pinLastVerifiedAt).apply();
     }
 
     public void clearPinVerified() {
-        pinLastVerifiedMode = MODE_OFF;
         if (pinLastVerifiedAt == 0L) return;
         pinLastVerifiedAt = 0L;
         getMessagesController().getMainSettings().edit().remove(PREF_PIN_LAST_OK_MS).apply();
@@ -326,7 +308,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
         }
     }
 
-    private static boolean sameSequence(java.util.List<TabStep> a, java.util.List<TabStep> b) {
+    public static boolean sameSequence(java.util.List<TabStep> a, java.util.List<TabStep> b) {
         int an = a == null ? 0 : a.size();
         int bn = b == null ? 0 : b.size();
         if (an != bn) return false;
@@ -399,63 +381,85 @@ public class SecondSpaceController extends BaseController implements Notificatio
         return !tabSequence.isEmpty() || pinInSearchEnabled;
     }
 
-    // --- Password (PIN) ---
-    //
-    // Mode-aware helpers — {@link #hasPassword()} / {@link #verifyPassword(String)} /
-    // {@link #setPassword(String)} route to the CURRENT mode's PIN store, so any caller
-    // that holds an "ssc" reference and edits the PIN sees the right space without having
-    // to know which mode is active. Callers that explicitly need the real PIN (e.g. the
-    // fake-PIN config row inside real settings) use the explicit *Real/*Fake methods.
+    // --- Decoy tap sequence ---
+
+    private void loadDecoyTabSequence(String json) {
+        decoyTabSequence.clear();
+        if (TextUtils.isEmpty(json)) return;
+        try {
+            JSONArray arr = new JSONArray(json);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject obj = arr.getJSONObject(i);
+                decoyTabSequence.add(new TabStep(obj.getInt("t"), obj.getBoolean("l")));
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    public java.util.List<TabStep> getDecoyTabSequence() {
+        return Collections.unmodifiableList(decoyTabSequence);
+    }
+
+    public void setDecoyTabSequence(java.util.List<TabStep> steps) {
+        boolean changed = !sameSequence(decoyTabSequence, steps);
+        decoyTabSequence.clear();
+        if (steps != null) decoyTabSequence.addAll(steps);
+        try {
+            JSONArray arr = new JSONArray();
+            for (TabStep s : decoyTabSequence) {
+                JSONObject o = new JSONObject();
+                o.put("t", s.tabIndex);
+                o.put("l", s.longPress);
+                arr.put(o);
+            }
+            getMessagesController().getMainSettings().edit().putString(PREF_DECOY_TAB_SEQUENCE, arr.toString()).apply();
+        } catch (Exception ignored) {
+        }
+        if (changed) {
+            clearDecoyShortcutTested();
+        }
+    }
+
+    public boolean hasConfiguredDecoyShortcut() {
+        return !decoyTabSequence.isEmpty();
+    }
+
+    public boolean isDecoyShortcutTested() {
+        return decoyShortcutTested;
+    }
+
+    public void markDecoyShortcutTested() {
+        if (!decoyShortcutTested) {
+            decoyShortcutTested = true;
+            getMessagesController().getMainSettings().edit().putBoolean(PREF_DECOY_SHORTCUT_TESTED, true).apply();
+        }
+    }
+
+    public void clearDecoyShortcutTested() {
+        if (decoyShortcutTested) {
+            decoyShortcutTested = false;
+            getMessagesController().getMainSettings().edit().putBoolean(PREF_DECOY_SHORTCUT_TESTED, false).apply();
+        }
+    }
+
+    // --- Password (PIN) — always targets the real space ---
 
     public boolean hasPassword() {
-        return !TextUtils.isEmpty(activePasswordHash());
+        return !TextUtils.isEmpty(passwordHash);
     }
 
     public boolean verifyPassword(String pin) {
         if (pin == null) return false;
-        String hash = activePasswordHash();
-        if (TextUtils.isEmpty(hash)) return true;
-        return hashPassword(pin).equals(hash);
+        if (TextUtils.isEmpty(passwordHash)) return true;
+        return hashPassword(pin).equals(passwordHash);
     }
 
-    /** Pass empty/null to clear. Edits the PIN of the current mode (REAL by default when
-     *  no PS is active — settings activity always opens inside an active space, so OFF
-     *  here is a fallback that targets the real PIN). */
     public void setPassword(String pin) {
-        if (activeMode == MODE_FAKE) {
-            setFakePassword(pin);
-        } else {
-            setRealPassword(pin);
-        }
-    }
-
-    private String activePasswordHash() {
-        return activeMode == MODE_FAKE ? fakePasswordHash : passwordHash;
+        setRealPassword(pin);
     }
 
     public boolean hasRealPassword() {
         return !TextUtils.isEmpty(passwordHash);
-    }
-
-    public boolean hasFakePassword() {
-        return !TextUtils.isEmpty(fakePasswordHash);
-    }
-
-    /** Check {@code pin} against both the real and fake PINs.
-     *  @return {@link #MODE_REAL} or {@link #MODE_FAKE} on match, {@link #MODE_OFF} when
-     *  nothing matches. When neither PIN is set, returns {@code MODE_REAL} (legacy
-     *  passwordless entry path). */
-    public int verifyAnyPassword(String pin) {
-        if (pin == null) return MODE_OFF;
-        boolean realSet = hasRealPassword();
-        boolean fakeSet = hasFakePassword();
-        if (!realSet && !fakeSet) {
-            return MODE_REAL;
-        }
-        String hashed = hashPassword(pin);
-        if (realSet && hashed.equals(passwordHash)) return MODE_REAL;
-        if (fakeSet && hashed.equals(fakePasswordHash)) return MODE_FAKE;
-        return MODE_OFF;
     }
 
     public void setRealPassword(String pin) {
@@ -463,31 +467,10 @@ public class SecondSpaceController extends BaseController implements Notificatio
         boolean changed = !newHash.equals(passwordHash);
         passwordHash = newHash;
         getMessagesController().getMainSettings().edit().putString(PREF_PASSWORD_HASH, passwordHash).apply();
-        // PIN changed → invalidate any cached «recently verified» state.
-        clearPinVerified();
-        // Entry method changed → user must re-verify before the entry button can be hidden.
-        if (changed) {
-            clearShortcutTested();
-        }
-    }
-
-    /** Set / clear the fake-space PIN. Empty/null clears.
-     *  Rejected if {@code pin} matches the current real PIN — collisions would route
-     *  ambiguous entries (a PIN that fits both is a footgun). Returns {@code true} on
-     *  success, {@code false} if the candidate collides with the real PIN. */
-    public boolean setFakePassword(String pin) {
-        String newHash = TextUtils.isEmpty(pin) ? "" : hashPassword(pin);
-        if (!TextUtils.isEmpty(newHash) && newHash.equals(passwordHash)) {
-            return false;
-        }
-        boolean changed = !newHash.equals(fakePasswordHash);
-        fakePasswordHash = newHash;
-        getMessagesController().getMainSettings().edit().putString(PREF_FAKE_PASSWORD_HASH, fakePasswordHash).apply();
         clearPinVerified();
         if (changed) {
             clearShortcutTested();
         }
-        return true;
     }
 
     private static String hashPassword(String pin) {

@@ -2350,10 +2350,9 @@
     <string name="PrivateSpacePinOff">Off</string>
     <string name="PrivateSpacePinOn">On</string>
     <string name="PrivateSpacePinInfo">When set, you must enter the PIN every time you open Private Space.</string>
-    <string name="PrivateSpaceFakePinTitle">Decoy PIN</string>
-    <string name="PrivateSpaceFakePinInfo">Optional second PIN that opens a separate, isolated Private Space. Useful as a decoy: anyone forced to unlock under duress can be given this PIN and they\'ll see only the decoy space, with the real one fully hidden.</string>
-    <string name="PrivateSpaceFakePinRemoveConfirm">Remove the decoy PIN? The decoy space and any chats added to it will become unreachable until you set a new decoy PIN.</string>
-    <string name="PrivateSpaceFakePinCollision">This PIN is already used by your other Private Space. Choose a different one.</string>
+    <string name="PrivateSpaceDecoySequenceTitle">Decoy tap sequence</string>
+    <string name="PrivateSpaceDecoySequenceInfo">A separate tap sequence that opens an isolated decoy Private Space. Anyone forced to unlock under duress can perform this sequence and see only the decoy space, with the real one fully hidden.</string>
+    <string name="PrivateSpaceSequenceCollision">This sequence is already used by your other entry shortcut. Choose a different one.</string>
     <string name="PrivateSpacePinSetTitle">Set PIN (4–6 digits)</string>
     <string name="PrivateSpacePinEnterTitle">Enter PIN</string>
     <string name="PrivateSpacePinEnterSubtitle">Enter your Private Space PIN to continue.</string>

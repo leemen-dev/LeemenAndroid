@@ -64,9 +64,9 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     private int passwordRow;
     private int passwordTimeoutRow;
     private int passwordInfoRow;
-    private int fakePasswordShadowRow;
-    private int fakePasswordRow;
-    private int fakePasswordInfoRow;
+    private int decoySequenceShadowRow;
+    private int decoySequenceRow;
+    private int decoySequenceInfoRow;
     private int sequenceShadowRow;
     private int sequenceRow;
     private int sequenceInfoRow;
@@ -143,8 +143,8 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                 onPasswordRowClick();
             } else if (position == passwordTimeoutRow) {
                 showPinTimeoutPicker();
-            } else if (position == fakePasswordRow) {
-                onFakePasswordRowClick();
+            } else if (position == decoySequenceRow) {
+                presentFragment(new PrivateSpaceTabSequenceActivity(PrivateSpaceTabSequenceActivity.TARGET_DECOY));
             } else if (position == sequenceRow) {
                 presentFragment(new PrivateSpaceTabSequenceActivity());
             } else if (position == pinInSearchRow) {
@@ -204,39 +204,6 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         AlertDialog alert = builder.create();
         alert.show();
         alert.redPositive();
-    }
-
-    /** Fake-PIN row click handler. Visible only inside real-mode settings (deniability);
-     *  manages the optional decoy PIN that routes to a separate, isolated private space. */
-    private void onFakePasswordRowClick() {
-        if (getParentActivity() == null) return;
-        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        if (ssc.hasFakePassword()) {
-            AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
-            b.setTitle(LocaleController.getString(R.string.PrivateSpaceFakePinTitle));
-            b.setMessage(LocaleController.getString(R.string.PrivateSpaceFakePinRemoveConfirm));
-            b.setPositiveButton(LocaleController.getString(R.string.Remove), (d, w) -> {
-                presentFragment(new PrivateSpacePasscodeActivity(
-                        PrivateSpacePasscodeActivity.MODE_REMOVE,
-                        PrivateSpacePasscodeActivity.TARGET_FAKE)
-                        .setOnSuccess(() -> {
-                            updateRows();
-                            if (adapter != null) adapter.notifyDataSetChanged();
-                        }));
-            });
-            b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
-            AlertDialog alert = b.create();
-            alert.show();
-            alert.redPositive();
-        } else {
-            presentFragment(new PrivateSpacePasscodeActivity(
-                    PrivateSpacePasscodeActivity.MODE_SET,
-                    PrivateSpacePasscodeActivity.TARGET_FAKE)
-                    .setOnSuccess(() -> {
-                        updateRows();
-                        if (adapter != null) adapter.notifyDataSetChanged();
-                    }));
-        }
     }
 
     private void onPasswordRowClick() {
@@ -433,17 +400,16 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             passwordTimeoutRow = -1;
         }
         passwordInfoRow = rowCount++;
-        // Fake PIN row: only inside real-mode settings, only when a real PIN is set. Without
-        // a real PIN there's nothing to protect, so a decoy adds no deniability value, and
-        // showing it from inside the fake space itself would betray the decoy.
-        if (ssc.isRealActive() && ssc.hasRealPassword()) {
-            fakePasswordShadowRow = rowCount++;
-            fakePasswordRow = rowCount++;
-            fakePasswordInfoRow = rowCount++;
+        // Decoy sequence row: only inside real-mode settings — the fake-mode user
+        // must not know a decoy mechanism exists (deniability).
+        if (ssc.isRealActive()) {
+            decoySequenceShadowRow = rowCount++;
+            decoySequenceRow = rowCount++;
+            decoySequenceInfoRow = rowCount++;
         } else {
-            fakePasswordShadowRow = -1;
-            fakePasswordRow = -1;
-            fakePasswordInfoRow = -1;
+            decoySequenceShadowRow = -1;
+            decoySequenceRow = -1;
+            decoySequenceInfoRow = -1;
         }
         sequenceShadowRow = rowCount++;
         sequenceRow = rowCount++;
@@ -581,8 +547,8 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceShowEntryButtonInfo));
                     } else if (position == passwordInfoRow) {
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpacePinInfo));
-                    } else if (position == fakePasswordInfoRow) {
-                        privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceFakePinInfo));
+                    } else if (position == decoySequenceInfoRow) {
+                        privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceDecoySequenceInfo));
                     } else if (position == sequenceInfoRow) {
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceSequenceInfo));
                     } else if (position == pinInSearchInfoRow) {
@@ -641,12 +607,12 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                                 ? LocaleController.getString(R.string.PrivateSpacePinTimeoutOff)
                                 : LocaleController.formatString(R.string.PrivateSpacePinTimeoutMinutes, m);
                         cell.setTextAndValue(LocaleController.getString(R.string.PrivateSpacePinTimeoutTitle), value, false);
-                    } else if (position == fakePasswordRow) {
-                        boolean on = ssc.hasFakePassword();
-                        cell.setTextAndValue(
-                                LocaleController.getString(R.string.PrivateSpaceFakePinTitle),
-                                LocaleController.getString(on ? R.string.PrivateSpacePinOn : R.string.PrivateSpacePinOff),
-                                on);
+                    } else if (position == decoySequenceRow) {
+                        int n = ssc.getDecoyTabSequence().size();
+                        String value = n == 0
+                                ? LocaleController.getString(R.string.PrivateSpaceSequenceRowOff)
+                                : LocaleController.formatString(R.string.PrivateSpaceSequenceRowOn, n);
+                        cell.setTextAndValue(LocaleController.getString(R.string.PrivateSpaceDecoySequenceTitle), value, false);
                     } else if (position == sequenceRow) {
                         int n = ssc.getTabSequence().size();
                         String value = n == 0
@@ -678,9 +644,9 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             if (position == passwordRow) return VIEW_VALUE;
             if (position == passwordTimeoutRow) return VIEW_VALUE;
             if (position == passwordInfoRow) return VIEW_INFO;
-            if (position == fakePasswordShadowRow) return VIEW_SHADOW;
-            if (position == fakePasswordRow) return VIEW_VALUE;
-            if (position == fakePasswordInfoRow) return VIEW_INFO;
+            if (position == decoySequenceShadowRow) return VIEW_SHADOW;
+            if (position == decoySequenceRow) return VIEW_VALUE;
+            if (position == decoySequenceInfoRow) return VIEW_INFO;
             if (position == sequenceShadowRow) return VIEW_SHADOW;
             if (position == sequenceRow) return VIEW_VALUE;
             if (position == sequenceInfoRow) return VIEW_INFO;

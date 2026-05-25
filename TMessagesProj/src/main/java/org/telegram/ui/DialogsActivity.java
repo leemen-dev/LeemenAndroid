@@ -8755,7 +8755,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             return false;
         }
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        if (!ssc.isActive() || ssc.isRealActive()) {
+        if (ssc.isRealActive() || ssc.getDialogIds().isEmpty()) {
             return true;
         }
         ArrayList<TLRPC.Dialog> archiveDialogs = getMessagesController().getDialogs(1);
@@ -10432,13 +10432,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (!ssc.isPinInSearchEnabled() || ssc.isActive()) {
             return false;
         }
-        // Without either PIN configured, search-pin is a no-op (the toggle is gated
-        // behind hasRealPassword in settings, but defensively skip here too).
-        if (!ssc.hasRealPassword() && !ssc.hasFakePassword()) {
+        if (!ssc.hasRealPassword()) {
             return false;
         }
-        int matched = ssc.verifyAnyPassword(text);
-        if (matched == SecondSpaceController.MODE_OFF) {
+        if (!ssc.verifyPassword(text)) {
             return false;
         }
         editText.setText("");
@@ -10446,8 +10443,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             actionBar.closeSearchField(true);
         }
         ssc.markShortcutTested();
-        ssc.recordPinVerified(matched);
-        ssc.setActiveMode(matched);
+        ssc.recordPinVerified();
+        ssc.setActiveMode(SecondSpaceController.MODE_REAL);
         return true;
     }
 

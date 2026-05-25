@@ -40,21 +40,15 @@ public class PrivateSpacePasscodeActivity extends BaseFragment {
     public static final int MODE_SET = 1;
     public static final int MODE_REMOVE = 2;
 
-    /** Which PS slot ({@link Target}) the MODE_SET / MODE_REMOVE operation targets. Defaults
-     *  to {@link #TARGET_CURRENT} which routes through the current active mode (real ↔ fake).
-     *  Pass {@link #TARGET_FAKE} from inside the real-mode settings activity to manage the
-     *  decoy PIN. {@link #MODE_ENTER} ignores target — it routes by what the entered PIN
-     *  matches. */
     public static final int TARGET_CURRENT = 0;
     public static final int TARGET_REAL = 1;
-    public static final int TARGET_FAKE = 2;
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({MODE_ENTER, MODE_SET, MODE_REMOVE})
     public @interface Mode {}
 
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({TARGET_CURRENT, TARGET_REAL, TARGET_FAKE})
+    @IntDef({TARGET_CURRENT, TARGET_REAL})
     public @interface Target {}
 
     private static final int MIN_LEN = 4;
@@ -239,14 +233,13 @@ public class PrivateSpacePasscodeActivity extends BaseFragment {
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
         switch (mode) {
             case MODE_ENTER: {
-                int matched = ssc.verifyAnyPassword(pin);
-                if (matched == SecondSpaceController.MODE_OFF) {
+                if (!ssc.verifyPassword(pin)) {
                     showError(LocaleController.getString(R.string.PrivateSpacePinWrong));
                     pinInput.setText("");
                     AndroidUtilities.shakeView(pinInput);
                 } else {
-                    ssc.recordPinVerified(matched);
-                    ssc.setActiveMode(matched);
+                    ssc.recordPinVerified();
+                    ssc.setActiveMode(SecondSpaceController.MODE_REAL);
                     finishFragmentAndRun();
                 }
                 break;
@@ -257,31 +250,12 @@ public class PrivateSpacePasscodeActivity extends BaseFragment {
                     pinInput.setText("");
                     applyModeTexts(true);
                 } else if (firstStageEntry.equals(pin)) {
-                    // Reject PINs that already match the OTHER slot — collisions would
-                    // make {@link #MODE_ENTER} ambiguous and silently route the user
-                    // into the wrong space.
-                    int otherSlot = ssc.verifyAnyPassword(pin);
-                    boolean collidesWithOther =
-                            (target == TARGET_FAKE && otherSlot == SecondSpaceController.MODE_REAL)
-                            || (target == TARGET_REAL && otherSlot == SecondSpaceController.MODE_FAKE)
-                            || (target == TARGET_CURRENT && otherSlot != SecondSpaceController.MODE_OFF
-                                && otherSlot != ssc.getActiveMode());
-                    if (collidesWithOther) {
-                        showError(LocaleController.getString(R.string.PrivateSpaceFakePinCollision));
-                        pinInput.setText("");
-                        AndroidUtilities.shakeView(pinInput);
-                        firstStageEntry = null;
-                        applyModeTexts(false);
+                    if (target == TARGET_REAL) {
+                        ssc.setRealPassword(pin);
                     } else {
-                        if (target == TARGET_FAKE) {
-                            ssc.setFakePassword(pin);
-                        } else if (target == TARGET_REAL) {
-                            ssc.setRealPassword(pin);
-                        } else {
-                            ssc.setPassword(pin);
-                        }
-                        finishFragmentAndRun();
+                        ssc.setPassword(pin);
                     }
+                    finishFragmentAndRun();
                 } else {
                     showError(LocaleController.getString(R.string.PrivateSpacePinMismatch));
                     pinInput.setText("");
@@ -291,21 +265,9 @@ public class PrivateSpacePasscodeActivity extends BaseFragment {
                 }
                 break;
             case MODE_REMOVE: {
-                // Verify against the slot we're about to clear: TARGET_CURRENT honors
-                // the current PS mode (real ↔ fake mirroring); TARGET_REAL / TARGET_FAKE
-                // verify against that explicit slot.
-                boolean ok;
-                if (target == TARGET_FAKE) {
-                    ok = ssc.verifyAnyPassword(pin) == SecondSpaceController.MODE_FAKE;
-                } else if (target == TARGET_REAL) {
-                    ok = ssc.verifyAnyPassword(pin) == SecondSpaceController.MODE_REAL;
-                } else {
-                    ok = ssc.verifyPassword(pin);
-                }
+                boolean ok = ssc.verifyPassword(pin);
                 if (ok) {
-                    if (target == TARGET_FAKE) {
-                        ssc.setFakePassword(null);
-                    } else if (target == TARGET_REAL) {
+                    if (target == TARGET_REAL) {
                         ssc.setRealPassword(null);
                     } else {
                         ssc.setPassword(null);

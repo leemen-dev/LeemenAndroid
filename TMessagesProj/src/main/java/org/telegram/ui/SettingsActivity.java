@@ -826,15 +826,13 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                         }
                     }
                 };
-                boolean anyPin = ssc101.hasRealPassword() || ssc101.hasFakePassword();
-                if (anyPin && !ssc101.isPinPromptSkippable()) {
+                boolean hasPin = ssc101.hasRealPassword();
+                if (hasPin && !ssc101.isPinPromptSkippable()) {
                     presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_ENTER).setOnSuccess(afterEnter));
-                } else if (anyPin) {
-                    // Skip window still open — re-enter the last verified mode.
-                    ssc101.setActiveMode(ssc101.getPinLastVerifiedMode());
+                } else if (hasPin) {
+                    ssc101.setActiveMode(SecondSpaceController.MODE_REAL);
                     afterEnter.run();
                 } else {
-                    // No PIN configured at all → enter real (legacy passwordless path).
                     ssc101.setActive(true);
                     afterEnter.run();
                 }

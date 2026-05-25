@@ -815,47 +815,55 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     private void recordTabEvent(int tabIndex, boolean longPress) {
         org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
         if (ssc.isActive()) {
-            // Sequence is an enter-only trigger; while active we don't re-arm it.
             tabEventBuffer.clear();
             return;
         }
-        java.util.List<org.telegram.messenger.SecondSpaceController.TabStep> seq = ssc.getTabSequence();
-        if (seq.isEmpty()) {
+        java.util.List<org.telegram.messenger.SecondSpaceController.TabStep> realSeq = ssc.getTabSequence();
+        java.util.List<org.telegram.messenger.SecondSpaceController.TabStep> decoySeq = ssc.getDecoyTabSequence();
+        if (realSeq.isEmpty() && decoySeq.isEmpty()) {
             return;
         }
         long now = android.os.SystemClock.uptimeMillis();
         tabEventBuffer.addLast(new long[]{tabIndex, longPress ? 1L : 0L, now});
-        while (tabEventBuffer.size() > seq.size()) {
+        int maxLen = Math.max(realSeq.size(), decoySeq.size());
+        while (tabEventBuffer.size() > maxLen) {
             tabEventBuffer.removeFirst();
         }
-        if (tabEventBuffer.size() != seq.size()) {
+        if (!realSeq.isEmpty() && matchesTail(realSeq, now)) {
+            tabEventBuffer.clear();
+            Runnable afterEnter = ssc::markShortcutTested;
+            boolean hasPin = ssc.hasRealPassword();
+            if (hasPin && !ssc.isPinPromptSkippable()) {
+                presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_ENTER).setOnSuccess(afterEnter));
+            } else if (hasPin) {
+                ssc.setActiveMode(org.telegram.messenger.SecondSpaceController.MODE_REAL);
+                afterEnter.run();
+            } else {
+                ssc.setActive(true);
+                afterEnter.run();
+            }
             return;
         }
-        // First event timestamp must be within window from latest.
-        if (now - tabEventBuffer.peekFirst()[2] > SEQUENCE_WINDOW_MS) {
-            return;
+        if (!decoySeq.isEmpty() && matchesTail(decoySeq, now)) {
+            tabEventBuffer.clear();
+            ssc.setActiveMode(org.telegram.messenger.SecondSpaceController.MODE_FAKE);
+            ssc.markDecoyShortcutTested();
         }
-        int i = 0;
-        for (long[] ev : tabEventBuffer) {
-            org.telegram.messenger.SecondSpaceController.TabStep step = seq.get(i++);
-            if (ev[0] != step.tabIndex || (ev[1] == 1L) != step.longPress) {
-                return;
+    }
+
+    private boolean matchesTail(java.util.List<org.telegram.messenger.SecondSpaceController.TabStep> seq, long now) {
+        int n = seq.size();
+        if (tabEventBuffer.size() < n) return false;
+        long[][] arr = tabEventBuffer.toArray(new long[0][]);
+        int offset = arr.length - n;
+        if (now - arr[offset][2] > SEQUENCE_WINDOW_MS) return false;
+        for (int i = 0; i < n; i++) {
+            org.telegram.messenger.SecondSpaceController.TabStep step = seq.get(i);
+            if (arr[offset + i][0] != step.tabIndex || (arr[offset + i][1] == 1L) != step.longPress) {
+                return false;
             }
         }
-        // Match — fire entry.
-        tabEventBuffer.clear();
-        Runnable afterEnter = ssc::markShortcutTested;
-        boolean anyPin = ssc.hasRealPassword() || ssc.hasFakePassword();
-        if (anyPin && !ssc.isPinPromptSkippable()) {
-            // PasscodeActivity sets activeMode based on which PIN was entered.
-            presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_ENTER).setOnSuccess(afterEnter));
-        } else if (anyPin) {
-            ssc.setActiveMode(ssc.getPinLastVerifiedMode());
-            afterEnter.run();
-        } else {
-            ssc.setActive(true);
-            afterEnter.run();
-        }
+        return true;
     }
 
     @Override
