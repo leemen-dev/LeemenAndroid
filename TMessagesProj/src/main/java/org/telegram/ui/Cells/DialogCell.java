@@ -1165,7 +1165,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 && (ssc.isMessageExposed(currentDialogId, message.getId())
                     || ssc.isMessagePending(currentDialogId, message.getId()));
         if (!keepReal) {
-            message = ssc.resolveLatestExposedPreview(currentDialogId);
+            message = ssc.resolveLatestSafePreview(currentDialogId);
         }
         if (message != null) {
             lastMessageDate = message.messageOwner.date;
@@ -3109,10 +3109,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 TLRPC.Dialog dialog = dialogs.get(a);
                 MessageObject object;
                 if (ssc.isHiddenFromCurrentView(dialog.id)) {
-                    // Hidden chat with exposed messages: use the exposed preview, not the
-                    // raw top message (which could be a newer non-exposed message whose
-                    // date / content shouldn't leak into the archive folder preview).
-                    object = ssc.resolveLatestExposedPreview(dialog.id);
+                    object = ssc.resolveLatestSafePreview(dialog.id);
                 } else {
                     LongSparseArray<ArrayList<MessageObject>> dialogMessage = MessagesController.getInstance(currentAccount).dialogMessage;
                     if (dialogMessage != null) {
@@ -3195,11 +3192,8 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                                     && (ssc.isMessageExposed(dialog.id, message.getId())
                                         || ssc.isMessagePending(dialog.id, message.getId()));
                             if (!currentIsSafe) {
-                                message = ssc.resolveLatestExposedPreview(dialog.id);
-                                if (message == null && ssc.hasExposedMessages(dialog.id) && previousMessage != null) {
-                                    // Global cache evicted — a new incoming message
-                                    // displaced the exposed top. Re-ensure the previous
-                                    // frame's exposed message in cache and keep using it.
+                                message = ssc.resolveLatestSafePreview(dialog.id);
+                                if (message == null && (ssc.hasExposedMessages(dialog.id) || ssc.hasPendingOffModeWork(dialog.id)) && previousMessage != null) {
                                     message = previousMessage;
                                     ssc.ensureExposedInGlobalCache(previousMessage);
                                 }
@@ -6058,7 +6052,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                         return message;
                     }
                 }
-                return ssc.resolveLatestExposedPreview(currentDialogId);
+                return ssc.resolveLatestSafePreview(currentDialogId);
             }
         }
         return message;

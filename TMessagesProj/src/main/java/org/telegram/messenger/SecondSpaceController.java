@@ -839,6 +839,19 @@ public class SecondSpaceController extends BaseController implements Notificatio
         return max == Integer.MIN_VALUE ? 0 : max;
     }
 
+    /** Highest message id from either exposed or pending sets, or 0 when none. */
+    public int getLatestSafeMessageId(long dialogId) {
+        int exposed = getLatestExposedMessageId(dialogId);
+        Set<Integer> pset = pendingMessages.get(dialogId);
+        int pending = 0;
+        if (pset != null) {
+            for (Integer id : pset) {
+                if (id != null && id > pending) pending = id;
+            }
+        }
+        return Math.max(exposed, pending);
+    }
+
     /** Resolve the latest-exposed {@link MessageObject} for {@code dialogId} by looking
      *  it up in Telegram's per-account {@code dialogMessagesByIds} cache. PS code never
      *  stores message bodies itself — this is a pure read of state that exists for
@@ -851,11 +864,32 @@ public class SecondSpaceController extends BaseController implements Notificatio
     public MessageObject resolveLatestExposedPreview(long dialogId) {
         int id = getLatestExposedMessageId(dialogId);
         if (id == 0) return null;
+        return resolveMessageFromCache(dialogId, id);
+    }
+
+    public MessageObject resolveLatestPendingPreview(long dialogId) {
+        Set<Integer> set = pendingMessages.get(dialogId);
+        if (set == null || set.isEmpty()) return null;
+        int max = Integer.MIN_VALUE;
+        for (Integer id : set) {
+            if (id != null && id > max) max = id;
+        }
+        if (max == Integer.MIN_VALUE) return null;
+        return resolveMessageFromCache(dialogId, max);
+    }
+
+    /** Resolve the latest safe (exposed or pending) preview for a hidden dialog. */
+    public MessageObject resolveLatestSafePreview(long dialogId) {
+        MessageObject exposed = resolveLatestExposedPreview(dialogId);
+        MessageObject pending = resolveLatestPendingPreview(dialogId);
+        if (exposed == null) return pending;
+        if (pending == null) return exposed;
+        return pending.getId() > exposed.getId() ? pending : exposed;
+    }
+
+    private MessageObject resolveMessageFromCache(long dialogId, int id) {
         MessageObject mo = getMessagesController().dialogMessagesByIds.get(id);
         if (mo == null) return null;
-        // dialogMessagesByIds is keyed by raw message id (no channel-id discriminator),
-        // so a hit on a same-id message belonging to a different dialog is theoretically
-        // possible for channels. Verify ownership before surfacing.
         if (mo.getDialogId() != dialogId) return null;
         return mo;
     }

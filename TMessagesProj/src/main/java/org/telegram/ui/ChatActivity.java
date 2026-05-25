@@ -2987,7 +2987,7 @@ public class ChatActivity extends BaseFragment implements
                 // before the messagesDidLoad filter strips it.
                 SecondSpaceController psCtrlInit = SecondSpaceController.getInstance(currentAccount);
                 if (psCtrlInit.isHiddenFromCurrentView(dialog_id)) {
-                    int safeAnchor = psCtrlInit.getLatestExposedMessageId(dialog_id);
+                    int safeAnchor = psCtrlInit.getLatestSafeMessageId(dialog_id);
                     if (startLoadFromMessageId != safeAnchor) {
                         startLoadFromMessageId = safeAnchor;
                         // Also reset the saved-scroll bookkeeping so we don't attempt offset
@@ -20475,11 +20475,10 @@ public class ChatActivity extends BaseFragment implements
                 ArrayList<MessageObject> filtered = filterToExposedSecondSpace((ArrayList<MessageObject>) args[2]);
                 args[2] = filtered;
                 args[1] = filtered.size();
+                args[4] = 0;
+                args[5] = 0;
                 args[6] = 0;
                 args[13] = 0;
-                // Tell the loader there's nothing more to fetch. Reset startLoadFromMessageId
-                // to 0 so the later `if (startLoadFromMessageId != 0) forwardEndReached = false`
-                // branch (line ~20804) doesn't re-open the forward-load gate.
                 startLoadFromMessageId = 0;
                 startLoadFromMessageIdSaved = 0;
                 endReached[0] = true;
@@ -25180,6 +25179,13 @@ public class ChatActivity extends BaseFragment implements
         processNewMessages(arr, true);
     }
     private void processNewMessages(ArrayList<MessageObject> arr, final boolean animatedFromBottom) {
+        if (isSecondSpaceContentSuppressed()) {
+            ArrayList<MessageObject> filtered = filterToExposedSecondSpace(arr);
+            if (filtered.isEmpty()) {
+                return;
+            }
+            arr = filtered;
+        }
         FileLog.d("processNewMessages " + arr.size() + " messages");
         long currentUserId = getUserConfig().getClientUserId();
         boolean updateChat = false;
