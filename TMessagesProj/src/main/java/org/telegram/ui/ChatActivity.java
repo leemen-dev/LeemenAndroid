@@ -20391,6 +20391,9 @@ public class ChatActivity extends BaseFragment implements
                 if (mid <= 0) continue;
                 if (!ssc.isMessageExposed(dialog_id, mid)) {
                     ssc.exposeMessage(dialog_id, mid);
+                    // Put into Telegram's global cache so dialog-list preview resolves
+                    // without a PS-owned MessageObject store.
+                    ssc.ensureExposedInGlobalCache(selectedMessagesIds[idx].valueAt(i));
                     // If this message was sitting in the pending set, exposing it transfers
                     // ownership to the exposed set — drop the pending entry.
                     ssc.unmarkMessagePending(dialog_id, mid);
@@ -20438,6 +20441,9 @@ public class ChatActivity extends BaseFragment implements
         for (int i = 0; i < toExpose.size(); i++) {
             int id = toExpose.get(i);
             ssc.exposeMessage(dialog_id, id);
+            if (i < toExposeMsgs.size()) {
+                ssc.ensureExposedInGlobalCache(toExposeMsgs.get(i));
+            }
         }
         // Manage flow closed: everything from this pending batch has been decided — either
         // moved to exposed above, or implicitly hidden (not picked). Drop the entire chat
@@ -20471,6 +20477,17 @@ public class ChatActivity extends BaseFragment implements
                 args[1] = filtered.size();
                 args[6] = 0;
                 args[13] = 0;
+                // Tell the loader there's nothing more to fetch — the server's full
+                // response was stripped down to exposed-only, and pagination is blocked
+                // by checkScrollForLoad. Without this the adapter shows a loading-row
+                // spacer at the bottom (endReached=false + loading=false → ghost space).
+                endReached[0] = true;
+                endReached[1] = true;
+                cacheEndReached[0] = true;
+                cacheEndReached[1] = true;
+                forwardEndReached[0] = true;
+                forwardEndReached[1] = true;
+                loading = false;
             } else {
                 // ACTIVE mode entry into a hidden chat: if off-mode work is pending, prompt.
                 AndroidUtilities.runOnUIThread(this::maybeShowPrivateSpaceDecisionDialog);

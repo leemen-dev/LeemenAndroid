@@ -3226,9 +3226,27 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                         if (ChatObject.isMonoForum(localChat)) {
                             mentionCount = 0;
                         }
-                        markUnread = dialog.unread_mark;
+                        // Hidden chat: mask counters immediately so the old→new diff
+                        // comparison below never sees a non-zero spike that would trigger
+                        // a counter animation (flash 0 → N → 0 on next mask pass).
+                        if (ssc.isHiddenFromCurrentView(dialog.id)) {
+                            unreadCount = 0;
+                            mentionCount = 0;
+                            reactionMentionCount = 0;
+                            pollVotesMentionCount = 0;
+                            markUnread = false;
+                        } else {
+                            markUnread = dialog.unread_mark;
+                        }
                         currentEditDate = message != null ? message.messageOwner.edit_date : 0;
-                        lastMessageDate = dialog.last_message_date;
+                        // For hidden chats, pin the date to the preview message's date (or 0)
+                        // rather than dialog.last_message_date — same as applyPrivateSpaceMask
+                        // does, but earlier so no intermediate state leaks into the diff.
+                        if (ssc.isHiddenFromCurrentView(dialog.id)) {
+                            lastMessageDate = message != null ? message.messageOwner.date : 0;
+                        } else {
+                            lastMessageDate = dialog.last_message_date;
+                        }
                         if (dialogsType == 7 || dialogsType == 8) {
                             MessagesController.DialogFilter filter = MessagesController.getInstance(currentAccount).selectedDialogFilter[dialogsType == 8 ? 1 : 0];
                             drawPin = filter != null && filter.pinnedDialogs.indexOfKey(dialog.id) >= 0;
