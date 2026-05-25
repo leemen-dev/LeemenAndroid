@@ -3418,10 +3418,18 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                         if (ChatObject.isMonoForum(localChat)) {
                             newMentionCount = 0;
                         }
+                        // Hidden chat: force-zero so the diff against our already-masked
+                        // unreadCount (0) never fires a counter animation.
+                        if (org.telegram.messenger.SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(currentDialogId)) {
+                            newCount = 0;
+                            newMentionCount = 0;
+                            newReactionCout = 0;
+                            newPollVotesCount = 0;
+                        }
                         if (dialog != null && (unreadCount != newCount || markUnread != dialog.unread_mark || mentionCount != newMentionCount || reactionMentionCount != newReactionCout)) {
                             unreadCount = newCount;
                             mentionCount = newMentionCount;
-                            markUnread = dialog.unread_mark;
+                            markUnread = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(currentDialogId) ? false : dialog.unread_mark;
                             reactionMentionCount = newReactionCout;
                             pollVotesMentionCount = newPollVotesCount;
                             continueUpdate = true;

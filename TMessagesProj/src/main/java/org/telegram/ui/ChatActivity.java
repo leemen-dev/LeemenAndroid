@@ -20477,10 +20477,11 @@ public class ChatActivity extends BaseFragment implements
                 args[1] = filtered.size();
                 args[6] = 0;
                 args[13] = 0;
-                // Tell the loader there's nothing more to fetch — the server's full
-                // response was stripped down to exposed-only, and pagination is blocked
-                // by checkScrollForLoad. Without this the adapter shows a loading-row
-                // spacer at the bottom (endReached=false + loading=false → ghost space).
+                // Tell the loader there's nothing more to fetch. Reset startLoadFromMessageId
+                // to 0 so the later `if (startLoadFromMessageId != 0) forwardEndReached = false`
+                // branch (line ~20804) doesn't re-open the forward-load gate.
+                startLoadFromMessageId = 0;
+                startLoadFromMessageIdSaved = 0;
                 endReached[0] = true;
                 endReached[1] = true;
                 cacheEndReached[0] = true;
