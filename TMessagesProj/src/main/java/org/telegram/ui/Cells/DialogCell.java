@@ -1488,7 +1488,10 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 lastDate = message.messageOwner.date;
             }
 
-            if (isTopic) {
+            if (org.telegram.messenger.SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(currentDialogId)) {
+                draftVoice = false;
+                draftMessage = null;
+            } else if (isTopic) {
                 draftVoice = MediaDataController.getInstance(currentAccount).getDraftVoice(currentDialogId, getTopicId()) != null;
                 draftMessage = !draftVoice ? MediaDataController.getInstance(currentAccount).getDraft(currentDialogId, getTopicId()) : null;
                 if (draftMessage != null && TextUtils.isEmpty(draftMessage.message)) {
