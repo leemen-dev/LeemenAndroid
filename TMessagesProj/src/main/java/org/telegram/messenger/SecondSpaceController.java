@@ -197,6 +197,25 @@ public class SecondSpaceController extends BaseController implements Notificatio
             if (isMessagePending(dialogId, mid)) {
                 unmarkMessagePending(dialogId, mid);
             }
+            // Remove from Telegram's global cache so the deleted message can't
+            // linger as a dialog preview (e.g. in archive after entering PS).
+            getMessagesController().dialogMessagesByIds.remove(mid);
+        }
+        // If the deleted message was the dialog's top message, clear stale reference
+        // so the cell picks up the correct (previous) message on next layout pass.
+        ArrayList<MessageObject> topMessages = getMessagesController().dialogMessage.get(dialogId);
+        if (topMessages != null) {
+            boolean removed = false;
+            for (int i = topMessages.size() - 1; i >= 0; i--) {
+                MessageObject mo = topMessages.get(i);
+                if (mo != null && mids.contains(mo.getId())) {
+                    topMessages.remove(i);
+                    removed = true;
+                }
+            }
+            if (removed) {
+                getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+            }
         }
     }
 
