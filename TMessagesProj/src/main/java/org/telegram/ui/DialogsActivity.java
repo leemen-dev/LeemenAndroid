@@ -4206,7 +4206,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     if (hasStories && !rightSlidingDialogContainer.hasFragment() && !fixScrollYAfterArchiveOpened) {
                         pTop -= dp(DialogStoriesCell.HEIGHT_IN_DP);
                     }
-                    boolean hasHidenArchive = !fixScrollYAfterArchiveOpened && viewPage.dialogsType == DIALOGS_TYPE_DEFAULT && !onlySelect && folderId == 0 && getMessagesController().hasHiddenArchive() && viewPage.archivePullViewState == ARCHIVE_ITEM_STATE_HIDDEN;
+                    boolean hasHidenArchive = !fixScrollYAfterArchiveOpened && hasHiddenArchive() && viewPage.archivePullViewState == ARCHIVE_ITEM_STATE_HIDDEN;
                     if ((hasHidenArchive || (hasStories && !rightSlidingDialogContainer.hasFragment())) && dy < 0) {
                         viewPage.listView.setOverScrollMode(View.OVER_SCROLL_ALWAYS);
                         int currentPosition = viewPage.layoutManager.findFirstVisibleItemPosition();
@@ -9646,10 +9646,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
             {
                 org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
-                if (ssc.isActive() && selectedDialog != selfUserId && selectedDialog != 777000) {
+                if (selectedDialog != selfUserId && selectedDialog != 777000) {
                     if (ssc.isInSecondSpace(selectedDialog)) {
                         canUnhideCount++;
-                    } else {
+                    } else if (ssc.isActive()) {
                         canHideCount++;
                     }
                 }

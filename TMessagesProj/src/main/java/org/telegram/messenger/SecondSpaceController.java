@@ -571,7 +571,19 @@ public class SecondSpaceController extends BaseController implements Notificatio
     }
 
     public void removeFromSecondSpace(long dialogId) {
-        removeFromCurrentSpace(dialogId);
+        boolean changed = dialogIds.remove(dialogId);
+        changed |= fakeDialogIds.remove(dialogId);
+        if (changed) {
+            exposedMessages.remove(dialogId);
+            lastDecidedMessageId.remove(dialogId);
+            pendingMessages.remove(dialogId);
+            persistDialogIds();
+            persistFakeDialogIds();
+            persistExposed();
+            persistLastDecided();
+            persistPendingMessages();
+            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+        }
     }
 
     /** Add {@code dialogId} to the currently-active space's chat list. Defaults to the
