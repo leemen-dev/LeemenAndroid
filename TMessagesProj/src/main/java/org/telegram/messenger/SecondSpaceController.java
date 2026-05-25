@@ -576,7 +576,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
             case MODE_REAL:
                 return false;
             case MODE_FAKE:
-                return dialogIds.contains(dialogId) && !fakeDialogIds.contains(dialogId);
+                return dialogIds.contains(dialogId);
             case MODE_OFF:
             default:
                 return dialogIds.contains(dialogId) || fakeDialogIds.contains(dialogId);
@@ -596,20 +596,19 @@ public class SecondSpaceController extends BaseController implements Notificatio
      *  inside a space, but the fallback keeps this defensive). */
     public void addToCurrentSpace(long dialogId) {
         Set<Long> target = currentDialogSet();
-        // Asymmetric isolation: a chat can only live in one space at a time. Adding to
-        // fake removes from real and vice versa, so the user can move a chat between
-        // spaces without doubling membership.
-        Set<Long> other = target == dialogIds ? fakeDialogIds : dialogIds;
         boolean changed = target.add(dialogId);
-        boolean otherChanged = other.remove(dialogId);
-        if (changed) {
-            persistDialogIds();
-            persistFakeDialogIds();
-        } else if (otherChanged) {
-            persistDialogIds();
-            persistFakeDialogIds();
+        boolean otherChanged = false;
+        // In MODE_REAL: mutual exclusivity — adding to real removes from fake.
+        // In MODE_FAKE: never touch dialogIds — decoy-mode actions must not
+        // affect real-space membership (an attacker could otherwise move a
+        // real-space chat into decoy and read its messages).
+        if (activeMode != MODE_FAKE) {
+            Set<Long> other = target == dialogIds ? fakeDialogIds : dialogIds;
+            otherChanged = other.remove(dialogId);
         }
         if (changed || otherChanged) {
+            persistDialogIds();
+            persistFakeDialogIds();
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
     }

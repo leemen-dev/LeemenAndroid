@@ -8751,7 +8751,21 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     }
 
     public boolean hasHiddenArchive() {
-        return !onlySelect && initialDialogsType == DIALOGS_TYPE_DEFAULT && folderId == 0 && getMessagesController().hasHiddenArchive();
+        if (onlySelect || initialDialogsType != DIALOGS_TYPE_DEFAULT || folderId != 0 || !getMessagesController().hasHiddenArchive()) {
+            return false;
+        }
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        if (!ssc.isActive() || ssc.isRealActive()) {
+            return true;
+        }
+        ArrayList<TLRPC.Dialog> archiveDialogs = getMessagesController().getDialogs(1);
+        for (int i = 0, n = archiveDialogs.size(); i < n; i++) {
+            TLRPC.Dialog d = archiveDialogs.get(i);
+            if (d != null && (!ssc.isHiddenFromCurrentView(d.id) || ssc.hasExposedMessages(d.id) || ssc.hasPendingOffModeWork(d.id))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean waitingForDialogsAnimationEnd(ViewPage viewPage) {
@@ -9021,6 +9035,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 }
             }
             hideActionMode(false);
+            updateVisibleRows(0);
             return;
         } else if (action == archive || action == archive2) {
             ArrayList<Long> copy = new ArrayList<>(selectedDialogs);
