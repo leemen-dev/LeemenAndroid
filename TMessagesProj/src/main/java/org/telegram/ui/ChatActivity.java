@@ -13632,13 +13632,6 @@ public class ChatActivity extends BaseFragment implements
         if (chatLayoutManager == null || paused || chatAdapter.isFrozen || waitingForGetDifference) {
             return;
         }
-        // Hidden chat in off / fake-cross view: don't fetch more history. The initial
-        // load (firstLoadMessages, anchored to last exposed) already brought the
-        // visible-from-outside context in. We intentionally do NOT set endReached here —
-        // that would confuse adapter/layout state and cause ghost rows or crashes.
-        if (isSecondSpaceContentSuppressed()) {
-            return;
-        }
         int firstVisibleItem = RecyclerListView.NO_POSITION;
         int lastVisibleItem = RecyclerListView.NO_POSITION;
         int visibleItemCount = 0;
@@ -20157,6 +20150,8 @@ public class ChatActivity extends BaseFragment implements
     private final ArrayList<MessageObject> privateSpacePendingMessages = new ArrayList<>();
     private int privateSpacePendingMaxId = 0;
     private boolean privateSpaceDecisionShown = false;
+    private int ssPreFilterMinMsgId = Integer.MAX_VALUE;
+    private boolean ssPreFilterDbEnd = false;
 
     // After the user clicks "Manage" in the decision popup we drop into Telegram's
     // existing multi-select mode with these IDs pre-selected. The set sticks around
@@ -20208,13 +20203,24 @@ public class ChatActivity extends BaseFragment implements
         }
         // Strip reply previews that reference hidden (non-exposed, non-pending) messages
         // so the reply header doesn't leak hidden content in OFF mode.
+        // We must also clear reply_to data; otherwise loadReplyMessagesForMessages
+        // will re-populate replyMessageObject from DB, and inline quote_text would
+        // still render in ChatMessageCell. The MessageObjects are recreated from the
+        // raw TLRPC.Message on every chat load, so this in-memory mutation is safe.
         for (int i = 0; i < filtered.size(); i++) {
             MessageObject mo = filtered.get(i);
-            if (mo.replyMessageObject != null) {
-                int replyId = mo.replyMessageObject.getId();
-                if (!ssc.isMessageExposed(dialog_id, replyId) && !ssc.isMessagePending(dialog_id, replyId)) {
-                    mo.replyMessageObject = null;
-                }
+            if (mo.messageOwner == null || mo.messageOwner.reply_to == null) continue;
+            int replyId = mo.messageOwner.reply_to.reply_to_msg_id;
+            if (replyId == 0) continue;
+            if (!ssc.isMessageExposed(dialog_id, replyId) && !ssc.isMessagePending(dialog_id, replyId)) {
+                mo.replyMessageObject = null;
+                mo.messageOwner.reply_to.reply_to_msg_id = 0;
+                mo.messageOwner.reply_to.reply_to_random_id = 0;
+                mo.messageOwner.reply_to.quote_text = null;
+                mo.messageOwner.reply_to.quote_entities = null;
+                mo.messageOwner.reply_to.reply_from = null;
+                mo.messageOwner.reply_to.reply_media = null;
+                mo.messageOwner.flags &= ~TLRPC.MESSAGE_FLAG_REPLY;
             }
         }
         // Put the latest exposed/pending MessageObject into Telegram's own global
@@ -20490,11 +20496,21 @@ public class ChatActivity extends BaseFragment implements
             }
             if (isSecondSpaceContentSuppressed()) {
                 // OFF mode + hidden chat: filter messages to exposed-only, no decision dialog.
+                @SuppressWarnings("unchecked")
+                ArrayList<MessageObject> original = (ArrayList<MessageObject>) args[2];
+                int requestedCount = (Integer) args[1];
+                ssPreFilterMinMsgId = Integer.MAX_VALUE;
+                for (int i = 0; i < original.size(); i++) {
+                    int mid = original.get(i).getId();
+                    if (mid > 0 && mid < ssPreFilterMinMsgId) {
+                        ssPreFilterMinMsgId = mid;
+                    }
+                }
+                ssPreFilterDbEnd = original.size() < requestedCount;
                 privateSpacePendingMessageIds.clear();
                 privateSpacePendingMessages.clear();
                 privateSpacePendingMaxId = 0;
-                @SuppressWarnings("unchecked")
-                ArrayList<MessageObject> filtered = filterToExposedSecondSpace((ArrayList<MessageObject>) args[2]);
+                ArrayList<MessageObject> filtered = filterToExposedSecondSpace(original);
                 args[2] = filtered;
                 args[1] = filtered.size();
                 args[4] = 0;
@@ -21370,8 +21386,15 @@ public class ChatActivity extends BaseFragment implements
                 createUnreadMessageAfterId = 0;
             }
 
+            if (ssPreFilterMinMsgId != Integer.MAX_VALUE) {
+                maxMessageId[loadIndex] = Math.min(maxMessageId[loadIndex], ssPreFilterMinMsgId);
+            }
+            boolean ssBatchEnd = ssPreFilterDbEnd;
+            ssPreFilterMinMsgId = Integer.MAX_VALUE;
+            ssPreFilterDbEnd = false;
+
             if (load_type == 1) {
-                if (!chatWasReset && messArr.size() != count && (!isCache || currentEncryptedChat != null || forwardEndReached[loadIndex])) {
+                if (!chatWasReset && (messArr.size() != count || ssBatchEnd) && (!isCache || currentEncryptedChat != null || forwardEndReached[loadIndex])) {
                     forwardEndReached[loadIndex] = true;
                     if (loadIndex != 1) {
                         first_unread_id = 0;
@@ -21412,7 +21435,7 @@ public class ChatActivity extends BaseFragment implements
                 }
                 loadingForward = false;
             } else {
-                if (messArr.size() < count && load_type != 3 && load_type != 4) {
+                if ((messArr.size() < count || ssBatchEnd) && load_type != 3 && load_type != 4) {
                     if (isCache) {
                         if (currentEncryptedChat != null || loadIndex == 1 && mergeDialogId != 0 && isEnd) {
                             endReached[loadIndex] = true;
