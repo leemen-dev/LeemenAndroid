@@ -34,6 +34,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private static final String PREF_HIDDEN_ACCOUNTS = "second_space_hidden_accounts";
     private static final String PREF_EYE_HINT_SHOWN = "second_space_eye_hint_shown";
     private static final String PREF_TOOLBAR_HINT_SHOWN = "second_space_toolbar_hint_shown";
+    private static final String PREF_SELF_PINNED = "second_space_self_pinned";
 
     public static final int MODE_OFF = 0;
     public static final int MODE_REAL = 1;
@@ -74,6 +75,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
     /** Private-space chat membership. */
     private final Set<Long> dialogIds = new HashSet<>();
     private final Map<Long, Set<Integer>> exposedMessages = new HashMap<>();
+    private final Map<Long, Set<Integer>> selfPinnedMessages = new HashMap<>();
     private final Map<Long, Integer> lastDecidedMessageId = new HashMap<>();
     /** Per-chat set of message ids the user sent while in OFF mode, still awaiting a decision.
      *  Off-mode-only sends go here directly so they can never be confused with normal active-
@@ -105,6 +107,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
         loadExposed(prefs.getString(PREF_EXPOSED, ""));
         loadLastDecided(prefs.getString(PREF_LAST_DECIDED, ""));
         loadPendingMessages(prefs.getString(PREF_PENDING_MESSAGES, ""));
+        loadSelfPinned(prefs.getString(PREF_SELF_PINNED, ""));
         String searchCsv = prefs.getString(PREF_PRIVATE_SEARCHES, "");
         if (!TextUtils.isEmpty(searchCsv)) {
             for (String s : searchCsv.split(",")) {
@@ -495,10 +498,12 @@ public class SecondSpaceController extends BaseController implements Notificatio
             exposedMessages.remove(dialogId);
             lastDecidedMessageId.remove(dialogId);
             pendingMessages.remove(dialogId);
+            selfPinnedMessages.remove(dialogId);
             persistDialogIds();
             persistExposed();
             persistLastDecided();
             persistPendingMessages();
+            persistSelfPinned();
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
     }
@@ -516,10 +521,12 @@ public class SecondSpaceController extends BaseController implements Notificatio
             exposedMessages.remove(dialogId);
             lastDecidedMessageId.remove(dialogId);
             pendingMessages.remove(dialogId);
+            selfPinnedMessages.remove(dialogId);
             persistDialogIds();
             persistExposed();
             persistLastDecided();
             persistPendingMessages();
+            persistSelfPinned();
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
     }
@@ -676,6 +683,11 @@ public class SecondSpaceController extends BaseController implements Notificatio
     public boolean hasExposedMessages(long dialogId) {
         Set<Integer> set = exposedMessages.get(dialogId);
         return set != null && !set.isEmpty();
+    }
+
+    public Set<Integer> getExposedMessageIds(long dialogId) {
+        Set<Integer> set = exposedMessages.get(dialogId);
+        return set == null ? Collections.emptySet() : Collections.unmodifiableSet(set);
     }
 
     /** Highest message id currently marked exposed for {@code dialogId}, or 0 when none.
@@ -960,6 +972,71 @@ public class SecondSpaceController extends BaseController implements Notificatio
             getMessagesController().getMainSettings().edit().putString(PREF_PENDING_MESSAGES, obj.toString()).apply();
         } catch (Exception ignored) {
         }
+    }
+
+    // --- Self-pinned messages tracking ---
+
+    private void loadSelfPinned(String json) {
+        if (TextUtils.isEmpty(json)) return;
+        try {
+            JSONObject obj = new JSONObject(json);
+            Iterator<String> keys = obj.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                long dialogId = Long.parseLong(key);
+                JSONArray arr = obj.getJSONArray(key);
+                Set<Integer> set = new HashSet<>(arr.length());
+                for (int i = 0; i < arr.length(); i++) {
+                    set.add(arr.getInt(i));
+                }
+                if (!set.isEmpty()) {
+                    selfPinnedMessages.put(dialogId, set);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void persistSelfPinned() {
+        try {
+            JSONObject obj = new JSONObject();
+            for (Map.Entry<Long, Set<Integer>> e : selfPinnedMessages.entrySet()) {
+                JSONArray arr = new JSONArray();
+                for (Integer id : e.getValue()) {
+                    arr.put(id);
+                }
+                obj.put(String.valueOf(e.getKey()), arr);
+            }
+            getMessagesController().getMainSettings().edit().putString(PREF_SELF_PINNED, obj.toString()).apply();
+        } catch (Exception ignored) {
+        }
+    }
+
+    public void addSelfPinnedMessage(long dialogId, int messageId) {
+        if (!dialogIds.contains(dialogId)) return;
+        Set<Integer> set = selfPinnedMessages.get(dialogId);
+        if (set == null) {
+            set = new HashSet<>();
+            selfPinnedMessages.put(dialogId, set);
+        }
+        if (set.add(messageId)) {
+            persistSelfPinned();
+        }
+    }
+
+    public void removeSelfPinnedMessage(long dialogId, int messageId) {
+        Set<Integer> set = selfPinnedMessages.get(dialogId);
+        if (set != null && set.remove(messageId)) {
+            if (set.isEmpty()) {
+                selfPinnedMessages.remove(dialogId);
+            }
+            persistSelfPinned();
+        }
+    }
+
+    public boolean isSelfPinnedMessage(long dialogId, int messageId) {
+        Set<Integer> set = selfPinnedMessages.get(dialogId);
+        return set != null && set.contains(messageId);
     }
 
     // --- Decision marker (banner trigger) ---

@@ -9621,6 +9621,159 @@ public class MessagesStorage extends BaseController {
         });
     }
 
+    public void getExposedMessagesById(long dialogId, int[] messageIds, int classGuid, int loadIndex) {
+        storageQueue.postRunnable(() -> {
+            TLRPC.TL_messages_messages res = new TLRPC.TL_messages_messages();
+            long currentUserId = getUserConfig().clientUserId;
+            SQLiteCursor cursor = null;
+            try {
+                ArrayList<Long> usersToLoad = new ArrayList<>();
+                ArrayList<Long> chatsToLoad = new ArrayList<>();
+                ArrayList<Long> animatedEmojiToLoad = new ArrayList<>();
+                LongSparseArray<SparseArray<ArrayList<TLRPC.Message>>> replyMessageOwners = new LongSparseArray<>();
+                LongSparseArray<ArrayList<Integer>> dialogReplyMessagesIds = new LongSparseArray<>();
+
+                StringBuilder idsBuilder = new StringBuilder();
+                for (int i = 0; i < messageIds.length; i++) {
+                    if (i > 0) idsBuilder.append(',');
+                    idsBuilder.append(messageIds[i]);
+                }
+
+                String messageSelect = "SELECT m.read_state, m.data, m.send_state, m.mid, m.date, r.random_id, m.replydata, m.media, m.ttl, m.mention, m.imp, m.forwards, m.replies_data, m.custom_params, m.reply_to_story_id FROM messages_v2 as m LEFT JOIN randoms_v2 as r ON r.mid = m.mid AND r.uid = m.uid";
+                cursor = database.queryFinalized(messageSelect + " WHERE m.uid = " + dialogId + " AND m.mid IN (" + idsBuilder + ")");
+
+                while (cursor.next()) {
+                    NativeByteBuffer data = cursor.byteBufferValue(1);
+                    if (data != null) {
+                        TLRPC.Message message = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
+                        message.send_state = cursor.intValue(2);
+                        long fullMid = cursor.longValue(3);
+                        message.id = (int) fullMid;
+                        if (message.id > 0 && message.send_state != 0 && message.send_state != 3) {
+                            message.send_state = 0;
+                        }
+                        if (dialogId == currentUserId) {
+                            message.out = true;
+                        }
+                        message.readAttachPath(data, currentUserId);
+                        data.reuse();
+                        MessageObject.setUnreadFlags(message, cursor.intValue(0));
+                        message.date = cursor.intValue(4);
+                        message.dialog_id = dialogId;
+                        if ((message.flags & TLRPC.MESSAGE_FLAG_HAS_VIEWS) != 0) {
+                            message.views = cursor.intValue(7);
+                            message.forwards = cursor.intValue(11);
+                        }
+                        NativeByteBuffer repliesData = cursor.byteBufferValue(12);
+                        if (repliesData != null) {
+                            TLRPC.MessageReplies replies = TLRPC.MessageReplies.TLdeserialize(repliesData, repliesData.readInt32(false), false);
+                            if (replies != null) {
+                                message.replies = replies;
+                            }
+                            repliesData.reuse();
+                        }
+                        if (!DialogObject.isEncryptedDialog(dialogId) && message.ttl == 0) {
+                            message.ttl = cursor.intValue(8);
+                        }
+                        if (cursor.intValue(9) != 0) {
+                            message.mentioned = true;
+                        }
+                        int flags = cursor.intValue(10);
+                        if ((flags & 1) != 0) {
+                            message.stickerVerified = 0;
+                        } else if ((flags & 2) != 0) {
+                            message.stickerVerified = 2;
+                        }
+                        NativeByteBuffer customParams = cursor.byteBufferValue(13);
+                        if (customParams != null) {
+                            MessageCustomParamsHelper.readLocalParams(message, customParams);
+                            customParams.reuse();
+                        }
+                        res.messages.add(message);
+
+                        addUsersAndChatsFromMessage(message, usersToLoad, chatsToLoad, animatedEmojiToLoad);
+
+                        if (message.reply_to != null) {
+                            if (message.reply_to.reply_to_msg_id != 0 || message.reply_to.reply_to_random_id != 0) {
+                                if (!cursor.isNull(6)) {
+                                    data = cursor.byteBufferValue(6);
+                                    if (data != null) {
+                                        message.replyMessage = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
+                                        message.replyMessage.readAttachPath(data, currentUserId);
+                                        data.reuse();
+                                        if (message.replyMessage != null) {
+                                            addUsersAndChatsFromMessage(message.replyMessage, usersToLoad, chatsToLoad, animatedEmojiToLoad);
+                                        }
+                                    }
+                                }
+                            } else if (message.reply_to.story_id != 0) {
+                                if (!cursor.isNull(6)) {
+                                    data = cursor.byteBufferValue(6);
+                                    if (data != null) {
+                                        message.replyStory = TL_stories.StoryItem.TLdeserialize(data, data.readInt32(false), false);
+                                        if (message.replyStory != null && message.replyStory.fwd_from != null) {
+                                            addLoadPeerInfo(message.replyStory.fwd_from.from, usersToLoad, chatsToLoad);
+                                        }
+                                        data.reuse();
+                                    }
+                                }
+                            }
+                            if (message.replyMessage == null && message.reply_to.reply_to_msg_id != 0) {
+                                addReplyMessages(message, replyMessageOwners, dialogReplyMessagesIds);
+                            }
+                        }
+                    }
+                }
+                cursor.dispose();
+                cursor = null;
+
+                Collections.sort(res.messages, (lhs, rhs) -> {
+                    if (lhs.id > 0 && rhs.id > 0) {
+                        if (lhs.id > rhs.id) return -1;
+                        else if (lhs.id < rhs.id) return 1;
+                    } else if (lhs.id < 0 && rhs.id < 0) {
+                        if (lhs.id < rhs.id) return -1;
+                        else if (lhs.id > rhs.id) return 1;
+                    } else {
+                        if (lhs.date > rhs.date) return -1;
+                        else if (lhs.date < rhs.date) return 1;
+                    }
+                    return 0;
+                });
+
+                loadReplyMessages(replyMessageOwners, dialogReplyMessagesIds, usersToLoad, chatsToLoad, 0);
+                if (!usersToLoad.isEmpty()) {
+                    getUsersInternal(usersToLoad, res.users);
+                }
+                if (!chatsToLoad.isEmpty()) {
+                    getChatsInternal(TextUtils.join(",", chatsToLoad), res.chats);
+                }
+                if (!animatedEmojiToLoad.isEmpty()) {
+                    res.animatedEmoji = new ArrayList<>();
+                    getAnimatedEmoji(TextUtils.join(",", animatedEmojiToLoad), res.animatedEmoji);
+                }
+            } catch (Exception e) {
+                res.messages.clear();
+                res.chats.clear();
+                res.users.clear();
+                res.animatedEmoji = null;
+                checkSQLException(e);
+            } finally {
+                if (cursor != null) {
+                    cursor.dispose();
+                }
+            }
+
+            int count = messageIds.length;
+            Utilities.stageQueue.postRunnable(() -> getMessagesController().processLoadedMessages(
+                res, res.messages.size(), dialogId, 0, count, 0, 0,
+                true, classGuid, 0, 0, 0, 0,
+                MessagesController.LOAD_FROM_UNREAD, true, 0, 0, loadIndex,
+                false, 0, true, false, null
+            ));
+        });
+    }
+
     public void clearSentMedia() {
         storageQueue.postRunnable(() -> {
             try {

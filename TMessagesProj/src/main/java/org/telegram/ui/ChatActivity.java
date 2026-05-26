@@ -3224,6 +3224,24 @@ public class ChatActivity extends BaseFragment implements
             } else {
                 if (historyPreloaded) {
                     lastLoadIndex++;
+                } else if (isSecondSpaceContentSuppressed()) {
+                    SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                    java.util.Set<Integer> exposedIds = ssc.getExposedMessageIds(dialog_id);
+                    java.util.Set<Integer> pendingIds = ssc.getPendingMessages(dialog_id);
+                    java.util.HashSet<Integer> allIds = new java.util.HashSet<>();
+                    allIds.addAll(exposedIds);
+                    allIds.addAll(pendingIds);
+                    if (!allIds.isEmpty()) {
+                        ssLoadedByExposedIds = true;
+                        int[] idsArray = new int[allIds.size()];
+                        int idx = 0;
+                        for (Integer id : allIds) {
+                            idsArray[idx++] = id;
+                        }
+                        getMessagesController().loadExposedMessages(dialog_id, idsArray, classGuid, lastLoadIndex++);
+                    } else {
+                        getMessagesController().loadMessages(dialog_id, mergeDialogId, loadInfo, initialMessagesSize, startLoadFromMessageId, 0, true, 0, classGuid, 2, 0, chatMode, threadMessageId, replyMaxReadId, lastLoadIndex++, isTopic);
+                    }
                 } else {
                     getMessagesController().loadMessages(dialog_id, mergeDialogId, loadInfo, initialMessagesSize, startLoadFromMessageId, 0, true, 0, classGuid, 2, 0, chatMode, threadMessageId, replyMaxReadId, lastLoadIndex++, isTopic);
                 }
@@ -10535,9 +10553,10 @@ public class ChatActivity extends BaseFragment implements
             scrollToMessageId(returnToMessageId, 0, true, returnToLoadIndex, true, 0, null, inCaseLoading);
         } else {
             scrollToLastMessage(true, true, inCaseLoading);
-            if (!pinnedMessageIds.isEmpty()) {
+            ArrayList<Integer> effPinnedIds = getEffectivePinnedIds();
+            if (!effPinnedIds.isEmpty()) {
                 forceScrollToFirst = true;
-                forceNextPinnedMessageId = pinnedMessageIds.get(0);
+                forceNextPinnedMessageId = effPinnedIds.get(0);
             }
         }
     }
@@ -11312,9 +11331,10 @@ public class ChatActivity extends BaseFragment implements
                 int currentPinned = currentPinnedMessageId;
 
                 int forceNextPinnedMessageId = 0;
-                if (!pinnedMessageIds.isEmpty()) {
-                    if (currentPinned == pinnedMessageIds.get(pinnedMessageIds.size() - 1)) {
-                        forceNextPinnedMessageId = pinnedMessageIds.get(0) + 1;
+                ArrayList<Integer> effectiveIds = getEffectivePinnedIds();
+                if (!effectiveIds.isEmpty()) {
+                    if (currentPinned == effectiveIds.get(effectiveIds.size() - 1)) {
+                        forceNextPinnedMessageId = effectiveIds.get(0) + 1;
                         forceScrollToFirst = true;
                     } else {
                         forceNextPinnedMessageId = currentPinned - 1;
@@ -11537,7 +11557,8 @@ public class ChatActivity extends BaseFragment implements
     }
 
     private void openPinnedMessagesList(boolean preview) {
-        if (getParentActivity() == null || parentLayout == null || parentLayout.getLastFragment() != this || pinnedMessageIds.isEmpty()) {
+        ArrayList<Integer> effectiveIds = getEffectivePinnedIds();
+        if (getParentActivity() == null || parentLayout == null || parentLayout.getLastFragment() != this || effectiveIds.isEmpty()) {
             return;
         }
         Bundle bundle = new Bundle();
@@ -11548,10 +11569,10 @@ public class ChatActivity extends BaseFragment implements
         }
         bundle.putInt("chatMode", MODE_PINNED);
         ChatActivity fragment = new ChatActivity(bundle);
-        fragment.pinnedMessageIds = new ArrayList<>(pinnedMessageIds);
-        fragment.pinnedMessageObjects = new HashMap<>(pinnedMessageObjects);
-        for (int a = 0, N = pinnedMessageIds.size(); a < N; a++) {
-            Integer id = pinnedMessageIds.get(a);
+        fragment.pinnedMessageIds = new ArrayList<>(effectiveIds);
+        fragment.pinnedMessageObjects = new HashMap<>();
+        for (int a = 0, N = effectiveIds.size(); a < N; a++) {
+            Integer id = effectiveIds.get(a);
             MessageObject object = pinnedMessageObjects.get(id);
             MessageObject object2 = messagesDict[0].get(id);
             if (object == null) {
@@ -11565,8 +11586,8 @@ public class ChatActivity extends BaseFragment implements
                 fragment.updatePinnedTopicStarterMessage();
             }
         }
-        fragment.loadedPinnedMessagesCount = loadedPinnedMessagesCount;
-        fragment.totalPinnedMessagesCount = isTopic ? pinnedMessageIds.size() : totalPinnedMessagesCount;
+        fragment.loadedPinnedMessagesCount = effectiveIds.size();
+        fragment.totalPinnedMessagesCount = isTopic ? effectiveIds.size() : effectiveIds.size();
         fragment.pinnedEndReached = pinnedEndReached;
         fragment.userInfo = userInfo;
         fragment.chatInfo = chatInfo;
@@ -16051,7 +16072,8 @@ public class ChatActivity extends BaseFragment implements
                     }
                 }
             }
-            currentPinnedMessageId = findClosest(pinnedMessageIds, forceNextPinnedMessageId != 0 ? forceNextPinnedMessageId : maxVisibleId, currentPinnedMessageIndex);
+            ArrayList<Integer> effectiveIds = getEffectivePinnedIds();
+            currentPinnedMessageId = findClosest(effectiveIds, forceNextPinnedMessageId != 0 ? forceNextPinnedMessageId : maxVisibleId, currentPinnedMessageIndex);
             if (!inMenuMode && !loadingPinnedMessagesList && !pinnedEndReached && (isTopic || (!pinnedMessageIds.isEmpty() && currentPinnedMessageIndex[0] > pinnedMessageIds.size() - 2))) {
                 getMediaDataController().loadPinnedMessages(dialog_id, maxPinnedMessageId, 0);
                 loadingPinnedMessagesList = true;
@@ -20148,12 +20170,29 @@ public class ChatActivity extends BaseFragment implements
         return SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(dialog_id);
     }
 
+    private ArrayList<Integer> getEffectivePinnedIds() {
+        if (!isSecondSpaceContentSuppressed()) {
+            return pinnedMessageIds;
+        }
+        SecondSpaceController ctrl = SecondSpaceController.getInstance(currentAccount);
+        ArrayList<Integer> result = new ArrayList<>();
+        for (int id : pinnedMessageIds) {
+            if (ctrl.isSelfPinnedMessage(dialog_id, id)
+                    || ctrl.isMessageExposed(dialog_id, id)
+                    || ctrl.isMessagePending(dialog_id, id)) {
+                result.add(id);
+            }
+        }
+        return result;
+    }
+
     private final ArrayList<Integer> privateSpacePendingMessageIds = new ArrayList<>();
     private final ArrayList<MessageObject> privateSpacePendingMessages = new ArrayList<>();
     private int privateSpacePendingMaxId = 0;
     private boolean privateSpaceDecisionShown = false;
     private int ssPreFilterMinMsgId = Integer.MAX_VALUE;
     private boolean ssPreFilterDbEnd = false;
+    private boolean ssLoadedByExposedIds = false;
 
     // After the user clicks "Manage" in the decision popup we drop into Telegram's
     // existing multi-select mode with these IDs pre-selected. The set sticks around
@@ -20169,11 +20208,10 @@ public class ChatActivity extends BaseFragment implements
         for (int i = 0; i < messages.size(); i++) {
             MessageObject mo = messages.get(i);
             if (mo == null) continue;
-            // Suppress pin-action service messages ("X pinned a message", "X pinned the
-            // message") regardless of whether their id is marked exposed — the inline
-            // service line would leak the existence of a pin event (and frequently
-            // references the pinned message text, which itself may be hidden).
-            if (mo.messageOwner != null && mo.messageOwner.action instanceof TLRPC.TL_messageActionPinMessage) {
+            // Suppress pin-action service messages from the other user — their pin
+            // must have no visible effect in OFF mode.  Our own pin service messages
+            // are allowed through so the user sees "You pinned a message".
+            if (mo.messageOwner != null && mo.messageOwner.action instanceof TLRPC.TL_messageActionPinMessage && !mo.isOut()) {
                 continue;
             }
             int id = mo.getId();
@@ -21802,8 +21840,15 @@ public class ChatActivity extends BaseFragment implements
                 }
             }
             if (isSecondSpaceContentSuppressed()) {
-                endReached[0] = false;
-                cacheEndReached[0] = false;
+                if (ssLoadedByExposedIds) {
+                    endReached[0] = true;
+                    cacheEndReached[0] = true;
+                    forwardEndReached[0] = true;
+                    ssLoadedByExposedIds = false;
+                } else {
+                    endReached[0] = false;
+                    cacheEndReached[0] = false;
+                }
                 loading = false;
             }
         } else if (id == NotificationCenter.invalidateMotionBackground) {
@@ -28000,7 +28045,7 @@ public class ChatActivity extends BaseFragment implements
         if (!fragmentOpened) {
             animated = false;
         }
-        boolean show = pinnedMessageIds.size() > 1 && !pinnedMessageButtonShown;
+        boolean show = getEffectivePinnedIds().size() > 1 && !pinnedMessageButtonShown;
         boolean visible = pinnedListButton.getTag() != null;
         boolean progressIsVisible = pinnedProgress.getTag() != null;
         boolean closeIsVisible = closePinned.getTag() != null;
@@ -28076,8 +28121,10 @@ public class ChatActivity extends BaseFragment implements
             if (isThreadChat() && !isTopic) {
                 pinnedLineView.set(0, 1, false);
             } else {
-                int position = Collections.binarySearch(pinnedMessageIds, currentPinnedMessageId, Comparator.reverseOrder());
-                pinnedLineView.set(pinnedMessageIds.size() - 1 - position, pinnedMessageIds.size(), animated);
+                ArrayList<Integer> effIds = getEffectivePinnedIds();
+                int position = effIds.isEmpty() ? 0 : Collections.binarySearch(effIds, currentPinnedMessageId, Comparator.reverseOrder());
+                if (position < 0) position = 0;
+                pinnedLineView.set(Math.max(0, effIds.size() - 1 - position), Math.max(1, effIds.size()), animated);
             }
         }
     }
@@ -28128,12 +28175,6 @@ public class ChatActivity extends BaseFragment implements
             }
             pinned_msg_id = currentPinnedMessageId;
         } else {
-            pinnedMessageObject = null;
-            pinned_msg_id = 0;
-        }
-        if (pinnedMessageObject != null && isSecondSpaceContentSuppressed()
-                && !SecondSpaceController.getInstance(currentAccount).isMessageExposed(dialog_id, pinnedMessageObject.getId())
-                && !SecondSpaceController.getInstance(currentAccount).isMessagePending(dialog_id, pinnedMessageObject.getId())) {
             pinnedMessageObject = null;
             pinned_msg_id = 0;
         }
@@ -28302,7 +28343,8 @@ public class ChatActivity extends BaseFragment implements
                 pinnedMessageTextView[1].setLayoutParams(layoutParams5);
 
                 boolean showCounter = false;
-                boolean shouldAnimateName = loadedPinnedMessagesCount == 2 || !pinnedNameTextView[animateToNext != 0 ? 0 : 1].getTrackWidth();
+                int effectivePinnedCount = getEffectivePinnedIds().size();
+                boolean shouldAnimateName = effectivePinnedCount == 2 || !pinnedNameTextView[animateToNext != 0 ? 0 : 1].getTrackWidth();
                 pinnedNameTextView[animateToNext != 0 ? 0 : 1].setTrackWidth(false);
                 nameTextView.setTrackWidth(true);
                 nameTextView.setVisibility(View.VISIBLE);
@@ -28372,14 +28414,13 @@ public class ChatActivity extends BaseFragment implements
                             if (isTopic) {
                                 pinnedCounterTextView.setNumber(Math.max(1, currentPinnedMessageIndex[0]), animated && pinnedCounterTextView.getTag() == null);
                             } else {
-                                int total = getPinnedMessagesCount();
-                                pinnedCounterTextView.setNumber(Math.min(total - 1, Math.max(1, total - currentPinnedMessageIndex[0])), animated && pinnedCounterTextView.getTag() == null);
+                                pinnedCounterTextView.setNumber(Math.min(effectivePinnedCount - 1, Math.max(1, effectivePinnedCount - currentPinnedMessageIndex[0])), animated && pinnedCounterTextView.getTag() == null);
                             }
                             showCounter = true;
                         }
                         showCounter = true;
                     } else {
-                        if (currentPinnedMessageIndex[0] == 0 || loadedPinnedMessagesCount != 2) {
+                        if (currentPinnedMessageIndex[0] == 0 || effectivePinnedCount != 2) {
                             nameTextView.setText(LocaleController.getString(R.string.PinnedMessage), true);
                         } else {
                             nameTextView.setText(LocaleController.getString(R.string.PreviousPinnedMessage), true);
@@ -28388,8 +28429,7 @@ public class ChatActivity extends BaseFragment implements
                             if (isTopic) {
                                 pinnedCounterTextView.setNumber(Math.max(1, currentPinnedMessageIndex[0]), animated && pinnedCounterTextView.getTag() == null);
                             } else {
-                                int total = getPinnedMessagesCount();
-                                pinnedCounterTextView.setNumber(Math.min(total - 1, Math.max(1, total - currentPinnedMessageIndex[0])), animated && pinnedCounterTextView.getTag() == null);
+                                pinnedCounterTextView.setNumber(Math.min(effectivePinnedCount - 1, Math.max(1, effectivePinnedCount - currentPinnedMessageIndex[0])), animated && pinnedCounterTextView.getTag() == null);
                             }
                             showCounter = true;
                         }
@@ -28481,7 +28521,7 @@ public class ChatActivity extends BaseFragment implements
                         animators.add(ObjectAnimator.ofFloat(nameTextView, View.ALPHA, 0.0f, 1.0f));
                         animators.add(ObjectAnimator.ofFloat(pinnedNameTextView[0], View.ALPHA, 1.0f, 0.0f));
                         animators.add(ObjectAnimator.ofFloat(nameTextView, View.TRANSLATION_Y, AndroidUtilities.dp(animateToNext == 2 ? 4 : -4), 0.0f));
-                        if (animateName = forceScrollToFirst && loadedPinnedMessagesCount > 5) {
+                        if (animateName = forceScrollToFirst && effectivePinnedCount > 5) {
                             animators2.add(ObjectAnimator.ofFloat(nameTextView, View.TRANSLATION_Y, AndroidUtilities.dp(4), AndroidUtilities.dp(-2)));
                         } else {
                             animators.add(ObjectAnimator.ofFloat(nameTextView, View.TRANSLATION_Y, AndroidUtilities.dp(animateToNext == 2 ? 4 : -4), 0.0f));
@@ -28507,7 +28547,7 @@ public class ChatActivity extends BaseFragment implements
                         messageTextView.setAlpha(0);
                         animators.add(ObjectAnimator.ofFloat(messageTextView, View.ALPHA, 0.0f, 1.0f));
                         animators.add(ObjectAnimator.ofFloat(pinnedMessageTextView[0], View.ALPHA, 1.0f, 0.0f));
-                        if (animateText = forceScrollToFirst && loadedPinnedMessagesCount > 5) {
+                        if (animateText = forceScrollToFirst && effectivePinnedCount > 5) {
                             animators2.add(ObjectAnimator.ofFloat(messageTextView, View.TRANSLATION_Y, AndroidUtilities.dp(4), AndroidUtilities.dp(-2)));
                         } else {
                             animators.add(ObjectAnimator.ofFloat(messageTextView, View.TRANSLATION_Y, AndroidUtilities.dp(animateToNext == 2 ? 4 : -4), 0.0f));
@@ -28526,7 +28566,7 @@ public class ChatActivity extends BaseFragment implements
                         buttonTextView.setAlpha(0);
                         animators.add(ObjectAnimator.ofFloat(buttonTextView, View.ALPHA, 0.0f, 1.0f));
                         animators.add(ObjectAnimator.ofFloat(pinnedMessageButton[0], View.ALPHA, 1.0f, 0.0f));
-                        if (animateButton = forceScrollToFirst && loadedPinnedMessagesCount > 5) {
+                        if (animateButton = forceScrollToFirst && effectivePinnedCount > 5) {
                             animators2.add(ObjectAnimator.ofFloat(buttonTextView, View.TRANSLATION_Y, AndroidUtilities.dp(4), AndroidUtilities.dp(-2)));
                         } else {
                             animators.add(ObjectAnimator.ofFloat(buttonTextView, View.TRANSLATION_Y, AndroidUtilities.dp(animateToNext == 2 ? 4 : -4), 0.0f));
@@ -28576,7 +28616,7 @@ public class ChatActivity extends BaseFragment implements
                         if (!noImage) {
                             animators.add(ObjectAnimator.ofFloat(pinnedMessageImageView[1], View.ALPHA, 0.0f, 1.0f));
                             animators.add(ObjectAnimator.ofFloat(pinnedMessageImageView[0], View.ALPHA, 1.0f, 0.0f));
-                            if (forceScrollToFirst && loadedPinnedMessagesCount > 5) {
+                            if (forceScrollToFirst && effectivePinnedCount > 5) {
                                 animateImage = pinnedMessageImageView[1];
                                 animators2.add(ObjectAnimator.ofFloat(pinnedMessageImageView[1], View.TRANSLATION_Y, AndroidUtilities.dp(3), AndroidUtilities.dp(-2)));
                             } else {
@@ -28656,7 +28696,7 @@ public class ChatActivity extends BaseFragment implements
                         public void onAnimationEnd(Animator animation) {
                             if (pinnedCounterTextView.getTag() != null) {
                                 pinnedCounterTextView.setVisibility(View.INVISIBLE);
-                                int total = getPinnedMessagesCount();
+                                int total = getEffectivePinnedIds().size();
                                 pinnedCounterTextView.setNumber(Math.min(total - 1, Math.max(1, total - currentPinnedMessageIndex[0])), false);
                             } else {
                                 pinnedCounterTextView.setAlpha(1.0f);
@@ -28774,13 +28814,16 @@ public class ChatActivity extends BaseFragment implements
                 if (isThreadChat() && !isTopic) {
                     pinnedLineView.set(0, 1, false);
                 } else {
-                    int position = Collections.binarySearch(pinnedMessageIds, currentPinnedMessageId, Comparator.reverseOrder());
-                    pinnedLineView.set(pinnedMessageIds.size() - 1 - position, pinnedMessageIds.size(), animated);
+                    ArrayList<Integer> effIds = getEffectivePinnedIds();
+                    int position = effIds.isEmpty() ? 0 : Collections.binarySearch(effIds, currentPinnedMessageId, Comparator.reverseOrder());
+                    if (position < 0) position = 0;
+                    pinnedLineView.set(Math.max(0, effIds.size() - 1 - position), Math.max(1, effIds.size()), animated);
                 }
             } else {
                 if (pinnedCounterTextView != null) {
-                    pinnedCounterTextView.setVisibility(loadedPinnedMessagesCount == 2 || currentPinnedMessageIndex[0] == 0 ? View.INVISIBLE : View.VISIBLE);
-                    pinnedCounterTextView.setAlpha(loadedPinnedMessagesCount == 2 || currentPinnedMessageIndex[0] == 0 ? 0.0f : 1.0f);
+                    int epCount = getEffectivePinnedIds().size();
+                    pinnedCounterTextView.setVisibility(epCount == 2 || currentPinnedMessageIndex[0] == 0 ? View.INVISIBLE : View.VISIBLE);
+                    pinnedCounterTextView.setAlpha(epCount == 2 || currentPinnedMessageIndex[0] == 0 ? 0.0f : 1.0f);
                 }
                 pinnedImageLocation = null;
                 pinnedImageLocationObject = null;

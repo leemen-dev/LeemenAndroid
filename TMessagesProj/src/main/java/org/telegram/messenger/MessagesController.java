@@ -9423,8 +9423,17 @@ public class MessagesController extends BaseController implements NotificationCe
         if (chat == null && user == null) {
             return;
         }
+        long dialogId = chat != null ? -chat.id : user.id;
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        if (ssc.isInSecondSpace(dialogId)) {
+            if (!unpin) {
+                ssc.addSelfPinnedMessage(dialogId, id);
+            } else {
+                ssc.removeSelfPinnedMessage(dialogId, id);
+            }
+        }
         TLRPC.TL_messages_updatePinnedMessage req = new TLRPC.TL_messages_updatePinnedMessage();
-        req.peer = getInputPeer(chat != null ? -chat.id : user.id);
+        req.peer = getInputPeer(dialogId);
         req.id = id;
         req.unpin = unpin;
         req.silent = !notify;
@@ -9433,7 +9442,7 @@ public class MessagesController extends BaseController implements NotificationCe
             if (error == null) {
                 ArrayList<Integer> ids = new ArrayList<>();
                 ids.add(id);
-                getMessagesStorage().updatePinnedMessages(chat != null ? -chat.id : user.id, ids, !unpin, -1, 0, false, null);
+                getMessagesStorage().updatePinnedMessages(dialogId, ids, !unpin, -1, 0, false, null);
                 TLRPC.Updates updates = (TLRPC.Updates) response;
                 processUpdates(updates, false);
             }
@@ -11138,6 +11147,10 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public void loadMessages(long dialogId, long mergeDialogId, boolean loadInfo, int count, int max_id, int offset_date, boolean fromCache, int midDate, int classGuid, int load_type, int last_message_id, int mode, long threadMessageId, int loadIndex, int first_unread, int unread_count, int last_date, boolean queryFromServer, int mentionsCount, boolean isTopic) {
         loadMessagesInternal(dialogId, mergeDialogId, loadInfo, count, max_id, offset_date, fromCache, midDate, classGuid, load_type, last_message_id, mode, threadMessageId, loadIndex, first_unread, unread_count, last_date, queryFromServer, mentionsCount, true, true, isTopic, null, 0L);
+    }
+
+    public void loadExposedMessages(long dialogId, int[] messageIds, int classGuid, int loadIndex) {
+        getMessagesStorage().getExposedMessagesById(dialogId, messageIds, classGuid, loadIndex);
     }
 
     private void loadMessagesInternal(long dialogId, long mergeDialogId, boolean loadInfo, int count, int max_id, int offset_date, boolean fromCache, int minDate, int classGuid, int load_type, int last_message_id, int mode, long threadMessageId, int loadIndex, int first_unread, int unread_count, int last_date, boolean queryFromServer, int mentionsCount, boolean loadDialog, boolean processMessages, boolean isTopic, Timer loaderLogger, long hash) {
