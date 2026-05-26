@@ -10500,6 +10500,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (id == NotificationCenter.secondSpaceModeChanged) {
             updatePrivateSpaceExitVisibility();
             updatePrivateSpaceEmptyView();
+            if (actionBar != null && actionBar.isActionModeShowed()) {
+                updateCounters(false);
+            }
             // Force adapter rebuild: applyPrivateSpaceFilter now returns a different set,
             // but the underlying MessagesController dialogs are unchanged, so the adapter's
             // own isDataSetChanged() returns false and reloadViewPageDialogs would no-op.
