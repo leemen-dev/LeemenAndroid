@@ -1183,4 +1183,12 @@ public class SecondSpaceController extends BaseController implements Notificatio
         SecondSpaceController ssc = getInstance(selected);
         return ssc.activeHiddenAccountsForMode(ssc.activeMode).contains(targetAccountNum);
     }
+
+    public static boolean isAccountHiddenByAny(int accountNum) {
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            if (a == accountNum || !UserConfig.getInstance(a).isClientActivated()) continue;
+            if (getInstance(a).isAccountHidden(accountNum)) return true;
+        }
+        return false;
+    }
 }

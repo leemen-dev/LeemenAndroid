@@ -366,6 +366,8 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
     private FlagSecureReason flagSecureReason;
     private boolean pendingSecureSnapshot;
+    private int preHiddenAccount = -1;
+    private int pendingSafeAccountSwitch = -1;
 
     /** Public hook for SecondSpaceController.setActive — toggles FLAG_SECURE immediately on PS on/off. */
     public void invalidateFlagSecure() {
@@ -1198,10 +1200,19 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         if (account == UserConfig.selectedAccount || !UserConfig.isValidAccount(account)) {
             return;
         }
+        int outgoing = UserConfig.selectedAccount;
+        SecondSpaceController outgoingSsc = SecondSpaceController.getInstance(outgoing);
+        if (outgoingSsc.isAccountHidden(account)) {
+            if (preHiddenAccount < 0) {
+                preHiddenAccount = outgoing;
+            }
+        } else {
+            preHiddenAccount = -1;
+        }
+
         switchingAccount = true;
 
         // Outgoing-account Private Space auto-exit on switch (deniability requirement).
-        int outgoing = UserConfig.selectedAccount;
         SecondSpaceController.getInstance(outgoing).setActive(false);
         // Refresh per-account tray visibility against the NEW selected account's hide-list.
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
@@ -6661,6 +6672,28 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 }
             }
         }
+        int selected = UserConfig.selectedAccount;
+        if (SecondSpaceController.isAccountHiddenByAny(selected)) {
+            if (!anyWasActive) {
+                pendingSecureSnapshot = true;
+                if (flagSecureReason != null) flagSecureReason.invalidate();
+            }
+            int target;
+            if (preHiddenAccount >= 0 && UserConfig.isValidAccount(preHiddenAccount)) {
+                target = preHiddenAccount;
+            } else {
+                target = 0;
+                for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                    if (UserConfig.getInstance(a).isClientActivated()
+                            && !SecondSpaceController.isAccountHiddenByAny(a)) {
+                        target = a;
+                        break;
+                    }
+                }
+            }
+            pendingSafeAccountSwitch = target;
+            preHiddenAccount = -1;
+        }
         pipActivityHandler.onPause();
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.stopAllHeavyOperations, 4096);
         ApplicationLoader.mainInterfacePaused = true;
@@ -6873,6 +6906,13 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         if (pendingSecureSnapshot) {
             pendingSecureSnapshot = false;
             if (flagSecureReason != null) flagSecureReason.invalidate();
+        }
+        if (pendingSafeAccountSwitch >= 0) {
+            int target = pendingSafeAccountSwitch;
+            pendingSafeAccountSwitch = -1;
+            if (target != UserConfig.selectedAccount && UserConfig.isValidAccount(target)) {
+                doSwitchToAccountInternal(target, true, obj -> new MainTabsActivity());
+            }
         }
         pipActivityHandler.onResume();
         if (onResumeStaticCallback != null) {

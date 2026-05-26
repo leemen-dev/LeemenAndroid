@@ -9624,6 +9624,15 @@ public class MessagesStorage extends BaseController {
     public void getExposedMessagesById(long dialogId, int[] messageIds, int classGuid, int loadIndex) {
         storageQueue.postRunnable(() -> {
             TLRPC.TL_messages_messages res = new TLRPC.TL_messages_messages();
+            if (messageIds.length == 0) {
+                Utilities.stageQueue.postRunnable(() -> getMessagesController().processLoadedMessages(
+                    res, 0, dialogId, 0, 0, 0, 0,
+                    true, classGuid, 0, 0, 0, 0,
+                    MessagesController.LOAD_FROM_UNREAD, true, 0, 0, loadIndex,
+                    false, 0, true, false, null
+                ));
+                return;
+            }
             long currentUserId = getUserConfig().clientUserId;
             SQLiteCursor cursor = null;
             try {

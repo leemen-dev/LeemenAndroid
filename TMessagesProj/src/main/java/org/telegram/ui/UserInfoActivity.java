@@ -179,7 +179,8 @@ public class UserInfoActivity extends UniversalFragment implements NotificationC
     private void updateAccounts() {
         accountNumbers.clear();
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            if (UserConfig.getInstance(a).isClientActivated() && currentAccount != a) {
+            if (UserConfig.getInstance(a).isClientActivated() && currentAccount != a
+                    && !org.telegram.messenger.SecondSpaceController.isHiddenFromSelectedAccount(a)) {
                 accountNumbers.add(a);
             }
         }

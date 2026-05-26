@@ -19537,6 +19537,14 @@ public class MessagesController extends BaseController implements NotificationCe
                                 }
                                 continue;
                             }
+                            long callerId = call.participant_id == getUserConfig().getClientUserId() ? call.admin_id : call.participant_id;
+                            if (SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(callerId)
+                                    || SecondSpaceController.isHiddenFromSelectedAccount(currentAccount)) {
+                                if (BuildVars.LOGS_ENABLED) {
+                                    FileLog.d("ignoring call from hidden-space user " + callerId);
+                                }
+                                continue;
+                            }
                             boolean notificationsDisabled = false;
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !NotificationManagerCompat.from(ApplicationLoader.applicationContext).areNotificationsEnabled()) {
                                 notificationsDisabled = true;

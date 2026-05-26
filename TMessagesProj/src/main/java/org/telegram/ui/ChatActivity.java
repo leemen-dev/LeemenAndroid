@@ -3213,6 +3213,26 @@ public class ChatActivity extends BaseFragment implements
                 HashtagSearchController.getInstance(currentAccount).searchHashtag(searchingHashtag, classGuid, searchType, lastLoadIndex++);
             } else if (startLoadFromDate != 0) {
                 getMessagesController().loadMessages(dialog_id, mergeDialogId, false, 30, 0, startLoadFromDate, true, 0, classGuid, 4, 0, chatMode, threadMessageId, replyMaxReadId, lastLoadIndex++, isTopic);
+            } else if (isSecondSpaceContentSuppressed()) {
+                startLoadFromMessageId = 0;
+                startLoadFromMessageIdSaved = 0;
+                SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                java.util.Set<Integer> exposedIds = ssc.getExposedMessageIds(dialog_id);
+                java.util.Set<Integer> pendingIds = ssc.getPendingMessages(dialog_id);
+                java.util.HashSet<Integer> allIds = new java.util.HashSet<>();
+                allIds.addAll(exposedIds);
+                allIds.addAll(pendingIds);
+                ssLoadedByExposedIds = true;
+                if (!allIds.isEmpty()) {
+                    int[] idsArray = new int[allIds.size()];
+                    int idx = 0;
+                    for (Integer id : allIds) {
+                        idsArray[idx++] = id;
+                    }
+                    getMessagesController().loadExposedMessages(dialog_id, idsArray, classGuid, lastLoadIndex++);
+                } else {
+                    getMessagesController().loadExposedMessages(dialog_id, new int[0], classGuid, lastLoadIndex++);
+                }
             } else if (startLoadFromMessageId != 0 && (!isThreadChat() || startLoadFromMessageId == highlightMessageId || isTopic)) {
                 startLoadFromMessageIdSaved = startLoadFromMessageId;
                 if (migrated_to != 0) {
@@ -3224,24 +3244,6 @@ public class ChatActivity extends BaseFragment implements
             } else {
                 if (historyPreloaded) {
                     lastLoadIndex++;
-                } else if (isSecondSpaceContentSuppressed()) {
-                    SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-                    java.util.Set<Integer> exposedIds = ssc.getExposedMessageIds(dialog_id);
-                    java.util.Set<Integer> pendingIds = ssc.getPendingMessages(dialog_id);
-                    java.util.HashSet<Integer> allIds = new java.util.HashSet<>();
-                    allIds.addAll(exposedIds);
-                    allIds.addAll(pendingIds);
-                    if (!allIds.isEmpty()) {
-                        ssLoadedByExposedIds = true;
-                        int[] idsArray = new int[allIds.size()];
-                        int idx = 0;
-                        for (Integer id : allIds) {
-                            idsArray[idx++] = id;
-                        }
-                        getMessagesController().loadExposedMessages(dialog_id, idsArray, classGuid, lastLoadIndex++);
-                    } else {
-                        getMessagesController().loadMessages(dialog_id, mergeDialogId, loadInfo, initialMessagesSize, startLoadFromMessageId, 0, true, 0, classGuid, 2, 0, chatMode, threadMessageId, replyMaxReadId, lastLoadIndex++, isTopic);
-                    }
                 } else {
                     getMessagesController().loadMessages(dialog_id, mergeDialogId, loadInfo, initialMessagesSize, startLoadFromMessageId, 0, true, 0, classGuid, 2, 0, chatMode, threadMessageId, replyMaxReadId, lastLoadIndex++, isTopic);
                 }
@@ -20211,7 +20213,24 @@ public class ChatActivity extends BaseFragment implements
             // Suppress pin-action service messages from the other user — their pin
             // must have no visible effect in OFF mode.  Our own pin service messages
             // are allowed through so the user sees "You pinned a message".
-            if (mo.messageOwner != null && mo.messageOwner.action instanceof TLRPC.TL_messageActionPinMessage && !mo.isOut()) {
+            if (mo.messageOwner != null && mo.messageOwner.action instanceof TLRPC.TL_messageActionPinMessage) {
+                if (!mo.isOut()) {
+                    continue;
+                }
+                int pinnedId = mo.messageOwner.reply_to != null ? mo.messageOwner.reply_to.reply_to_msg_id : 0;
+                if (pinnedId != 0 && (ssc.isMessageExposed(dialog_id, pinnedId) || ssc.isMessagePending(dialog_id, pinnedId))) {
+                    int id = mo.getId();
+                    ssc.markMessagePending(dialog_id, id);
+                    filtered.add(mo);
+                    privateSpacePendingMessageIds.add(id);
+                    privateSpacePendingMessages.add(mo);
+                    if (id > privateSpacePendingMaxId) {
+                        privateSpacePendingMaxId = id;
+                    }
+                    if (latestExposedOrPending == null || id > latestExposedOrPending.getId()) {
+                        latestExposedOrPending = mo;
+                    }
+                }
                 continue;
             }
             int id = mo.getId();
@@ -21845,9 +21864,6 @@ public class ChatActivity extends BaseFragment implements
                     cacheEndReached[0] = true;
                     forwardEndReached[0] = true;
                     ssLoadedByExposedIds = false;
-                } else {
-                    endReached[0] = false;
-                    cacheEndReached[0] = false;
                 }
                 loading = false;
             }
