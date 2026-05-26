@@ -1185,6 +1185,9 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_SUGGESTION_EDIT_TIME = 112;
     public final static int OPTION_SUGGESTION_EDIT_MESSAGE = 113;
     public final static int OPTION_SUGGESTION_ADD_OFFER = 114;
+    public final static int OPTION_PS_TOGGLE_HIDE = 115;
+    public final static int OPTION_PS_EXPOSE_MSG = 116;
+    public final static int OPTION_PS_HIDE_MSG = 117;
 
     private final static int[] allowedNotificationsDuringChatListAnimations = new int[]{
             NotificationCenter.messagesRead,
@@ -33837,6 +33840,40 @@ public class ChatActivity extends BaseFragment implements
                 }, getResourceProvider(), AlertsCreator.SUGGEST_DATE_PICKER_MODE_EDIT).show(), AmountUtils.Amount.of(suggestedPost != null ? suggestedPost.price : null), !ChatObject.canManageMonoForum(currentAccount, getDialogId()));
                 break;
             }
+            case OPTION_PS_TOGGLE_HIDE: {
+                SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                if (ssc.isInSecondSpace(dialog_id)) {
+                    ssc.removeFromSecondSpace(dialog_id);
+                } else {
+                    ssc.addToSecondSpace(dialog_id);
+                }
+                break;
+            }
+            case OPTION_PS_EXPOSE_MSG: {
+                SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                int mid = selectedObject.getId();
+                if (mid > 0 && !ssc.isMessageExposed(dialog_id, mid)) {
+                    ssc.exposeMessage(dialog_id, mid);
+                    ssc.ensureInGlobalCache(selectedObject);
+                    ssc.unmarkMessagePending(dialog_id, mid);
+                    updateVisibleRows();
+                }
+                break;
+            }
+            case OPTION_PS_HIDE_MSG: {
+                SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                int mid = selectedObject.getId();
+                if (mid > 0) {
+                    if (ssc.isMessageExposed(dialog_id, mid)) {
+                        ssc.unexposeMessage(dialog_id, mid);
+                    }
+                    if (ssc.isMessagePending(dialog_id, mid)) {
+                        ssc.unmarkMessagePending(dialog_id, mid);
+                    }
+                    updateVisibleRows();
+                }
+                break;
+            }
         }
         selectedObject = null;
         selectedObjectGroup = null;
@@ -44992,6 +45029,34 @@ public class ChatActivity extends BaseFragment implements
                 options.add(OPTION_GIFT);
                 icons.add(R.drawable.menu_gift);
             }
+            {
+                SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                if (ssc.isActive() && dialog_id != getUserConfig().getClientUserId() && dialog_id != 777000) {
+                    boolean isHidden = ssc.isInSecondSpace(dialog_id);
+                    if (isHidden) {
+                        items.add(LocaleController.getString(R.string.PrivateSpaceUnhide));
+                        options.add(OPTION_PS_TOGGLE_HIDE);
+                        icons.add(R.drawable.filled_views);
+                        if (selectedObject.getId() > 0) {
+                            boolean exposed = ssc.isMessageExposed(dialog_id, selectedObject.getId());
+                            boolean pending = ssc.isMessagePending(dialog_id, selectedObject.getId());
+                            if (exposed || pending) {
+                                items.add(LocaleController.getString(R.string.PrivateSpaceExposureHide));
+                                options.add(OPTION_PS_HIDE_MSG);
+                                icons.add(R.drawable.msg_stories_stealth);
+                            } else {
+                                items.add(LocaleController.getString(R.string.PrivateSpaceExposureActionShort));
+                                options.add(OPTION_PS_EXPOSE_MSG);
+                                icons.add(R.drawable.filled_views);
+                            }
+                        }
+                    } else {
+                        items.add(LocaleController.getString(R.string.PrivateSpaceHide));
+                        options.add(OPTION_PS_TOGGLE_HIDE);
+                        icons.add(R.drawable.msg_stories_stealth);
+                    }
+                }
+            }
             if (message.canDeleteMessage(chatMode == MODE_SCHEDULED, currentChat) && (threadMessageObjects == null || !threadMessageObjects.contains(message)) && !(message != null && message.messageOwner != null && message.messageOwner.action instanceof TLRPC.TL_messageActionTopicCreate)) {
                 items.add(LocaleController.getString(chatMode == MODE_SAVED && threadMessageId != getUserConfig().getClientUserId() ? R.string.Remove : R.string.Delete));
                 options.add(OPTION_DELETE);
@@ -45309,6 +45374,34 @@ public class ChatActivity extends BaseFragment implements
                         icons.add(R.drawable.msg_report);
                     }
                 }
+                {
+                    SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                    if (ssc.isActive() && dialog_id != getUserConfig().getClientUserId() && dialog_id != 777000) {
+                        boolean isHidden = ssc.isInSecondSpace(dialog_id);
+                        if (isHidden) {
+                            items.add(LocaleController.getString(R.string.PrivateSpaceUnhide));
+                            options.add(OPTION_PS_TOGGLE_HIDE);
+                            icons.add(R.drawable.filled_views);
+                            if (selectedObject.getId() > 0) {
+                                boolean exposed = ssc.isMessageExposed(dialog_id, selectedObject.getId());
+                                boolean pending = ssc.isMessagePending(dialog_id, selectedObject.getId());
+                                if (exposed || pending) {
+                                    items.add(LocaleController.getString(R.string.PrivateSpaceExposureHide));
+                                    options.add(OPTION_PS_HIDE_MSG);
+                                    icons.add(R.drawable.msg_stories_stealth);
+                                } else {
+                                    items.add(LocaleController.getString(R.string.PrivateSpaceExposureActionShort));
+                                    options.add(OPTION_PS_EXPOSE_MSG);
+                                    icons.add(R.drawable.filled_views);
+                                }
+                            }
+                        } else {
+                            items.add(LocaleController.getString(R.string.PrivateSpaceHide));
+                            options.add(OPTION_PS_TOGGLE_HIDE);
+                            icons.add(R.drawable.msg_stories_stealth);
+                        }
+                    }
+                }
                 if (message.canDeleteMessage(chatMode == MODE_SCHEDULED, currentChat) && (threadMessageObjects == null || !threadMessageObjects.contains(message))) {
                     items.add(LocaleController.getString(chatMode == MODE_SAVED && threadMessageId != getUserConfig().getClientUserId() ? R.string.Remove : R.string.Delete));
                     options.add(OPTION_DELETE);
@@ -45398,6 +45491,34 @@ public class ChatActivity extends BaseFragment implements
                         items.add(LocaleController.getString(R.string.Call));
                         options.add(OPTION_CALL);
                         icons.add(R.drawable.msg_callback);
+                    }
+                }
+                {
+                    SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                    if (ssc.isActive() && dialog_id != getUserConfig().getClientUserId() && dialog_id != 777000) {
+                        boolean isHidden = ssc.isInSecondSpace(dialog_id);
+                        if (isHidden) {
+                            items.add(LocaleController.getString(R.string.PrivateSpaceUnhide));
+                            options.add(OPTION_PS_TOGGLE_HIDE);
+                            icons.add(R.drawable.filled_views);
+                            if (selectedObject.getId() > 0) {
+                                boolean exposed = ssc.isMessageExposed(dialog_id, selectedObject.getId());
+                                boolean pending = ssc.isMessagePending(dialog_id, selectedObject.getId());
+                                if (exposed || pending) {
+                                    items.add(LocaleController.getString(R.string.PrivateSpaceExposureHide));
+                                    options.add(OPTION_PS_HIDE_MSG);
+                                    icons.add(R.drawable.msg_stories_stealth);
+                                } else {
+                                    items.add(LocaleController.getString(R.string.PrivateSpaceExposureActionShort));
+                                    options.add(OPTION_PS_EXPOSE_MSG);
+                                    icons.add(R.drawable.filled_views);
+                                }
+                            }
+                        } else {
+                            items.add(LocaleController.getString(R.string.PrivateSpaceHide));
+                            options.add(OPTION_PS_TOGGLE_HIDE);
+                            icons.add(R.drawable.msg_stories_stealth);
+                        }
                     }
                 }
                 items.add(LocaleController.getString(chatMode == MODE_SAVED && threadMessageId != getUserConfig().getClientUserId() ? R.string.Remove : R.string.Delete));

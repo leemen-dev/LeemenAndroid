@@ -8664,6 +8664,30 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             previewMenu[0].addView(muteItem);
         }
 
+        {
+            org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+            long selfUserId = getUserConfig().getClientUserId();
+            if (ssc.isActive() && dialogId != selfUserId && dialogId != 777000) {
+                boolean isHidden = ssc.isInSecondSpace(dialogId);
+                ActionBarMenuSubItem psToggleItem = new ActionBarMenuSubItem(getParentActivity(), false, false);
+                if (isHidden) {
+                    psToggleItem.setTextAndIcon(LocaleController.getString(R.string.PrivateSpaceUnhide), R.drawable.filled_views);
+                } else {
+                    psToggleItem.setTextAndIcon(LocaleController.getString(R.string.PrivateSpaceHide), R.drawable.msg_stories_stealth);
+                }
+                psToggleItem.setMinimumWidth(160);
+                psToggleItem.setOnClickListener(e -> {
+                    if (isHidden) {
+                        ssc.removeFromSecondSpace(dialogId);
+                    } else {
+                        ssc.addToSecondSpace(dialogId);
+                    }
+                    finishPreviewFragment();
+                });
+                previewMenu[0].addView(psToggleItem);
+            }
+        }
+
         ActionBarMenuSubItem deleteItem = new ActionBarMenuSubItem(getParentActivity(), false, true);
         deleteItem.setIconColor(getThemedColor(Theme.key_text_RedRegular));
         deleteItem.setTextColor(getThemedColor(Theme.key_text_RedBold));
@@ -9656,10 +9680,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
             {
                 org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
-                if (selectedDialog != selfUserId && selectedDialog != 777000) {
+                if (selectedDialog != selfUserId && selectedDialog != 777000 && ssc.isActive()) {
                     if (ssc.isInSecondSpace(selectedDialog)) {
                         canUnhideCount++;
-                    } else if (ssc.isActive()) {
+                    } else {
                         canHideCount++;
                     }
                 }
