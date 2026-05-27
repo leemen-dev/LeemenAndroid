@@ -22046,16 +22046,6 @@ public class ChatActivity extends BaseFragment implements
             long did = (Long) args[0];
             ArrayList<MessageObject> arr = (ArrayList<MessageObject>) args[1];
             if (isInsideContainer) return;
-            if (did == dialog_id && isSecondSpaceContentSuppressed()) {
-                // OFF mode + hidden chat: keep messages filtered to exposed-only. No decision
-                // dialog mid-stream — the prompt only appears on chat entry in ACTIVE mode.
-                ArrayList<MessageObject> filtered = filterToExposedSecondSpace(arr);
-                if (filtered.isEmpty()) {
-                    return;
-                }
-                arr = filtered;
-                args[1] = filtered;
-            }
             if (did == dialog_id) {
                 boolean scheduled = (Boolean) args[2];
                 int mode = (Integer) args[3];
