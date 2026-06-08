@@ -92,6 +92,7 @@ import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SavedMessagesController;
+import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
@@ -883,6 +884,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             notificationCenter.addObserver(this, NotificationCenter.fileLoaded);
             notificationCenter.addObserver(this, NotificationCenter.storiesListUpdated);
             notificationCenter.addObserver(this, NotificationCenter.savedMessagesDialogsUpdate);
+            notificationCenter.addObserver(this, NotificationCenter.secondSpaceModeChanged);
         }
 
         public void addDelegate(SharedMediaPreloaderDelegate delegate) {
@@ -911,9 +913,25 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             notificationCenter.removeObserver(this, NotificationCenter.fileLoaded);
             notificationCenter.removeObserver(this, NotificationCenter.storiesListUpdated);
             notificationCenter.removeObserver(this, NotificationCenter.savedMessagesDialogsUpdate);
+            notificationCenter.removeObserver(this, NotificationCenter.secondSpaceModeChanged);
+        }
+
+        private boolean isSecondSpaceSuppressed() {
+            return parentFragment != null
+                && SecondSpaceController.getInstance(parentFragment.getCurrentAccount()).isMediaSuppressed(dialogId);
         }
 
         public int[] getLastMediaCount() {
+            if (isSecondSpaceSuppressed()) {
+                // Hidden chat in OFF mode: report only the count of exposed/pending media
+                // actually loaded (already filtered at the source in processLoadedMedia), so
+                // tab existence / badges never leak the true hidden-media totals.
+                int[] suppressed = new int[lastMediaCount.length];
+                for (int a = 0; a < suppressed.length; a++) {
+                    suppressed[a] = a < sharedMediaData.length ? sharedMediaData[a].messages.size() : 0;
+                }
+                return suppressed;
+            }
             return lastMediaCount;
         }
 
@@ -992,6 +1010,11 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                     final int currentAccount = parentFragment != null ? parentFragment.getCurrentAccount() : -1;
                     for (int a = 0; a < arr.size(); a++) {
                         MessageObject obj = arr.get(a);
+                        // Private space: don't let a hidden chat's new (non-exposed) media slip
+                        // into the cached gallery while in OFF mode.
+                        if (currentAccount >= 0 && !SecondSpaceController.getInstance(currentAccount).isMessageVisibleInCurrentView(dialogId, obj)) {
+                            continue;
+                        }
                         if (topicId != 0 && topicId != MessageObject.getTopicId(currentAccount, obj.messageOwner, true)) {
                             continue;
                         }
@@ -1029,6 +1052,36 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                 Integer newMsgId = (Integer) args[1];
                 for (int a = 0; a < sharedMediaData.length; a++) {
                     sharedMediaData[a].replaceMid(msgId, newMsgId);
+                }
+            } else if (id == NotificationCenter.secondSpaceModeChanged) {
+                // Private space toggled (OFF<->REAL). This preloader's cache feeds
+                // getLastMediaCount() (tab existence / badge counts); it was filled under the
+                // previous mode and addMessage is add-only, so without an explicit reset a
+                // now-hidden chat would keep reporting its full media totals. Drop the cache and
+                // re-fetch so the source-level mediaDidLoad filter re-applies for the new mode.
+                if (parentFragment != null
+                        && SecondSpaceController.getInstance(parentFragment.getCurrentAccount()).isInSecondSpace(dialogId)) {
+                    boolean enc = DialogObject.isEncryptedDialog(dialogId);
+                    for (int a = 0; a < sharedMediaData.length; a++) {
+                        sharedMediaData[a].messages.clear();
+                        sharedMediaData[a].messagesDict[0].clear();
+                        sharedMediaData[a].messagesDict[1].clear();
+                        sharedMediaData[a].sections.clear();
+                        sharedMediaData[a].sectionArrays.clear();
+                        sharedMediaData[a].fastScrollPeriods.clear();
+                        sharedMediaData[a].totalCount = 0;
+                        sharedMediaData[a].setMaxId(0, enc ? Integer.MIN_VALUE : Integer.MAX_VALUE);
+                        sharedMediaData[a].setEndReached(0, false);
+                        sharedMediaData[a].startReached = true;
+                    }
+                    java.util.Arrays.fill(mediaCount, -1);
+                    java.util.Arrays.fill(mediaMergeCount, -1);
+                    java.util.Arrays.fill(lastMediaCount, -1);
+                    java.util.Arrays.fill(lastLoadMediaCount, -1);
+                    loadMediaCounts();
+                    for (int a = 0, N = delegates.size(); a < N; a++) {
+                        delegates.get(a).mediaCountUpdated();
+                    }
                 }
             } else if (id == NotificationCenter.mediaDidLoad) {
                 long did = (Long) args[0];
@@ -1640,6 +1693,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         profileActivity.getNotificationCenter().addObserver(this, NotificationCenter.starUserGiftsLoaded);
         profileActivity.getNotificationCenter().addObserver(this, NotificationCenter.updatedChatRanks);
         profileActivity.getNotificationCenter().addObserver(this, NotificationCenter.didUpdatePollResults);
+        profileActivity.getNotificationCenter().addObserver(this, NotificationCenter.secondSpaceModeChanged);
 
         for (int a = 0; a < 10; a++) {
             //cellCache.add(new SharedPhotoVideoCell(context));
@@ -2023,7 +2077,12 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                 addZoomInZoomOutItemOptions(options);
 
                 final boolean hasDifferentTypes = isStories || (sharedMediaData[0].hasPhotos && sharedMediaData[0].hasVideos) || !sharedMediaData[0].endReached[0] || !sharedMediaData[0].endReached[1] || !sharedMediaData[0].startReached;
-                if (!DialogObject.isEncryptedDialog(dialog_id) && !(user != null && user.bot)) {
+                // Private space: a media calendar can't be filtered to exposed-only (the server
+                // returns one sample message + an opaque count per day), so hide the entry point
+                // entirely for a hidden chat in OFF mode. CalendarActivity.onFragmentCreate also
+                // guards the other route (chat date-header tap).
+                final boolean ssMediaSuppressed = SecondSpaceController.getInstance(profileActivity.getCurrentAccount()).isMediaSuppressed(dialog_id);
+                if (!DialogObject.isEncryptedDialog(dialog_id) && !(user != null && user.bot) && !ssMediaSuppressed) {
                     options.add(R.drawable.msg_calendar2, getString(R.string.Calendar), () -> {
                         showMediaCalendar(tab, false);
                         options.dismiss();
@@ -4829,6 +4888,60 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         profileActivity.getMediaDataController().loadMedia(dialog_id, 50, 0, sharedMediaData[selectedType].min_id, type, topicId, 1, profileActivity.getClassGuid(), sharedMediaData[selectedType].requestIndex, null, null);
     }
 
+    /** Private space mode flipped while this profile/media view is open. Drop every cached
+     *  media row at once (so a hidden chat never keeps showing fuller media after the space is
+     *  exited) and reload the visible media tab; the exposed-only filter is re-applied at the
+     *  processLoadedMedia source for the new mode. Only invoked for hidden chats. */
+    private void reloadAfterSecondSpaceModeChange() {
+        boolean enc = DialogObject.isEncryptedDialog(dialog_id);
+        for (int a = 0; a < sharedMediaData.length; a++) {
+            if (sharedMediaData[a] == null) {
+                continue;
+            }
+            sharedMediaData[a].messages.clear();
+            sharedMediaData[a].messagesDict[0].clear();
+            sharedMediaData[a].messagesDict[1].clear();
+            sharedMediaData[a].sections.clear();
+            sharedMediaData[a].sectionArrays.clear();
+            sharedMediaData[a].fastScrollPeriods.clear();
+            sharedMediaData[a].totalCount = 0;
+            sharedMediaData[a].startOffset = 0;
+            sharedMediaData[a].endLoadingStubs = 0;
+            sharedMediaData[a].min_id = 0;
+            sharedMediaData[a].max_id[0] = enc ? Integer.MIN_VALUE : Integer.MAX_VALUE;
+            sharedMediaData[a].endReached[0] = false;
+            // Restore the merged (migrated-from supergroup) pagination to its initial state so
+            // the merge load chain re-runs; otherwise a stale advanced max_id[1] would drop the
+            // already-shown merge media after the flip. Mirrors the constructor init.
+            if (mergeDialogId != 0 && info != null) {
+                sharedMediaData[a].max_id[1] = info.migrated_from_max_id;
+                sharedMediaData[a].endReached[1] = false;
+            } else {
+                sharedMediaData[a].max_id[1] = 0;
+                sharedMediaData[a].endReached[1] = true;
+            }
+            sharedMediaData[a].startReached = true;
+            sharedMediaData[a].loading = false;
+            sharedMediaData[a].loadingAfterFastScroll = false;
+            sharedMediaData[a].requestIndex++;
+        }
+        if (photoVideoAdapter != null) photoVideoAdapter.notifyDataSetChanged();
+        if (documentsAdapter != null) documentsAdapter.notifyDataSetChanged();
+        if (voiceAdapter != null) voiceAdapter.notifyDataSetChanged();
+        if (linksAdapter != null) linksAdapter.notifyDataSetChanged();
+        if (audioAdapter != null) audioAdapter.notifyDataSetChanged();
+        if (gifAdapter != null) gifAdapter.notifyDataSetChanged();
+        for (int i = 0; i < mediaPages.length; i++) {
+            if (mediaPages[i] == null) {
+                continue;
+            }
+            int st = mediaPages[i].selectedType;
+            if (st >= 0 && st <= 5) {
+                loadFromStart(st);
+            }
+        }
+    }
+
     public ActionBarMenuItem getSearchItem() {
         return searchItem;
     }
@@ -4952,6 +5065,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         profileActivity.getNotificationCenter().removeObserver(this, NotificationCenter.starUserGiftsLoaded);
         profileActivity.getNotificationCenter().removeObserver(this, NotificationCenter.updatedChatRanks);
         profileActivity.getNotificationCenter().removeObserver(this, NotificationCenter.didUpdatePollResults);
+        profileActivity.getNotificationCenter().removeObserver(this, NotificationCenter.secondSpaceModeChanged);
         if (searchTagsList != null) {
             searchTagsList.detach();
         }
@@ -5000,6 +5114,14 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
 
     private void loadFastScrollData(boolean force) {
         if (topicId != 0 || isSearchingStories()) {
+            return;
+        }
+        // Private space: fast-scroll positions/count come from an unfiltered server query
+        // (TL_messages_getSearchResultsPositions) that the source-level mediaDidLoad filter never
+        // touches — leaving it on would surface a hidden chat's media dates, distribution and
+        // true total in OFF mode. Skip it so fastScrollPeriods stays empty and the scroller stays
+        // disabled, mirroring the calendar entry-point suppression.
+        if (SecondSpaceController.getInstance(profileActivity.getCurrentAccount()).isMediaSuppressed(dialog_id)) {
             return;
         }
         for (int k = 0; k < supportedFastScrollTypes.length; k++) {
@@ -6284,6 +6406,11 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                 boolean updated = false;
                 for (int a = 0; a < arr.size(); a++) {
                     MessageObject obj = arr.get(a);
+                    // Private space: a hidden chat's new (non-exposed) media must not appear
+                    // in the grid while in OFF mode.
+                    if (!SecondSpaceController.getInstance(profileActivity.getCurrentAccount()).isMessageVisibleInCurrentView(dialog_id, obj)) {
+                        continue;
+                    }
                     if (MessageObject.getMedia(obj.messageOwner) == null || obj.needDrawBluredPreview()) {
                         continue;
                     }
@@ -6421,6 +6548,14 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             }
         } else if (id == NotificationCenter.dialogsNeedReload) {
             savedDialogsAdapter.update(true);
+        } else if (id == NotificationCenter.secondSpaceModeChanged) {
+            // Private space toggled (OFF<->REAL). For a hidden chat the set of visible media
+            // changes, so the grid cached under the previous mode is stale (and could leak
+            // fuller media after exiting the space). Only hidden chats are affected; reset and
+            // reload so the source-level filter re-applies for the new mode.
+            if (SecondSpaceController.getInstance(profileActivity.getCurrentAccount()).isInSecondSpace(dialog_id)) {
+                reloadAfterSecondSpaceModeChange();
+            }
         } else if (id == NotificationCenter.starUserGiftsLoaded) {
             long dialogId = (long) args[0];
             if (dialogId == dialog_id) {
@@ -9238,7 +9373,21 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                     if (reqId != 0) {
                         if (currentReqId == lastReqId) {
                             int oldItemCounts = getItemCount();
-                            globalSearch = messageObjects;
+                            // Private space: drop hidden-chat media results in OFF mode. Done on
+                            // the UI thread so SecondSpaceController state is read race-free.
+                            SecondSpaceController ssc = SecondSpaceController.getInstance(profileActivity.getCurrentAccount());
+                            if (ssc.isMediaSuppressed(did)) {
+                                ArrayList<MessageObject> visible = new ArrayList<>(messageObjects.size());
+                                for (int a = 0; a < messageObjects.size(); a++) {
+                                    MessageObject mo = messageObjects.get(a);
+                                    if (ssc.isMessageVisibleInCurrentView(did, mo)) {
+                                        visible.add(mo);
+                                    }
+                                }
+                                globalSearch = visible;
+                            } else {
+                                globalSearch = messageObjects;
+                            }
                             searchesInProgress--;
                             int count = getItemCount();
                             if (searchesInProgress == 0 || count != 0) {

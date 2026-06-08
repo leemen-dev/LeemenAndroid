@@ -35,6 +35,7 @@ import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.HashtagSearchController;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
+import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
@@ -156,8 +157,20 @@ public class MessagesSearchAdapter extends RecyclerListView.SelectionAdapter imp
         searchResultMessages.clear();
         messageIds.clear();
         ArrayList<MessageObject> searchResults = searchType == 0 ? MediaDataController.getInstance(currentAccount).getFoundMessageObjects() : HashtagSearchController.getInstance(currentAccount).getMessages(searchType);
+        SecondSpaceController secondSpace = SecondSpaceController.getInstance(currentAccount);
         for (int i = 0; i < searchResults.size(); ++i) {
             MessageObject m = searchResults.get(i);
+            // Private space: hide results (incl. their media previews) from a hidden chat in
+            // OFF mode unless exposed/pending. Hashtag search rewrites messageOwner.id to a
+            // synthetic value and keeps the true id in realId, so key the exposure check off
+            // realId (falling back to getId() for the plain message-search path).
+            long did = m.getDialogId();
+            if (secondSpace.isMediaSuppressed(did)) {
+                int realId = m.messageOwner != null && m.messageOwner.realId != 0 ? m.messageOwner.realId : m.getId();
+                if (!secondSpace.isMessageExposed(did, realId) && !secondSpace.isMessagePending(did, realId)) {
+                    continue;
+                }
+            }
             if ((!m.hasValidGroupId() || m.isPrimaryGroupMessage) && !messageIds.contains(m.getId())) {
                 searchResultMessages.add(m);
                 messageIds.add(m.getId());

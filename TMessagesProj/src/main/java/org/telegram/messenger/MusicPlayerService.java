@@ -177,6 +177,16 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
                 AndroidUtilities.runOnUIThread(this::stopSelf);
                 return START_STICKY;
             }
+            // Deniability: never surface a foreground/lock-screen media notification for an account
+            // that is hidden from any other account (Private Space off). Stop the service instead.
+            if (SecondSpaceController.isAccountHiddenByAny(messageObject.currentAccount)) {
+                try {
+                    stopForeground(true);
+                } catch (Throwable ignore) {
+                }
+                AndroidUtilities.runOnUIThread(this::stopSelf);
+                return START_NOT_STICKY;
+            }
             if (supportLockScreenControls) {
                 ComponentName remoteComponentName = new ComponentName(getApplicationContext(), MusicPlayerReceiver.class.getName());
                 try {

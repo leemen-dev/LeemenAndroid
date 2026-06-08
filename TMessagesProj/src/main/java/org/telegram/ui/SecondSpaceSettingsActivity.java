@@ -60,6 +60,9 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     private int chatsShadowRow;
     private int switchRow;
     private int switchInfoRow;
+    private int screenshotShadowRow;
+    private int screenshotRow;
+    private int screenshotInfoRow;
     private int passwordShadowRow;
     private int passwordRow;
     private int passwordTimeoutRow;
@@ -136,6 +139,8 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                 openChatPicker();
             } else if (position == switchRow) {
                 onEntryButtonSwitchClick((TextCheckCell) view);
+            } else if (position == screenshotRow) {
+                onScreenshotSwitchClick((TextCheckCell) view);
             } else if (position == passwordRow) {
                 onPasswordRowClick();
             } else if (position == passwordTimeoutRow) {
@@ -288,6 +293,13 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         if (!wasVisible) notifyEntryMethodChanged();
     }
 
+    private void onScreenshotSwitchClick(TextCheckCell cell) {
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        boolean newValue = !ssc.isScreenshotsAllowed();
+        ssc.setScreenshotsAllowed(newValue);
+        cell.setChecked(newValue);
+    }
+
     private void onEntryButtonSwitchClick(TextCheckCell cell) {
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
         boolean currentValue = ssc.isEntryButtonVisible();
@@ -386,6 +398,9 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         }
         switchRow = rowCount++;
         switchInfoRow = rowCount++;
+        screenshotShadowRow = rowCount++;
+        screenshotRow = rowCount++;
+        screenshotInfoRow = rowCount++;
         passwordShadowRow = rowCount++;
         passwordRow = rowCount++;
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
@@ -529,6 +544,8 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceAddChatsInfo));
                     } else if (position == switchInfoRow) {
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceShowEntryButtonInfo));
+                    } else if (position == screenshotInfoRow) {
+                        privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceAllowScreenshotsInfo));
                     } else if (position == passwordInfoRow) {
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpacePinInfo));
                     } else if (position == sequenceInfoRow) {
@@ -562,6 +579,8 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                     SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
                     if (position == switchRow) {
                         cell.setTextAndCheck(LocaleController.getString(R.string.PrivateSpaceShowEntryButton), ssc.isEntryButtonVisible(), false);
+                    } else if (position == screenshotRow) {
+                        cell.setTextAndCheck(LocaleController.getString(R.string.PrivateSpaceAllowScreenshots), ssc.isScreenshotsAllowed(), false);
                     } else if (position == pinInSearchRow) {
                         cell.setTextAndCheck(LocaleController.getString(R.string.PrivateSpacePinInSearch), ssc.isPinInSearchEnabled(), false);
                     } else if (position >= hideAccountsStartRow && position < hideAccountsEndRow) {
@@ -616,6 +635,9 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             if (position == chatsShadowRow) return VIEW_SHADOW;
             if (position == switchRow) return VIEW_SWITCH;
             if (position == switchInfoRow) return VIEW_INFO;
+            if (position == screenshotShadowRow) return VIEW_SHADOW;
+            if (position == screenshotRow) return VIEW_SWITCH;
+            if (position == screenshotInfoRow) return VIEW_INFO;
             if (position == passwordShadowRow) return VIEW_SHADOW;
             if (position == passwordRow) return VIEW_VALUE;
             if (position == passwordTimeoutRow) return VIEW_VALUE;

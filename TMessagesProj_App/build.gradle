@@ -18,6 +18,11 @@ dependencies {
     implementation project(':TMessagesProj')
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     implementation files('../TMessagesProj/libs/libgsaverification-client.aar')
+
+    // Crash reporting (Firebase Crashlytics). Firebase is already part of the app (FCM /
+    // remote config), so this adds no new vendor — only fatal-crash reporting for real users.
+    implementation platform("com.google.firebase:firebase-bom:32.7.0")
+    implementation "com.google.firebase:firebase-crashlytics:18.6.0"
 }
 
 android {
@@ -199,3 +204,4 @@ android {
 }
 
 apply plugin: 'com.google.gms.google-services'
+apply plugin: 'com.google.firebase.crashlytics'

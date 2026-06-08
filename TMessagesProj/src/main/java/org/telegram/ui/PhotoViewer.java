@@ -183,6 +183,7 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
+import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.SecureDocument;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.SharedConfig;
@@ -4246,10 +4247,15 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             long topicId = (Long) args[1];
             if (this.topicId == topicId && (uid == currentDialogId || uid == mergeDialogId)) {
                 if (currentMessageObject == null || MediaDataController.getMediaType(currentMessageObject.messageOwner) == sharedMediaType) {
+                    // Private space: for a hidden chat in OFF mode the server media total leaks
+                    // how much hidden media exists (the "N of M" counter) and drives the swipe
+                    // paging that would fetch beyond the exposed set. Zero it so the counter and
+                    // paging fall back to the already exposed-only imagesArr (filtered at source).
+                    boolean ssHidden = SecondSpaceController.getInstance(currentAccount).isMediaSuppressed(uid);
                     if (uid == currentDialogId) {
-                        totalImagesCount = (Integer) args[2];
+                        totalImagesCount = ssHidden ? 0 : (Integer) args[2];
                     } else {
-                        totalImagesCountMerge = (Integer) args[2];
+                        totalImagesCountMerge = ssHidden ? 0 : (Integer) args[2];
                     }
                     if (needSearchImageInArr && isFirstLoading) {
                         isFirstLoading = false;

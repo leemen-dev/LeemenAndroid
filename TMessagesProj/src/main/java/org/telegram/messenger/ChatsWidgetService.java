@@ -389,6 +389,12 @@ class ChatsRemoteViewsFactory implements RemoteViewsService.RemoteViewsFactory {
         if (accountInstance == null || !accountInstance.getUserConfig().isClientActivated()) {
             return;
         }
+        // Deniability: if this widget's account is hidden from any other account (Private Space off),
+        // show nothing on the home screen instead of leaking its dialogs.
+        if (SecondSpaceController.isAccountHiddenByAny(accountInstance.getCurrentAccount())) {
+            dialogs.clear();
+            return;
+        }
         ArrayList<TLRPC.User> users = new ArrayList<>();
         ArrayList<TLRPC.Chat> chats = new ArrayList<>();
         LongSparseArray<TLRPC.Message> messages = new LongSparseArray<>();

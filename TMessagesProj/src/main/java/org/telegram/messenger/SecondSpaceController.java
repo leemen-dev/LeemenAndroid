@@ -35,6 +35,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private static final String PREF_EYE_HINT_SHOWN = "second_space_eye_hint_shown";
     private static final String PREF_TOOLBAR_HINT_SHOWN = "second_space_toolbar_hint_shown";
     private static final String PREF_SELF_PINNED = "second_space_self_pinned";
+    private static final String PREF_ALLOW_SCREENSHOTS = "second_space_allow_screenshots";
 
     public static final int MODE_OFF = 0;
     public static final int MODE_REAL = 1;
@@ -95,6 +96,9 @@ public class SecondSpaceController extends BaseController implements Notificatio
     /** Hidden-other-accounts list — accounts whose tray notifications / switcher
      *  presence are suppressed while private space is not active (i.e. in OFF mode). */
     private final Set<Integer> hiddenAccounts = new HashSet<>();
+    /** When {@code true}, screenshots / screen-recording are permitted while this account's
+     *  Private Space is open. Default {@code false}: FLAG_SECURE blocks capture in-space. */
+    private boolean allowScreenshots;
 
     private boolean entryButtonVisible;
 
@@ -124,6 +128,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
         pinTimeoutMinutes = prefs.getInt(PREF_PIN_TIMEOUT_MIN, 0);
         pinLastVerifiedAt = prefs.getLong(PREF_PIN_LAST_OK_MS, 0L);
         entryPasswordHash = prefs.getString(PREF_ENTRY_PASSWORD_HASH, "");
+        allowScreenshots = prefs.getBoolean(PREF_ALLOW_SCREENSHOTS, false);
         loadHiddenAccounts(hiddenAccounts, prefs.getString(PREF_HIDDEN_ACCOUNTS, ""), num);
         // We need to track placeholder-id → server-id renames globally, not just while a
         // ChatActivity for that dialog happens to be open. Otherwise: user sends in off
@@ -265,6 +270,25 @@ public class SecondSpaceController extends BaseController implements Notificatio
         if (pinLastVerifiedAt == 0L) return;
         pinLastVerifiedAt = 0L;
         getMessagesController().getMainSettings().edit().remove(PREF_PIN_LAST_OK_MS).apply();
+    }
+
+    /** Whether screenshots / screen-recording are permitted while this account's space is open. */
+    public boolean isScreenshotsAllowed() {
+        return allowScreenshots;
+    }
+
+    public void setScreenshotsAllowed(boolean allowed) {
+        if (allowScreenshots == allowed) {
+            return;
+        }
+        allowScreenshots = allowed;
+        getMessagesController().getMainSettings().edit().putBoolean(PREF_ALLOW_SCREENSHOTS, allowed).apply();
+        // Re-evaluate FLAG_SECURE immediately: the in-space secure flag now depends on this toggle.
+        try {
+            org.telegram.ui.LaunchActivity la = org.telegram.ui.LaunchActivity.instance;
+            if (la != null) la.invalidateFlagSecure();
+        } catch (Throwable ignored) {
+        }
     }
 
     private void loadTabSequence(String json) {
@@ -880,6 +904,38 @@ public class SecondSpaceController extends BaseController implements Notificatio
     public boolean isMessagePending(long dialogId, int messageId) {
         Set<Integer> set = pendingMessages.get(dialogId);
         return set != null && set.contains(messageId);
+    }
+
+    // --- Shared media-surface visibility ---
+    //
+    // Media surfaces (shared-media gallery, photo viewer, media calendar, media search) must
+    // agree with the chat message list: in OFF mode a hidden chat exposes only its exposed/
+    // pending media. These two helpers are the single shared predicate so every surface
+    // mirrors ChatActivity.filterToExposedSecondSpace without re-deriving the rule.
+
+    /** Chat-level gate for media surfaces; alias of {@link #isHiddenFromCurrentView(long)}
+     *  named for intent. When true, only exposed/pending media of {@code dialogId} may show. */
+    public boolean isMediaSuppressed(long dialogId) {
+        return isHiddenFromCurrentView(dialogId);
+    }
+
+    /** Per-message visibility predicate. MODE_REAL / non-hidden chats are privileged (always
+     *  visible). For a hidden chat in OFF mode a message shows only if it is exposed, pending,
+     *  or the user's own in-flight outgoing placeholder (negative id / sending / send-error)
+     *  not yet tagged — mirrors ChatActivity.filterToExposedSecondSpace lines 20238-20263. */
+    public boolean isMessageVisibleInCurrentView(long dialogId, MessageObject mo) {
+        if (!isHiddenFromCurrentView(dialogId)) return true;
+        if (mo == null) return false;
+        int id = mo.getId();
+        if (isMessageExposed(dialogId, id)) return true;
+        if (isMessagePending(dialogId, id)) return true;
+        return mo.isOut() && (id < 0 || mo.isSending() || mo.isSendError());
+    }
+
+    /** Convenience overload keying on the message's own dialog id — use when iterating a media
+     *  list that may mix a chat and its merged (migrated-from) dialog. */
+    public boolean isMessageVisibleInCurrentView(MessageObject mo) {
+        return mo != null && isMessageVisibleInCurrentView(mo.getDialogId(), mo);
     }
 
     public Set<Integer> getPendingMessages(long dialogId) {

@@ -13,6 +13,8 @@ import android.view.ViewGroup;
 
 import androidx.core.content.FileProvider;
 
+import com.google.firebase.crashlytics.FirebaseCrashlytics;
+
 import org.json.JSONObject;
 import org.telegram.messenger.web.BuildConfig;
 import org.telegram.messenger.web.R;
@@ -44,9 +46,27 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
         return true;
     }
 
+    // --- Crash reporting (Firebase Crashlytics) ---
+    //
+    // Enabled unconditionally (including the production standalone variant where
+    // BuildVars.DEBUG_VERSION is false) so we receive fatal crashes from real users. Fatal
+    // crashes are captured automatically by the handler installed at Firebase init; this hook
+    // only enables collection and attaches non-identifying device/version keys for triage.
+    // Privacy: no userId / username / account info is sent (only stack traces + device keys).
     @Override
     protected void startAppCenterInternal(Activity context) {
-
+        try {
+            final FirebaseCrashlytics crashlytics = FirebaseCrashlytics.getInstance();
+            crashlytics.setCrashlyticsCollectionEnabled(true);
+            crashlytics.setCustomKey("app_version", BuildConfig.VERSION_NAME);
+            crashlytics.setCustomKey("build_type", BuildConfig.BUILD_TYPE);
+            crashlytics.setCustomKey("model", Build.MODEL);
+            crashlytics.setCustomKey("manufacturer", Build.MANUFACTURER);
+            crashlytics.setCustomKey("device", Build.DEVICE);
+            crashlytics.setCustomKey("android_sdk", Build.VERSION.SDK_INT);
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
     }
 
     @Override
@@ -54,8 +74,12 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
 
     }
 
+    @Override
     protected void appCenterLogInternal(Throwable e) {
-
+        try {
+            FirebaseCrashlytics.getInstance().recordException(e);
+        } catch (Throwable ignore) {
+        }
     }
 
     protected void logDualCameraInternal(boolean success, boolean vendor) {

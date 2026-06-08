@@ -4470,9 +4470,28 @@ public class MediaDataController extends BaseController {
                 Runnable notify = () -> {
                     AndroidUtilities.runOnUIThread(() -> {
                         int totalCount = res.count;
+                        ArrayList<MessageObject> mediaObjects = objects;
+                        // Private space: a hidden chat in OFF mode must expose only its
+                        // exposed/pending media. Filter the in-memory list that is broadcast to
+                        // every media surface (shared-media grid, photo viewer strip, preloader
+                        // cache) here — the single choke point. putMediaDatabase above already
+                        // persisted the full server result, so the DB/holes cache stays a
+                        // complete mirror and a MODE_REAL reload still shows everything. Runs on
+                        // the UI thread so reading SecondSpaceController state is race-free.
+                        SecondSpaceController secondSpace = SecondSpaceController.getInstance(currentAccount);
+                        if (secondSpace.isMediaSuppressed(dialogId)) {
+                            mediaObjects = new ArrayList<>(objects.size());
+                            for (int a = 0; a < objects.size(); a++) {
+                                MessageObject mo = objects.get(a);
+                                if (secondSpace.isMessageVisibleInCurrentView(dialogId, mo)) {
+                                    mediaObjects.add(mo);
+                                }
+                            }
+                            totalCount = mediaObjects.size();
+                        }
                         getMessagesController().putUsers(res.users, fromCache != 0);
                         getMessagesController().putChats(res.chats, fromCache != 0);
-                        getNotificationCenter().postNotificationName(NotificationCenter.mediaDidLoad, dialogId, totalCount, objects, classGuid, type, topReached, min_id != 0, requestIndex);
+                        getNotificationCenter().postNotificationName(NotificationCenter.mediaDidLoad, dialogId, totalCount, mediaObjects, classGuid, type, topReached, min_id != 0, requestIndex);
                     });
                 };
 
@@ -4949,14 +4968,26 @@ public class MediaDataController extends BaseController {
         if (Build.VERSION.SDK_INT < 23) {
             return;
         }
+        // Deniability: a hidden account must not publish launcher shortcuts (they'd point at it and
+        // reveal its existence). Leave the visible account's shortcuts untouched.
+        if (SecondSpaceController.isAccountHiddenByAny(currentAccount)) {
+            return;
+        }
         int maxShortcuts = ShortcutManagerCompat.getMaxShortcutCountPerActivity(ApplicationLoader.applicationContext) - 2;
         if (maxShortcuts <= 0) {
             maxShortcuts = 5;
         }
         ArrayList<TLRPC.TL_topPeer> hintsFinal = new ArrayList<>();
         if (SharedConfig.passcodeHash.length() <= 0) {
+            SecondSpaceController secondSpace = SecondSpaceController.getInstance(currentAccount);
             for (int a = 0; a < hints.size(); a++) {
-                hintsFinal.add(hints.get(a));
+                TLRPC.TL_topPeer hint = hints.get(a);
+                // Like home-screen widgets, the launcher has no notion of active/off mode, so strip
+                // Private-Space member chats unconditionally (mirrors ChatsWidgetService.onDataSetChanged).
+                if (secondSpace.isInSecondSpace(MessageObject.getPeerId(hint.peer))) {
+                    continue;
+                }
+                hintsFinal.add(hint);
                 if (hintsFinal.size() == maxShortcuts - 2) {
                     break;
                 }

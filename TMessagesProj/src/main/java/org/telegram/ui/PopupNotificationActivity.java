@@ -1198,7 +1198,8 @@ public class PopupNotificationActivity extends Activity implements NotificationC
             popupMessages.addAll(NotificationsController.getInstance(account).popupReplyMessages);
         } else {
             for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-                if (UserConfig.getInstance(a).isClientActivated()) {
+                if (UserConfig.getInstance(a).isClientActivated()
+                        && !org.telegram.messenger.SecondSpaceController.isHiddenFromSelectedAccount(a)) {
                     popupMessages.addAll(NotificationsController.getInstance(a).popupMessages);
                 }
             }
@@ -1468,7 +1469,8 @@ public class PopupNotificationActivity extends Activity implements NotificationC
             if (!isReply) {
                 popupMessages.clear();
                 for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-                    if (UserConfig.getInstance(a).isClientActivated()) {
+                    if (UserConfig.getInstance(a).isClientActivated()
+                            && !org.telegram.messenger.SecondSpaceController.isHiddenFromSelectedAccount(a)) {
                         popupMessages.addAll(NotificationsController.getInstance(a).popupMessages);
                     }
                 }

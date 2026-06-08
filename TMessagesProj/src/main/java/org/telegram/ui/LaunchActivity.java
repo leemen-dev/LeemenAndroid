@@ -396,6 +396,20 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         }
         instance = this;
         ApplicationLoader.postInitApplication();
+        // Deniability: if the app was force-killed while a hidden account was selected, onPause's
+        // safe-switch never ran and selectedAccount is still the hidden one. Reset it to a non-hidden
+        // activated account BEFORE the UI binds to currentAccount, so a hidden account is never made
+        // current at launch (which would register observers / build fragments for it).
+        if (SecondSpaceController.isAccountHiddenByAny(UserConfig.selectedAccount)) {
+            for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                if (UserConfig.getInstance(a).isClientActivated()
+                        && !SecondSpaceController.isAccountHiddenByAny(a)) {
+                    UserConfig.selectedAccount = a;
+                    UserConfig.getInstance(0).saveConfig(false);
+                    break;
+                }
+            }
+        }
         AndroidUtilities.checkDisplaySize(this, getResources().getConfiguration());
         currentAccount = UserConfig.selectedAccount;
         registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
@@ -430,8 +444,15 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             // window (so the recents thumbnail captured during backgrounding is blank, not PS content).
             if (pendingSecureSnapshot) return true;
             for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-                if (UserConfig.getInstance(a).isClientActivated()
-                        && SecondSpaceController.getInstance(a).isActive()) {
+                if (!UserConfig.getInstance(a).isClientActivated()) {
+                    continue;
+                }
+                SecondSpaceController ssc = SecondSpaceController.getInstance(a);
+                // Block capture while an account is inside Private Space, unless that space
+                // explicitly allows screenshots. The pendingSecureSnapshot branch above stays
+                // unconditional, so the backgrounding recents thumbnail is always blank even
+                // when screenshots are otherwise allowed.
+                if (ssc.isActive() && !ssc.isScreenshotsAllowed()) {
                     return true;
                 }
             }
@@ -6644,6 +6665,47 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.activityPermissionsGranted, requestCode, permissions, grantResults);
     }
 
+    /**
+     * Pops every fragment stacked above the root tabs fragment and selects the Chats tab, with no
+     * animation. Used on focus loss while in Private Space so the user comes back to the neutral
+     * chats list instead of an open (possibly hidden) chat or a deep Private-Space screen. Runs
+     * while the activity is paused, so the change is invisible and already in place on resume.
+     */
+    private void resetToChatsPageAfterFocusLoss() {
+        MainTabsActivity mainTabs = null;
+        for (int i = 0; i < mainFragmentsStack.size(); i++) {
+            if (mainFragmentsStack.get(i) instanceof MainTabsActivity) {
+                mainTabs = (MainTabsActivity) mainFragmentsStack.get(i);
+                break;
+            }
+        }
+        if (mainTabs == null) {
+            return;
+        }
+        popFragmentsAboveTabsRoot(actionBarLayout, mainTabs);
+        if (AndroidUtilities.isTablet()) {
+            if (rightActionBarLayout != null) {
+                rightActionBarLayout.removeAllFragments();
+            }
+            popFragmentsAboveTabsRoot(layersActionBarLayout, mainTabs);
+        }
+        mainTabs.switchToChatsTab(false);
+    }
+
+    private static void popFragmentsAboveTabsRoot(INavigationLayout layout, MainTabsActivity root) {
+        if (layout == null) {
+            return;
+        }
+        List<BaseFragment> snapshot = new ArrayList<>(layout.getFragmentStack());
+        for (int i = snapshot.size() - 1; i >= 0; i--) {
+            BaseFragment fragment = snapshot.get(i);
+            if (fragment == root) {
+                break;
+            }
+            layout.removeFragmentFromStack(fragment, true);
+        }
+    }
+
     @Override
     protected void onPause() {
         super.onPause();
@@ -6652,6 +6714,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         // FLAG_SECURE must remain on through the recents snapshot to prevent a PS preview leak: we
         // arm pendingSecureSnapshot BEFORE clearing active so the lambda keeps returning true even
         // after each setActive(false) call invalidates the secure reason. Cleared on resume.
+        final int selectedAccount = UserConfig.selectedAccount;
+        final boolean selectedWasInSecondSpace = UserConfig.getInstance(selectedAccount).isClientActivated()
+                && SecondSpaceController.getInstance(selectedAccount).isActive();
         boolean anyWasActive = false;
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (UserConfig.getInstance(a).isClientActivated()
@@ -6672,7 +6737,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 }
             }
         }
-        int selected = UserConfig.selectedAccount;
+        int selected = selectedAccount;
         if (SecondSpaceController.isAccountHiddenByAny(selected)) {
             if (!anyWasActive) {
                 pendingSecureSnapshot = true;
@@ -6693,6 +6758,12 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             }
             pendingSafeAccountSwitch = target;
             preHiddenAccount = -1;
+        }
+        // Deniability: if focus was lost while the visible account was in Private Space, drop the
+        // user back onto the chats list regardless of where they were (open chat, settings, PS
+        // screen). Skipped when a safe-account switch is queued — that rebuild lands on chats anyway.
+        if (selectedWasInSecondSpace && pendingSafeAccountSwitch < 0) {
+            resetToChatsPageAfterFocusLoss();
         }
         pipActivityHandler.onPause();
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.stopAllHeavyOperations, 4096);

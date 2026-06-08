@@ -40,6 +40,7 @@ import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -159,6 +160,15 @@ public class CalendarActivity extends BaseFragment implements NotificationCenter
         dialogId = getArguments().getLong("dialog_id");
         topicId = getArguments().getLong("topic_id");
         calendarType = getArguments().getInt("type");
+
+        // Private space: the media/stories calendar can't be filtered to exposed-only (the
+        // server returns one sample message + an opaque count per day), and its thumbnails +
+        // date jumps would reveal a hidden chat's content. Refuse to open for a hidden chat in
+        // OFF mode. This is the single choke point for every route (shared-media menu, fast
+        // scroll, chat date-header tap). MODE_REAL / non-hidden chats are unaffected.
+        if (SecondSpaceController.getInstance(currentAccount).isMediaSuppressed(dialogId)) {
+            return false;
+        }
 
         if (calendarType == TYPE_PROFILE_STORIES) {
             storiesList = MessagesController.getInstance(currentAccount).getStoriesController().getStoriesList(dialogId, StoriesController.StoriesList.TYPE_PINNED);

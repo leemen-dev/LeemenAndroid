@@ -19538,8 +19538,12 @@ public class MessagesController extends BaseController implements NotificationCe
                                 continue;
                             }
                             long callerId = call.participant_id == getUserConfig().getClientUserId() ? call.admin_id : call.participant_id;
+                            // isHiddenFromSelectedAccount is false when this account IS the selected one; during the
+                            // onPause->onResume window a hidden account is still selected, so also gate on
+                            // isAccountHiddenByAny to suppress incoming-call leaks for the hidden account itself.
                             if (SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(callerId)
-                                    || SecondSpaceController.isHiddenFromSelectedAccount(currentAccount)) {
+                                    || SecondSpaceController.isHiddenFromSelectedAccount(currentAccount)
+                                    || SecondSpaceController.isAccountHiddenByAny(currentAccount)) {
                                 if (BuildVars.LOGS_ENABLED) {
                                     FileLog.d("ignoring call from hidden-space user " + callerId);
                                 }

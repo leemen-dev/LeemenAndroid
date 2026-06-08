@@ -2426,6 +2426,8 @@
     <string name="PrivateSpaceSettings">Private Space Settings</string>
     <string name="PrivateSpaceShowEntryButton">Show entry button in Privacy settings</string>
     <string name="PrivateSpaceShowEntryButtonInfo">When off, enter Private Space by long-pressing the Chats tab at the bottom.</string>
+    <string name="PrivateSpaceAllowScreenshots">Allow screenshots</string>
+    <string name="PrivateSpaceAllowScreenshotsInfo">When off, screenshots and screen recording are blocked while Private Space is open.</string>
     <string name="PrivateSpaceShowEntryButtonBlocked">Set up an enter shortcut before hiding this button — otherwise you will lose access.</string>
     <string name="PrivateSpaceShowEntryButtonBlockedNoShortcut">Configure a tap sequence or enable PIN-in-search first — otherwise you will lose access to Private Space.</string>
     <string name="PrivateSpaceShowEntryButtonBlockedUntested">Open Private Space using your shortcut at least once. Once confirmed working, you can hide this button.</string>

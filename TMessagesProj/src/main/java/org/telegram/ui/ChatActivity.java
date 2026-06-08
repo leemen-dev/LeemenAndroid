@@ -11496,7 +11496,9 @@ public class ChatActivity extends BaseFragment implements
                 showDialog(builder.create());
             } else if (!pinnedMessageIds.isEmpty()) {
                 SharedPreferences preferences = MessagesController.getNotificationsSettings(currentAccount);
-                preferences.edit().putInt("pin_" + dialog_id, pinnedMessageIds.get(0)).commit();
+                ArrayList<Integer> effIds = getEffectivePinnedIds();
+                int topPinId = effIds.isEmpty() ? pinnedMessageIds.get(0) : effIds.get(0);
+                preferences.edit().putInt("pin_" + dialog_id, topPinId).commit();
                 updatePinnedMessageView(true);
             }
         });
@@ -20180,8 +20182,8 @@ public class ChatActivity extends BaseFragment implements
         ArrayList<Integer> result = new ArrayList<>();
         for (int id : pinnedMessageIds) {
             if (ctrl.isSelfPinnedMessage(dialog_id, id)
-                    || ctrl.isMessageExposed(dialog_id, id)
-                    || ctrl.isMessagePending(dialog_id, id)) {
+                    && (ctrl.isMessageExposed(dialog_id, id)
+                        || ctrl.isMessagePending(dialog_id, id))) {
                 result.add(id);
             }
         }
@@ -23559,7 +23561,7 @@ public class ChatActivity extends BaseFragment implements
                             avatarContainer.setTitle(LocaleController.formatPluralString("PinnedMessagesCount", getPinnedMessagesCount()));
                         }
                         Collections.sort(pinnedMessageIds, (o1, o2) -> o2.compareTo(o1));
-                        if (pinnedMessageIds.isEmpty()) {
+                        if (pinnedMessageIds.isEmpty() || getEffectivePinnedIds().isEmpty()) {
                             hidePinnedMessageView(true);
                         } else {
                             updateMessagesVisiblePart(false);
@@ -28188,7 +28190,8 @@ public class ChatActivity extends BaseFragment implements
         String callLink = callLink(pinnedMessageObject);
         pinnedMessageButtonShown = botButton != null || !TextUtils.isEmpty(callLink);
         SharedPreferences preferences = MessagesController.getNotificationsSettings(currentAccount);
-        if ((threadMessageObject == null || isTopic) && (chatInfo == null && userInfo == null || pinned_msg_id == 0 || !pinnedMessageIds.isEmpty() && pinnedMessageIds.get(0) == preferences.getInt("pin_" + dialog_id, 0)) || isReport() || actionBar != null && (actionBar.isActionModeShowed() || actionBar.isSearchFieldVisible())) {
+        ArrayList<Integer> effectivePinnedIds = getEffectivePinnedIds();
+        if ((threadMessageObject == null || isTopic) && (chatInfo == null && userInfo == null || pinned_msg_id == 0 || !effectivePinnedIds.isEmpty() && effectivePinnedIds.get(0) == preferences.getInt("pin_" + dialog_id, 0)) || isReport() || actionBar != null && (actionBar.isActionModeShowed() || actionBar.isSearchFieldVisible())) {
             changed = hidePinnedMessageView(animated);
         } else {
             if (pinnedMessageView == null) {

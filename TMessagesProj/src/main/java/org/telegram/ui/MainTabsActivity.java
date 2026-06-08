@@ -792,12 +792,20 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     }
 
     public void switchToChatsTab() {
+        switchToChatsTab(true);
+    }
+
+    public void switchToChatsTab(boolean animated) {
         if (viewPager == null) {
             return;
         }
         if (viewPager.getCurrentPosition() != POSITION_CHATS) {
-            viewPager.scrollToPosition(POSITION_CHATS);
-            selectTab(POSITION_CHATS, true);
+            if (animated) {
+                viewPager.scrollToPosition(POSITION_CHATS);
+            } else {
+                viewPager.setPosition(POSITION_CHATS);
+            }
+            selectTab(POSITION_CHATS, animated);
         }
     }
 
