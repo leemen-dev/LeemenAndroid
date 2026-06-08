@@ -16,3 +16,38 @@ buildscript {
 repositories {
     google()
 }
+
+// --- Release signing guard ---
+// Refuse to build a release/standalone APK or AAB that would be signed with the PUBLIC
+// fallback keystore (TMessagesProj/config/release.keystore, the upstream key with password
+// "android"). The private release key must be configured via RELEASE_STORE_FILE /
+// RELEASE_STORE_PASSWORD / RELEASE_KEY_ALIAS / RELEASE_KEY_PASSWORD (normally in
+// ~/.gradle/gradle.properties, or injected as CI secrets). Without this, a build machine
+// lacking the override would SILENTLY ship a publicly-signed (forgeable) build.
+subprojects { sp ->
+    sp.plugins.withId('com.android.application') {
+        sp.afterEvaluate {
+            def publicKey = rootProject.file('TMessagesProj/config/release.keystore').canonicalPath
+            sp.android.applicationVariants.all { variant ->
+                def bt = variant.buildType.name
+                if (bt != 'release' && bt != 'standalone') return
+                def checkTask = sp.tasks.register("verify${variant.name.capitalize()}SigningKey") {
+                    group = 'verification'
+                    description = "Fails if ${variant.name} would be signed with the public fallback keystore."
+                    doLast {
+                        def sf = variant.signingConfig?.storeFile
+                        if (sf != null && sf.canonicalPath == publicKey) {
+                            throw new GradleException(
+                                "Refusing to build ${sp.name}:${variant.name} signed with the PUBLIC fallback " +
+                                "keystore (TMessagesProj/config/release.keystore). Configure the private release " +
+                                "key via RELEASE_STORE_FILE / RELEASE_STORE_PASSWORD / RELEASE_KEY_ALIAS / " +
+                                "RELEASE_KEY_PASSWORD (see ~/.gradle/gradle.properties).")
+                        }
+                    }
+                }
+                variant.packageApplicationProvider.configure { it.dependsOn(checkTask) }
+                sp.tasks.matching { it.name == "bundle${variant.name.capitalize()}" }.configureEach { it.dependsOn(checkTask) }
+            }
+        }
+    }
+}
