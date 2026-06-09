@@ -1676,6 +1676,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         }
         MediaDataController.getInstance(currentAccount).loadStickersByEmojiOrName(AndroidUtilities.STICKERS_PLACEHOLDER_PACK_NAME, false, true);
 
+        // Leemen: invisible per-account backend identity bind (WebApp initData → /v1/auth/telegram).
+        org.telegram.messenger.leemen.LeemenIdentity.bindIfNeeded(currentAccount);
+
         needFinishActivity(afterSignup, res.setup_password_required, res.otherwise_relogin_days);
     }
 

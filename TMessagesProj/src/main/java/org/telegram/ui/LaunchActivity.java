@@ -710,6 +710,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         }
         MediaController.getInstance().setBaseActivity(this, true);
         ApplicationLoader.startAppCenter(this);
+        // Leemen: backfill backend identity for already-logged-in accounts (deferred off the busy startup).
+        AndroidUtilities.runOnUIThread(() -> {
+            try { org.telegram.messenger.leemen.LeemenIdentity.bindAllActivated(); } catch (Throwable ignore) {}
+        }, 3000);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             FingerprintController.checkKeyReady();
