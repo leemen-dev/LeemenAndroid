@@ -689,12 +689,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
         items.add(SettingCell.Factory.of(1, IconBackgroundColors.BLUE.top, IconBackgroundColors.BLUE.bottom, R.drawable.settings_account, getString(R.string.SettingsAccount), getString(R.string.SettingsAccountInfo)));
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        // Private-space row sits in a single fixed slot right under Account regardless of mode:
-        // off-mode shows «Enter Private Space» (id=101), active-mode shows «Private Space Settings» (id=100).
+        // While inside the space, keep the in-mode «Private Space Settings» shortcut here (id=100).
+        // The off-mode entry point lives deeper, in Privacy & Security (PrivacySettingsActivity).
         if (ssc.isActive()) {
             items.add(SettingCell.Factory.of(100, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.msg2_secret, getString(R.string.PrivateSpaceSettings), ""));
-        } else if (ssc.isEntryButtonEffectivelyVisible()) {
-            items.add(SettingCell.Factory.of(101, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.msg2_secret, getString(R.string.PrivateSpaceEnter), ""));
         }
         items.add(SettingCell.Factory.of(2, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.settings_chat, getString(R.string.SettingsChat), getString(R.string.SettingsChatInfo)));
         items.add(SettingCell.Factory.of(3, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.settings_privacy, getString(R.string.SettingsPrivacySecurity), getString(R.string.SettingsPrivacySecurityInfo)));
@@ -813,32 +811,6 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             case 100:
                 presentFragment(new SecondSpaceSettingsActivity());
                 break;
-            case 101: {
-                SecondSpaceController ssc101 = SecondSpaceController.getInstance(currentAccount);
-                Runnable afterEnter = () -> {
-                    // Mode is set either by PasscodeActivity (PIN path) or by the no-PIN
-                    // / skip-path branches below. This runnable handles only post-entry UI.
-                    if (getParentLayout() != null) {
-                        for (org.telegram.ui.ActionBar.BaseFragment f : getParentLayout().getFragmentStack()) {
-                            if (f instanceof MainTabsActivity) {
-                                ((MainTabsActivity) f).switchToChatsTab();
-                                break;
-                            }
-                        }
-                    }
-                };
-                boolean hasPin = ssc101.hasRealPassword();
-                if (hasPin && !ssc101.isPinPromptSkippable()) {
-                    presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_ENTER).setOnSuccess(afterEnter));
-                } else if (hasPin) {
-                    ssc101.setActiveMode(SecondSpaceController.MODE_REAL);
-                    afterEnter.run();
-                } else {
-                    ssc101.setActive(true);
-                    afterEnter.run();
-                }
-                break;
-            }
             case 5:
                 presentFragment(new NotificationsSettingsActivity());
                 break;

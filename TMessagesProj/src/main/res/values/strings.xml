@@ -2367,15 +2367,18 @@
     <string name="PrivateSpacePinMismatch">PINs don\'t match.</string>
     <string name="PrivateSpacePinTooShort">PIN must be at least %1$d digits.</string>
     <string name="PrivateSpacePinRemoveConfirm">Remove the PIN? Private Space will no longer require a password.</string>
-    <!-- Hidden accounts: per-account entry password gating switch INTO this account -->
-    <string name="HiddenAccountEntryPasswordTitle">Account password</string>
-    <string name="HiddenAccountEntryPasswordInfo">When enabled, switching to this account from another account requires this password. The password is independent of the Private Space PIN.</string>
-    <string name="HiddenAccountEntryPasswordRemoveConfirm">Remove the account password? Switching to this account will no longer require a password.</string>
-    <string name="HiddenAccountEnterPasswordTitle">Enter account password</string>
+    <!-- Hidden accounts: list of OTHER accounts the main account hides while Private Space is off -->
+    <string name="HiddenAccountsListTitle">Hidden accounts</string>
+    <string name="HiddenAccountsListInfo">These accounts won\'t appear in the account switcher while Private Space is off. Their notifications and badges are muted. They reappear when you enter Private Space.</string>
+    <string name="HiddenAccountsAddAccount">Add account</string>
+    <string name="HiddenAccountsNoneToAdd">No other accounts to add.</string>
+    <string name="HiddenAccountsRemoveConfirm">Stop hiding this account?</string>
+    <!-- Hidden accounts: single switch password, set in the main account, gating switching INTO a hidden account -->
+    <string name="HiddenAccountsSwitchPasswordTitle">Password to switch accounts</string>
+    <string name="HiddenAccountsSwitchPasswordInfo">When set, switching to a hidden account requires this password. It is configured here, in your main account, and is independent of the Private Space PIN.</string>
+    <string name="HiddenAccountsSwitchPasswordRemoveConfirm">Remove the password? Switching to a hidden account will no longer require it.</string>
+    <string name="HiddenAccountEnterPasswordTitle">Enter password</string>
     <string name="HiddenAccountWrongPassword">Wrong password. Try again.</string>
-    <!-- Hidden accounts: per-account list of OTHER accounts to hide while in off-mode -->
-    <string name="HiddenAccountsListTitle">Hide other accounts</string>
-    <string name="HiddenAccountsListInfo">Selected accounts will not appear in the account switcher while Private Space is off. Their notifications and badges are muted. They reappear when you enter Private Space.</string>
     <string name="PrivateSpaceExposureHide">Hide outside</string>
     <string name="PrivateSpaceEyeHint">The eye icon marks messages that are visible outside Private Space. Long-press a message to hide it again.</string>
     <string name="PrivateSpaceToolbarHint">Use these buttons to show selected messages outside Private Space or hide them again.</string>
@@ -2441,6 +2444,38 @@
     <string name="PrivateSpaceShortcutRetestRequired">Entry methods changed. The entry button stays visible until you confirm the new shortcut works.</string>
     <string name="PrivateSpaceEmpty">No chats in Private Space yet. Open settings to add them.</string>
     <string name="PrivateSpaceEmptyOpenSettings">Open settings</string>
+    <string name="PrivateSpaceOnboardingHideHint">Long-press any chat and choose “Hide chat” to make it disappear from your normal chat list.</string>
+    <string name="PrivateSpaceOnboardingHidden">Chat hidden. It stays invisible outside Private Space.</string>
+    <string name="PrivateSpacePaywallTitle">Unlimited hidden chats</string>
+    <string name="PrivateSpacePaywallSubtitle">You hid your first chat for free. Subscribe to hide as many chats as you want.</string>
+    <string name="PrivateSpacePaywallFeature1Title">Hide as many as you want</string>
+    <string name="PrivateSpacePaywallFeature1Text">Move any number of chats into Private Space, not just the first one.</string>
+    <string name="PrivateSpacePaywallFeature2Title">Stays fully private</string>
+    <string name="PrivateSpacePaywallFeature2Text">Hidden chats stay out of your chat list, search, notifications and widgets.</string>
+    <string name="PrivateSpacePaywallFeature3Title">Only you can open it</string>
+    <string name="PrivateSpacePaywallFeature3Text">Unlock Private Space with your PIN or a secret gesture.</string>
+    <string name="PrivateSpacePaywallButton">Subscribe</string>
+    <string name="PrivateSpacePaywallLater">Not now</string>
+    <string name="PrivateSpacePaywallActivated">Subscription activated. Enjoy unlimited hidden chats!</string>
+    <string name="LeemenPremium">Leemen Premium</string>
+    <string name="LeemenPremiumScreenSubtitle">Unlimited chats in your Private Space</string>
+    <string name="LeemenPremiumFeatureUnlimited">Hide as many chats as you want, not just one.</string>
+    <string name="LeemenPremiumPlanMonthly">Monthly</string>
+    <string name="LeemenPremiumPlanYearly">Yearly</string>
+    <string name="LeemenPremiumPriceMonthly">$10 / month</string>
+    <string name="LeemenPremiumPriceYearly">$96 / year</string>
+    <string name="LeemenPremiumYearlyBadge">−20%</string>
+    <string name="LeemenPremiumSubscribe">Subscribe</string>
+    <string name="LeemenPremiumActiveUntil">Active until %1$s</string>
+    <string name="LeemenPremiumActivated">Leemen Premium activated</string>
+    <string name="LeemenPremiumStatusUnlimited">Unlimited chats</string>
+    <string name="LeemenPremiumTelegramRow">Telegram Premium</string>
+    <string name="LeemenPremiumRenew">Renew</string>
+    <string name="PrivateSpaceLimitReachedTitle">Chat limit reached</string>
+    <string name="PrivateSpaceLimitReachedMessage">Without a subscription you can hide only one chat. Subscribe to Leemen Premium to hide unlimited chats.</string>
+    <string name="PrivateSpaceOverLimitTitle">Subscription ended</string>
+    <string name="PrivateSpaceOverLimitMessage">Your Leemen Premium subscription has ended. Renew it to keep your hidden chats, or remove the extra ones to keep just one.</string>
+    <string name="PrivateSpaceOverLimitRemove">Manage chats</string>
     <string name="BlockUserMultiTitle">Block User</string>
     <string name="BlockUserChatsTitle">CHATS</string>
     <string name="BlockUserContactsTitle">CONTACTS</string>

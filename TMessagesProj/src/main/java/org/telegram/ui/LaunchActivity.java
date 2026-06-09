@@ -1204,11 +1204,14 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         if (account == UserConfig.selectedAccount || !UserConfig.isValidAccount(account)) {
             return;
         }
-        SecondSpaceController targetSsc = SecondSpaceController.getInstance(account);
-        if (targetSsc.hasEntryPassword()) {
-            PrivateSpacePinDialog.showEnterAccountPassword(
+        // The switch password is owned by the MAIN (currently selected) account and guards
+        // switching INTO any account that main account hides. Prompt only on that crossing.
+        int mainAccount = UserConfig.selectedAccount;
+        SecondSpaceController mainSsc = SecondSpaceController.getInstance(mainAccount);
+        if (mainSsc.isAccountHidden(account) && mainSsc.hasSwitchPassword()) {
+            PrivateSpacePinDialog.showEnterSwitchPassword(
                 this,
-                account,
+                mainAccount,
                 () -> doSwitchToAccountInternal(account, removeAll, dialogsActivityProvider),
                 null
             );

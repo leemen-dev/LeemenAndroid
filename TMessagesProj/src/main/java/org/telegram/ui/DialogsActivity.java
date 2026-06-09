@@ -8676,13 +8676,33 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     psToggleItem.setTextAndIcon(LocaleController.getString(R.string.PrivateSpaceHide), R.drawable.msg_stories_stealth);
                 }
                 psToggleItem.setMinimumWidth(160);
+                // First-run onboarding: draw the eye to the "Hide chat" action.
+                if (privateSpaceOnboardingActive && !isHidden) {
+                    int accent = getThemedColor(Theme.key_featuredStickers_addButton);
+                    psToggleItem.setTextColor(accent);
+                    psToggleItem.setIconColor(accent);
+                    psToggleItem.setSelectorColor(Theme.multAlpha(accent, .12f));
+                }
                 psToggleItem.setOnClickListener(e -> {
                     if (isHidden) {
                         ssc.removeFromSecondSpace(dialogId);
+                        finishPreviewFragment();
+                    } else if (!ssc.canAddChats(1)) {
+                        // Free tier allows one hidden chat — offer the subscription instead of hiding.
+                        finishPreviewFragment();
+                        showPrivateSpacePaywall();
                     } else {
+                        boolean firstHide = privateSpaceOnboardingActive;
                         ssc.addToSecondSpace(dialogId);
+                        if (firstHide) {
+                            ssc.markOnboardingDone();
+                            stopPrivateSpaceOnboarding();
+                            BulletinFactory.of(DialogsActivity.this)
+                                    .createSimpleBulletin(R.raw.chats_infotip, LocaleController.getString(R.string.PrivateSpaceOnboardingHidden))
+                                    .show();
+                        }
+                        finishPreviewFragment();
                     }
-                    finishPreviewFragment();
                 });
                 previewMenu[0].addView(psToggleItem);
             }
@@ -9050,15 +9070,24 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (action == ps_toggle_hide) {
             org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
             boolean hiding = canHideCount > 0;
+            // Free tier caps hidden chats; hide as many as fit, then offer the subscription.
+            boolean blockedByLimit = false;
             for (int a = 0; a < count; a++) {
                 long did = selectedDialogs.get(a);
                 if (hiding) {
+                    if (!ssc.canAddChats(1)) {
+                        blockedByLimit = true;
+                        break;
+                    }
                     ssc.addToSecondSpace(did);
                 } else {
                     ssc.removeFromSecondSpace(did);
                 }
             }
             hideActionMode(false);
+            if (blockedByLimit) {
+                showPrivateSpacePaywall();
+            }
             if (viewPages != null) {
                 for (ViewPage viewPage : viewPages) {
                     if (viewPage == null || viewPage.listView == null) continue;
@@ -10441,7 +10470,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (privateSpaceEmptyHintCell != null) {
             topPanelLayout.setViewVisible(privateSpaceEmptyHintCell, show);
         }
-        if (show && !privateSpaceIntroPopupShown) {
+        // First-time users get the interactive coach-marks (started from the mode-change
+        // handler) instead of this modal. Only fall back to the legacy popup for users who
+        // already finished onboarding.
+        if (show && !privateSpaceIntroPopupShown && SecondSpaceController.getInstance(currentAccount).isOnboardingDone()) {
             privateSpaceIntroPopupShown = true;
             showPrivateSpaceIntroPopup();
         }
@@ -10494,6 +10526,125 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         builder.show();
     }
 
+    // --- Private Space first-run onboarding & paywall ---
+
+    private boolean privateSpaceOnboardingActive;
+    private org.telegram.ui.Stories.recorder.HintView2 privateSpaceOnboardingHint;
+
+    /**
+     * On entering the hidden space, decide what (if anything) to surface:
+     *  - a brand-new user with nothing hidden yet → coach-marks teaching the first hide;
+     *  - a user who already hid their first chat and is coming back → the one-time
+     *    "unlimited hidden chats" offer (the euphoria moment, after they lived the loop).
+     */
+    private void maybeStartPrivateSpaceOnboardingOrPaywall() {
+        if (getParentActivity() == null || fragmentView == null) {
+            return;
+        }
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        if (!ssc.isRealActive()) {
+            return;
+        }
+        if (onlySelect || folderId != 0 || initialDialogsType != DIALOGS_TYPE_DEFAULT) {
+            return;
+        }
+        boolean hasHidden = !ssc.getDialogIds().isEmpty();
+        // Subscription lapsed (or never held) while keeping more than the free allowance: on every
+        // entry, offer to renew or trim down to the limit (req #5). Outside the space those chats
+        // stay hidden as usual — expiry never reveals them. Takes precedence over the one-time offer.
+        if (ssc.isOverChatLimit()) {
+            LeemenPremiumActivity.showOverLimitDialog(DialogsActivity.this, currentAccount);
+            return;
+        }
+        // Completed via the settings chat-picker (not the coached long-press) or pre-existing
+        // user: mark onboarding done so we move on to the offer rather than re-coaching.
+        if (!ssc.isOnboardingDone() && hasHidden) {
+            ssc.markOnboardingDone();
+        }
+        if (ssc.isOnboardingDone()) {
+            // The "euphoria" moment: user lived the loop (hid a chat, saw it vanish, came back).
+            // Offer the upgrade once — unless they already subscribed.
+            if (!ssc.isPaywallShown() && hasHidden && !ssc.hasLeemenPremium()) {
+                ssc.markPaywallShown();
+                showPrivateSpacePaywall();
+            }
+        } else if (!hasHidden) {
+            startPrivateSpaceOnboarding();
+        }
+    }
+
+    private void startPrivateSpaceOnboarding() {
+        if (privateSpaceOnboardingActive || getParentActivity() == null || fragmentView == null) {
+            return;
+        }
+        if (viewPages == null || viewPages.length == 0 || viewPages[0] == null || viewPages[0].listView == null) {
+            return;
+        }
+        View anchor = findFirstDialogCell(viewPages[0].listView);
+        if (anchor == null) {
+            return; // no chat to point at (e.g. empty account) — skip gracefully
+        }
+        privateSpaceOnboardingActive = true;
+
+        final int[] cellLoc = new int[2];
+        final int[] rootLoc = new int[2];
+        anchor.getLocationInWindow(cellLoc);
+        fragmentView.getLocationInWindow(rootLoc);
+        final float anchorCenterX = cellLoc[0] - rootLoc[0] + anchor.getWidth() / 2f;
+        final float anchorBottomY = cellLoc[1] - rootLoc[1] + anchor.getHeight();
+
+        org.telegram.ui.Stories.recorder.HintView2 hint =
+                new org.telegram.ui.Stories.recorder.HintView2(getParentActivity(), org.telegram.ui.Stories.recorder.HintView2.DIRECTION_TOP);
+        hint.setMultilineText(true);
+        hint.setText(LocaleController.getString(R.string.PrivateSpaceOnboardingHideHint));
+        hint.setTextAlign(android.text.Layout.Alignment.ALIGN_CENTER);
+        hint.setMaxWidth(240);
+        hint.setRounding(12);
+        hint.setDuration(-1);
+        hint.setJointPx(0, anchorCenterX);
+        hint.setTranslationY(anchorBottomY);
+        ((FrameLayout) fragmentView).addView(hint, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 120, Gravity.TOP | Gravity.FILL_HORIZONTAL));
+        hint.show();
+        privateSpaceOnboardingHint = hint;
+    }
+
+    private void stopPrivateSpaceOnboarding() {
+        privateSpaceOnboardingActive = false;
+        final org.telegram.ui.Stories.recorder.HintView2 hint = privateSpaceOnboardingHint;
+        privateSpaceOnboardingHint = null;
+        if (hint != null) {
+            hint.hide();
+            AndroidUtilities.runOnUIThread(() -> {
+                if (hint.getParent() instanceof ViewGroup) {
+                    ((ViewGroup) hint.getParent()).removeView(hint);
+                }
+            }, 400);
+        }
+    }
+
+    private View findFirstDialogCell(ViewGroup listView) {
+        if (listView == null) {
+            return null;
+        }
+        for (int i = 0; i < listView.getChildCount(); i++) {
+            View child = listView.getChildAt(i);
+            if (child instanceof DialogCell && child.getVisibility() == View.VISIBLE && child.getHeight() > 0) {
+                return child;
+            }
+        }
+        return null;
+    }
+
+    private void showPrivateSpacePaywall() {
+        if (getParentActivity() == null) {
+            return;
+        }
+        // Teaser sheet → open the full Leemen Premium screen (monthly / yearly plan choice).
+        showDialog(new PrivateSpacePaywallBottomSheet(getParentActivity(), DialogsActivity.this, () ->
+                presentFragment(new LeemenPremiumActivity())
+        ));
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
@@ -10522,10 +10673,25 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 // filterRecent is mode-aware (filters out private-only entries in off mode).
                 searchViewPager.dialogsSearchAdapter.filterRecent(null);
             }
+            if (SecondSpaceController.getInstance(currentAccount).isRealActive()) {
+                // Let the list rebuild + enter animation settle before coaching / offering.
+                AndroidUtilities.runOnUIThread(this::maybeStartPrivateSpaceOnboardingOrPaywall, 350);
+            } else {
+                stopPrivateSpaceOnboarding();
+            }
             return;
         }
         if (id == NotificationCenter.dialogsNeedReload) {
             updatePrivateSpaceEmptyView();
+            // Safety net: if the first chat got hidden by any path (long-press OR the settings
+            // chat-picker) while we were coaching, finish onboarding so the hint doesn't linger.
+            if (privateSpaceOnboardingActive) {
+                SecondSpaceController psc = SecondSpaceController.getInstance(currentAccount);
+                if (psc.isRealActive() && !psc.getDialogIds().isEmpty()) {
+                    psc.markOnboardingDone();
+                    stopPrivateSpaceOnboarding();
+                }
+            }
             if (viewPages == null || dialogsListFrozen) {
                 return;
             }

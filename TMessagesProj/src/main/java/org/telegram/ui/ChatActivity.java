@@ -1911,37 +1911,11 @@ public class ChatActivity extends BaseFragment implements
 
         @Override
         public void onMessageSend(CharSequence message, boolean notify, int scheduleDate, int scheduleRepeatPeriod, long payStars) {
-            SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-            if (ssc.isHiddenFromCurrentView(dialog_id)) {
-                // Tag the just-sent message id as pending off-mode work. processSendingText
-                // (already called by ChatActivityEnterView before this callback) has put the
-                // local placeholder into `messages`; we grab the latest own message and add
-                // its id to the per-message pending set. Its id is negative right now;
-                // messageReceivedByServer will rename it to the positive server id later.
-                final long capturedDialogId = dialog_id;
-                AndroidUtilities.runOnUIThread(() -> {
-                    if (messages == null) return;
-                    // Tag the latest *un-tagged* outgoing. Rapid back-to-back sends queue
-                    // multiple onMessageSend callbacks 200 ms apart each; without the
-                    // already-pending check every callback would walk the same `messages`
-                    // tail and re-tag the very latest placeholder while older placeholders
-                    // from the same burst stayed unmarked → no eye badge later. Skipping
-                    // already-pending makes each callback claim exactly one fresh message;
-                    // over N rapid sends every one ends up tagged.
-                    for (int i = messages.size() - 1; i >= 0; i--) {
-                        MessageObject mo = messages.get(i);
-                        if (mo == null || !mo.isOut()) continue;
-                        int moId = mo.getId();
-                        if (ssc.isMessageExposed(capturedDialogId, moId)) continue;
-                        if (ssc.isMessagePending(capturedDialogId, moId)) continue;
-                        ssc.markMessagePending(capturedDialogId, moId);
-                        break;
-                    }
-                });
-                // The preview cache itself is updated synchronously inside
-                // filterToExposedSecondSpace when didReceiveNewMessages delivers the local
-                // placeholder, so we don't schedule any post-send snapshot here.
-            }
+            // Off-mode "pending" tagging of our own just-sent message happens in processNewMessages
+            // (when the local placeholder enters `messages`), not here. Doing it synchronously there
+            // — before messageReceivedByServer can migrate the negative id to the server id — closes
+            // a race that previously stranded the tag on a dead id (message vanished from OFF mode +
+            // RecyclerView inconsistency crash). See the suppressed branch of processNewMessages.
             if (chatListItemAnimator != null) {
                 chatActivityEnterViewAnimateFromTop = chatActivityEnterView.getBackgroundTop();
                 if (chatActivityEnterViewAnimateFromTop != 0) {
@@ -20254,11 +20228,10 @@ public class ChatActivity extends BaseFragment implements
                     latestExposedOrPending = mo;
                 }
             } else if (mo.isOut() && (id < 0 || mo.isSending() || mo.isSendError())) {
-                // Local outgoing placeholder that hasn't been tagged pending yet. onMessageSend
-                // tags it on a runOnUIThread tick AFTER processSendingText has put it here,
-                // so during the brief window between send-fire and our tag the message must
-                // still be visible — otherwise the user watches their own bubble flicker out.
-                // It's the user's own work-in-progress; never an incoming.
+                // Local outgoing placeholder, not yet tagged pending on this first pass. The caller
+                // (processNewMessages) tags it pending immediately after this filter returns, as it
+                // enters `messages`. Keep it visible here so the user's own in-flight bubble doesn't
+                // flicker out. It's the user's own work-in-progress; never an incoming.
                 filtered.add(mo);
             }
         }
@@ -25286,6 +25259,24 @@ public class ChatActivity extends BaseFragment implements
             ArrayList<MessageObject> filtered = filterToExposedSecondSpace(arr);
             if (filtered.isEmpty()) {
                 return;
+            }
+            // Tag our own freshly-sent placeholder(s) as pending off-mode work right here — at the
+            // moment they enter `messages`, synchronously with the insert notify below. The old path
+            // tagged on a later runOnUIThread tick in onMessageSend, which raced messageReceivedByServer:
+            // when the server echo landed first, replacePendingMessageId (negative -> positive) found
+            // nothing and the tag stranded on the dead negative id, so the message dropped out of the
+            // OFF-mode view AND desynced the adapter -> RecyclerView "Inconsistency detected" crash.
+            // Setting the tag before the server can confirm closes the race.
+            SecondSpaceController pendingCtrl = SecondSpaceController.getInstance(currentAccount);
+            for (int i = 0; i < filtered.size(); i++) {
+                MessageObject mo = filtered.get(i);
+                if (mo == null || !mo.isOut()) continue;
+                int moId = mo.getId();
+                if ((moId < 0 || mo.isSending() || mo.isSendError())
+                        && !pendingCtrl.isMessageExposed(dialog_id, moId)
+                        && !pendingCtrl.isMessagePending(dialog_id, moId)) {
+                    pendingCtrl.markMessagePending(dialog_id, moId);
+                }
             }
             arr = filtered;
         }

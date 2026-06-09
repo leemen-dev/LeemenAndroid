@@ -740,6 +740,11 @@ public class SendGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private void buyPremiumTier() {
+        // Leemen: this fork does not process Telegram Premium gifting (bot/invoice or Google Play).
+        if (BillingController.showLeemenPurchaseBlocked()) {
+            button.setLoading(false);
+            return;
+        }
         final TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(dialogId);
         if (user == null) {
             button.setLoading(false);

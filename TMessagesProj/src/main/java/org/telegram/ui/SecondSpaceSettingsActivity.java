@@ -52,6 +52,8 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     private final ArrayList<Long> hiddenIds = new ArrayList<>();
 
     private int rowCount;
+    private int premiumRow;
+    private int premiumShadowRow;
     private int addChatRow;
     private int addChatInfoRow;
     private int chatsHeaderRow;
@@ -72,15 +74,19 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     private int sequenceInfoRow;
     private int pinInSearchRow;
     private int pinInSearchInfoRow;
-    private int entryPasswordShadowRow;
-    private int entryPasswordRow;
-    private int entryPasswordInfoRow;
-    private int hideAccountsShadowRow;
-    private int hideAccountsHeaderRow;
-    private int hideAccountsStartRow;
-    private int hideAccountsEndRow;
-    private int hideAccountsInfoRow;
-    private final ArrayList<Integer> otherAccounts = new ArrayList<>();
+    private int hiddenAccountsShadowRow;
+    private int addHiddenAccountRow;
+    private int hiddenAccountsHeaderRow;
+    private int hiddenAccountsStartRow;
+    private int hiddenAccountsEndRow;
+    private int hiddenAccountsInfoRow;
+    private int switchPasswordShadowRow;
+    private int switchPasswordRow;
+    private int switchPasswordInfoRow;
+    /** Accounts currently in the hide-list (shown as removable rows). */
+    private final ArrayList<Integer> hiddenAccountsList = new ArrayList<>();
+    /** Whether any OTHER activated account exists at all (gates the whole section). */
+    private boolean hasOtherAccounts;
 
     @Override
     public boolean onFragmentCreate() {
@@ -135,7 +141,9 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         listView.setLayoutManager(new LinearLayoutManager(context));
         listView.setAdapter(adapter = new ListAdapter(context));
         listView.setOnItemClickListener((view, position) -> {
-            if (position == addChatRow) {
+            if (position == premiumRow) {
+                presentFragment(new LeemenPremiumActivity());
+            } else if (position == addChatRow) {
                 openChatPicker();
             } else if (position == switchRow) {
                 onEntryButtonSwitchClick((TextCheckCell) view);
@@ -149,10 +157,12 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                 presentFragment(new PrivateSpaceTabSequenceActivity());
             } else if (position == pinInSearchRow) {
                 onPinInSearchSwitchClick((TextCheckCell) view);
-            } else if (position == entryPasswordRow) {
-                onEntryPasswordRowClick();
-            } else if (position >= hideAccountsStartRow && position < hideAccountsEndRow) {
-                onHideAccountToggle((TextCheckCell) view, otherAccounts.get(position - hideAccountsStartRow));
+            } else if (position == addHiddenAccountRow) {
+                openAccountPicker();
+            } else if (position == switchPasswordRow) {
+                onSwitchPasswordRowClick();
+            } else if (position >= hiddenAccountsStartRow && position < hiddenAccountsEndRow) {
+                confirmRemoveAccount(hiddenAccountsList.get(position - hiddenAccountsStartRow));
             } else if (position >= chatsStartRow && position < chatsEndRow) {
                 long dialogId = hiddenIds.get(position - chatsStartRow);
                 confirmRemove(dialogId);
@@ -161,6 +171,10 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         listView.setOnItemLongClickListener((view, position) -> {
             if (position >= chatsStartRow && position < chatsEndRow) {
                 confirmRemove(hiddenIds.get(position - chatsStartRow));
+                return true;
+            }
+            if (position >= hiddenAccountsStartRow && position < hiddenAccountsEndRow) {
+                confirmRemoveAccount(hiddenAccountsList.get(position - hiddenAccountsStartRow));
                 return true;
             }
             return false;
@@ -180,11 +194,21 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
             // addToCurrentSpace targets whichever space is currently active (real or fake),
             // so the picker mutates the right membership set without explicit branching.
+            // Free tier caps hidden chats at MAX_HIDDEN_CHATS_FREE; add as many as fit, then
+            // surface the Leemen Premium upsell if the selection exceeded the limit.
+            boolean blockedByLimit = false;
             for (Long id : ids) {
                 if (id == null) continue;
+                if (!ssc.canAddChats(1)) {
+                    blockedByLimit = true;
+                    break;
+                }
                 ssc.addToCurrentSpace(id);
             }
             reloadHiddenIds();
+            if (blockedByLimit) {
+                LeemenPremiumActivity.showUpgradeDialog(SecondSpaceSettingsActivity.this);
+            }
         });
         presentFragment(fragment);
     }
@@ -327,36 +351,99 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         if (all != null) {
             hiddenIds.addAll(all);
         }
-        reloadOtherAccounts();
+        reloadAccounts();
         updateRows();
         if (adapter != null) {
             adapter.notifyDataSetChanged();
         }
     }
 
-    private void reloadOtherAccounts() {
-        otherAccounts.clear();
+    private void reloadAccounts() {
+        hiddenAccountsList.clear();
+        hasOtherAccounts = false;
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (a == currentAccount) continue;
-            if (UserConfig.getInstance(a).isClientActivated()) {
-                otherAccounts.add(a);
+            if (!UserConfig.getInstance(a).isClientActivated()) continue;
+            hasOtherAccounts = true;
+            if (ssc.isAccountHidden(a)) {
+                hiddenAccountsList.add(a);
             }
         }
     }
 
-    private void onEntryPasswordRowClick() {
+    private String accountName(int account) {
+        TLRPC.User user = UserConfig.getInstance(account).getCurrentUser();
+        return user == null
+                ? ""
+                : org.telegram.messenger.ContactsController.formatName(user.first_name, user.last_name);
+    }
+
+    /** Pick an account to add to the hide-list — lists OTHER activated accounts not yet hidden. */
+    private void openAccountPicker() {
         if (getParentActivity() == null) return;
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        if (ssc.hasEntryPassword()) {
+        ArrayList<Integer> addable = new ArrayList<>();
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            if (a == currentAccount) continue;
+            if (!UserConfig.getInstance(a).isClientActivated()) continue;
+            if (ssc.isAccountHidden(a)) continue;
+            addable.add(a);
+        }
+        if (addable.isEmpty()) {
+            new AlertDialog.Builder(getParentActivity())
+                    .setTitle(LocaleController.getString(R.string.HiddenAccountsAddAccount))
+                    .setMessage(LocaleController.getString(R.string.HiddenAccountsNoneToAdd))
+                    .setPositiveButton(LocaleController.getString(R.string.OK), null)
+                    .show();
+            return;
+        }
+        CharSequence[] names = new CharSequence[addable.size()];
+        for (int i = 0; i < addable.size(); i++) {
+            names[i] = accountName(addable.get(i));
+        }
+        AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
+        b.setTitle(LocaleController.getString(R.string.HiddenAccountsAddAccount));
+        b.setItems(names, (d, which) -> {
+            SecondSpaceController.getInstance(currentAccount).setAccountHidden(addable.get(which), true);
+            reloadAccounts();
+            updateRows();
+            if (adapter != null) adapter.notifyDataSetChanged();
+        });
+        b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        b.show();
+    }
+
+    private void confirmRemoveAccount(int account) {
+        if (getParentActivity() == null) return;
+        AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
+        b.setTitle(LocaleController.getString(R.string.HiddenAccountsListTitle));
+        b.setMessage(LocaleController.getString(R.string.HiddenAccountsRemoveConfirm));
+        b.setPositiveButton(LocaleController.getString(R.string.Remove), (d, w) -> {
+            SecondSpaceController.getInstance(currentAccount).setAccountHidden(account, false);
+            reloadAccounts();
+            updateRows();
+            if (adapter != null) adapter.notifyDataSetChanged();
+        });
+        b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        AlertDialog alert = b.create();
+        alert.show();
+        alert.redPositive();
+    }
+
+    private void onSwitchPasswordRowClick() {
+        if (getParentActivity() == null) return;
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        if (ssc.hasSwitchPassword()) {
             AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
-            b.setTitle(LocaleController.getString(R.string.HiddenAccountEntryPasswordTitle));
-            b.setMessage(LocaleController.getString(R.string.HiddenAccountEntryPasswordRemoveConfirm));
+            b.setTitle(LocaleController.getString(R.string.HiddenAccountsSwitchPasswordTitle));
+            b.setMessage(LocaleController.getString(R.string.HiddenAccountsSwitchPasswordRemoveConfirm));
             b.setPositiveButton(LocaleController.getString(R.string.Remove), (d, w) -> {
-                PrivateSpacePinDialog.showEnterAccountPassword(
+                PrivateSpacePinDialog.showEnterSwitchPassword(
                         getParentActivity(),
                         currentAccount,
                         () -> {
-                            SecondSpaceController.getInstance(currentAccount).setEntryPassword(null);
+                            SecondSpaceController.getInstance(currentAccount).setSwitchPassword(null);
                             if (adapter != null) adapter.notifyDataSetChanged();
                         },
                         null
@@ -367,21 +454,16 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             alert.show();
             alert.redPositive();
         } else {
-            PrivateSpacePinDialog.showSetAccountPassword(getParentActivity(), currentAccount, () -> {
+            PrivateSpacePinDialog.showSetSwitchPassword(getParentActivity(), currentAccount, () -> {
                 if (adapter != null) adapter.notifyDataSetChanged();
             });
         }
     }
 
-    private void onHideAccountToggle(TextCheckCell cell, int otherAccountNum) {
-        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        boolean newValue = !ssc.isAccountHidden(otherAccountNum);
-        ssc.setAccountHidden(otherAccountNum, newValue);
-        cell.setChecked(newValue);
-    }
-
     private void updateRows() {
         rowCount = 0;
+        premiumRow = rowCount++;
+        premiumShadowRow = rowCount++;
         addChatRow = rowCount++;
         addChatInfoRow = rowCount++;
         if (!hiddenIds.isEmpty()) {
@@ -420,22 +502,33 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             pinInSearchRow = -1;
             pinInSearchInfoRow = -1;
         }
-        entryPasswordShadowRow = rowCount++;
-        entryPasswordRow = rowCount++;
-        entryPasswordInfoRow = rowCount++;
-        if (!otherAccounts.isEmpty()) {
-            hideAccountsShadowRow = rowCount++;
-            hideAccountsHeaderRow = rowCount++;
-            hideAccountsStartRow = rowCount;
-            rowCount += otherAccounts.size();
-            hideAccountsEndRow = rowCount;
-            hideAccountsInfoRow = rowCount++;
+        if (hasOtherAccounts) {
+            hiddenAccountsShadowRow = rowCount++;
+            addHiddenAccountRow = rowCount++;
+            if (!hiddenAccountsList.isEmpty()) {
+                hiddenAccountsHeaderRow = rowCount++;
+                hiddenAccountsStartRow = rowCount;
+                rowCount += hiddenAccountsList.size();
+                hiddenAccountsEndRow = rowCount;
+            } else {
+                hiddenAccountsHeaderRow = -1;
+                hiddenAccountsStartRow = -1;
+                hiddenAccountsEndRow = -1;
+            }
+            hiddenAccountsInfoRow = rowCount++;
+            switchPasswordShadowRow = rowCount++;
+            switchPasswordRow = rowCount++;
+            switchPasswordInfoRow = rowCount++;
         } else {
-            hideAccountsShadowRow = -1;
-            hideAccountsHeaderRow = -1;
-            hideAccountsStartRow = -1;
-            hideAccountsEndRow = -1;
-            hideAccountsInfoRow = -1;
+            hiddenAccountsShadowRow = -1;
+            addHiddenAccountRow = -1;
+            hiddenAccountsHeaderRow = -1;
+            hiddenAccountsStartRow = -1;
+            hiddenAccountsEndRow = -1;
+            hiddenAccountsInfoRow = -1;
+            switchPasswordShadowRow = -1;
+            switchPasswordRow = -1;
+            switchPasswordInfoRow = -1;
         }
     }
 
@@ -504,6 +597,16 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             switch (viewType) {
                 case VIEW_USER: {
                     ManageChatUserCell userCell = (ManageChatUserCell) holder.itemView;
+                    if (position >= hiddenAccountsStartRow && position < hiddenAccountsEndRow) {
+                        int acc = hiddenAccountsList.get(position - hiddenAccountsStartRow);
+                        TLRPC.User accUser = UserConfig.getInstance(acc).getCurrentUser();
+                        String subtitle = accUser != null && accUser.phone != null && accUser.phone.length() != 0
+                                ? PhoneFormat.getInstance().format("+" + accUser.phone)
+                                : LocaleController.getString(R.string.NumberUnknown);
+                        userCell.setTag(acc);
+                        userCell.setData(accUser, null, subtitle, position != hiddenAccountsEndRow - 1);
+                        break;
+                    }
                     long did = hiddenIds.get(position - chatsStartRow);
                     userCell.setTag(did);
                     if (did > 0) {
@@ -552,22 +655,26 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceSequenceInfo));
                     } else if (position == pinInSearchInfoRow) {
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpacePinInSearchInfo));
-                    } else if (position == entryPasswordInfoRow) {
-                        privacyCell.setText(LocaleController.getString(R.string.HiddenAccountEntryPasswordInfo));
-                    } else if (position == hideAccountsInfoRow) {
+                    } else if (position == hiddenAccountsInfoRow) {
                         privacyCell.setText(LocaleController.getString(R.string.HiddenAccountsListInfo));
+                    } else if (position == switchPasswordInfoRow) {
+                        privacyCell.setText(LocaleController.getString(R.string.HiddenAccountsSwitchPasswordInfo));
                     }
                     break;
                 }
                 case VIEW_ADD: {
                     ManageChatTextCell actionCell = (ManageChatTextCell) holder.itemView;
                     actionCell.setColors(Theme.key_windowBackgroundWhiteBlueIcon, Theme.key_windowBackgroundWhiteBlueButton);
-                    actionCell.setText(LocaleController.getString(R.string.PrivateSpaceAddChat), null, R.drawable.msg_contact_add, false);
+                    if (position == addHiddenAccountRow) {
+                        actionCell.setText(LocaleController.getString(R.string.HiddenAccountsAddAccount), null, R.drawable.msg_contact_add, false);
+                    } else {
+                        actionCell.setText(LocaleController.getString(R.string.PrivateSpaceAddChat), null, R.drawable.msg_contact_add, false);
+                    }
                     break;
                 }
                 case VIEW_HEADER: {
                     HeaderCell headerCell = (HeaderCell) holder.itemView;
-                    if (position == hideAccountsHeaderRow) {
+                    if (position == hiddenAccountsHeaderRow) {
                         headerCell.setText(LocaleController.getString(R.string.HiddenAccountsListTitle));
                     } else {
                         headerCell.setText(LocaleController.getString(R.string.PrivateSpaceSelectChats));
@@ -583,20 +690,24 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                         cell.setTextAndCheck(LocaleController.getString(R.string.PrivateSpaceAllowScreenshots), ssc.isScreenshotsAllowed(), false);
                     } else if (position == pinInSearchRow) {
                         cell.setTextAndCheck(LocaleController.getString(R.string.PrivateSpacePinInSearch), ssc.isPinInSearchEnabled(), false);
-                    } else if (position >= hideAccountsStartRow && position < hideAccountsEndRow) {
-                        int acc = otherAccounts.get(position - hideAccountsStartRow);
-                        TLRPC.User user = UserConfig.getInstance(acc).getCurrentUser();
-                        String name = user == null
-                                ? ""
-                                : org.telegram.messenger.ContactsController.formatName(user.first_name, user.last_name);
-                        cell.setTextAndCheck(name, ssc.isAccountHidden(acc), position != hideAccountsEndRow - 1);
                     }
                     break;
                 }
                 case VIEW_VALUE: {
                     org.telegram.ui.Cells.TextSettingsCell cell = (org.telegram.ui.Cells.TextSettingsCell) holder.itemView;
                     SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-                    if (position == passwordRow) {
+                    if (position == premiumRow) {
+                        String value;
+                        if (ssc.hasLeemenPremium()) {
+                            String date = android.text.format.DateFormat
+                                    .getDateFormat(org.telegram.messenger.ApplicationLoader.applicationContext)
+                                    .format(new java.util.Date(ssc.getLeemenPremiumUntil()));
+                            value = LocaleController.formatString(R.string.LeemenPremiumActiveUntil, date);
+                        } else {
+                            value = LocaleController.getString(R.string.LeemenPremiumStatusUnlimited);
+                        }
+                        cell.setTextAndValue(LocaleController.getString(R.string.LeemenPremium), value, true);
+                    } else if (position == passwordRow) {
                         boolean on = ssc.hasPassword();
                         cell.setTextAndValue(
                                 LocaleController.getString(R.string.PrivateSpacePinTitle),
@@ -614,10 +725,10 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                                 ? LocaleController.getString(R.string.PrivateSpaceSequenceRowOff)
                                 : LocaleController.formatString(R.string.PrivateSpaceSequenceRowOn, n);
                         cell.setTextAndValue(LocaleController.getString(R.string.PrivateSpaceSequenceTitle), value, false);
-                    } else if (position == entryPasswordRow) {
-                        boolean on = ssc.hasEntryPassword();
+                    } else if (position == switchPasswordRow) {
+                        boolean on = ssc.hasSwitchPassword();
                         cell.setTextAndValue(
-                                LocaleController.getString(R.string.HiddenAccountEntryPasswordTitle),
+                                LocaleController.getString(R.string.HiddenAccountsSwitchPasswordTitle),
                                 LocaleController.getString(on ? R.string.PrivateSpacePinOn : R.string.PrivateSpacePinOff),
                                 false);
                     }
@@ -628,6 +739,8 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
 
         @Override
         public int getItemViewType(int position) {
+            if (position == premiumRow) return VIEW_VALUE;
+            if (position == premiumShadowRow) return VIEW_SHADOW;
             if (position == addChatRow) return VIEW_ADD;
             if (position == addChatInfoRow) return VIEW_INFO;
             if (position == chatsHeaderRow) return VIEW_HEADER;
@@ -647,13 +760,14 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             if (position == sequenceInfoRow) return VIEW_INFO;
             if (position == pinInSearchRow) return VIEW_SWITCH;
             if (position == pinInSearchInfoRow) return VIEW_INFO;
-            if (position == entryPasswordShadowRow) return VIEW_SHADOW;
-            if (position == entryPasswordRow) return VIEW_VALUE;
-            if (position == entryPasswordInfoRow) return VIEW_INFO;
-            if (position == hideAccountsShadowRow) return VIEW_SHADOW;
-            if (position == hideAccountsHeaderRow) return VIEW_HEADER;
-            if (position >= hideAccountsStartRow && position < hideAccountsEndRow) return VIEW_SWITCH;
-            if (position == hideAccountsInfoRow) return VIEW_INFO;
+            if (position == hiddenAccountsShadowRow) return VIEW_SHADOW;
+            if (position == addHiddenAccountRow) return VIEW_ADD;
+            if (position == hiddenAccountsHeaderRow) return VIEW_HEADER;
+            if (position >= hiddenAccountsStartRow && position < hiddenAccountsEndRow) return VIEW_USER;
+            if (position == hiddenAccountsInfoRow) return VIEW_INFO;
+            if (position == switchPasswordShadowRow) return VIEW_SHADOW;
+            if (position == switchPasswordRow) return VIEW_VALUE;
+            if (position == switchPasswordInfoRow) return VIEW_INFO;
             return VIEW_SHADOW;
         }
 

@@ -106,6 +106,10 @@ public class BoostRepository {
     }
 
     public static void payGiftCode(List<TLObject> users, TLRPC.TL_premiumGiftCodeOption option, TLRPC.Chat chat, TLRPC.TL_textWithEntities message, BaseFragment baseFragment, Utilities.Callback<Void> onSuccess, Utilities.Callback<TLRPC.TL_error> onError) {
+        // Leemen: this fork does not process channel boosts / gift-code purchases.
+        if (BillingController.showLeemenPurchaseBlocked()) {
+            return;
+        }
         invalidateGiftOptionsToCache(UserConfig.selectedAccount);
         if (!isGoogleBillingAvailable()) {
             payGiftCodeByInvoice(users, option, chat, message, baseFragment, onSuccess, onError);
@@ -334,6 +338,10 @@ public class BoostRepository {
                                    TLRPC.Chat chat, int date, boolean onlyNewSubscribers, BaseFragment baseFragment,
                                    boolean winnersVisible, boolean withAdditionPrize, String prizeDesc,
                                    Utilities.Callback<Void> onSuccess, Utilities.Callback<TLRPC.TL_error> onError) {
+        // Leemen: this fork does not process giveaway purchases.
+        if (BillingController.showLeemenPurchaseBlocked()) {
+            return;
+        }
         if (!isGoogleBillingAvailable()) {
             payGiveAwayByInvoice(chats, selectedCountries, option, chat, date, onlyNewSubscribers, baseFragment, winnersVisible, withAdditionPrize, prizeDesc, onSuccess, onError);
         } else {

@@ -126,13 +126,13 @@ public final class PrivateSpacePinDialog {
     }
 
     /**
-     * Prompt for the account-entry password (per-account gate guarding switch INTO this account).
-     * If the target account has no entry password, runs onSuccess immediately. If user cancels,
-     * onCancel runs (may be null).
+     * Prompt for the main account's switch password (the gate guarding switches INTO accounts
+     * this main account hides). If the main account has no switch password, runs onSuccess
+     * immediately. If user cancels, onCancel runs (may be null).
      */
-    public static void showEnterAccountPassword(Context context, int targetAccount, Runnable onSuccess, Runnable onCancel) {
-        SecondSpaceController ssc = SecondSpaceController.getInstance(targetAccount);
-        if (!ssc.hasEntryPassword()) {
+    public static void showEnterSwitchPassword(Context context, int mainAccount, Runnable onSuccess, Runnable onCancel) {
+        SecondSpaceController ssc = SecondSpaceController.getInstance(mainAccount);
+        if (!ssc.hasSwitchPassword()) {
             if (onSuccess != null) onSuccess.run();
             return;
         }
@@ -149,7 +149,7 @@ public final class PrivateSpacePinDialog {
         boolean[] succeeded = {false};
         Runnable submit = () -> {
             String pin = field.getText().toString();
-            if (ssc.verifyEntryPassword(pin)) {
+            if (ssc.verifySwitchPassword(pin)) {
                 succeeded[0] = true;
                 if (alertRef[0] != null) alertRef[0].dismiss();
                 if (onSuccess != null) onSuccess.run();
@@ -179,10 +179,10 @@ public final class PrivateSpacePinDialog {
         focus(field);
     }
 
-    /** Prompt to set/change the account entry password (two-field confirmation). */
-    public static void showSetAccountPassword(Context context, int targetAccount, Runnable onSuccess) {
-        SecondSpaceController ssc = SecondSpaceController.getInstance(targetAccount);
-        AlertDialog.Builder builder = baseBuilder(context, R.string.HiddenAccountEntryPasswordTitle);
+    /** Prompt to set/change the main account's switch password (two-field confirmation). */
+    public static void showSetSwitchPassword(Context context, int mainAccount, Runnable onSuccess) {
+        SecondSpaceController ssc = SecondSpaceController.getInstance(mainAccount);
+        AlertDialog.Builder builder = baseBuilder(context, R.string.HiddenAccountsSwitchPasswordTitle);
         EditText field1 = newPinField(context);
         EditText field2 = newPinField(context);
         field2.setImeOptions(EditorInfo.IME_ACTION_DONE);
@@ -209,7 +209,7 @@ public final class PrivateSpacePinDialog {
                 AndroidUtilities.shakeView(field2);
                 return;
             }
-            ssc.setEntryPassword(pin1);
+            ssc.setSwitchPassword(pin1);
             if (alertRef[0] != null) alertRef[0].dismiss();
             if (onSuccess != null) onSuccess.run();
         };

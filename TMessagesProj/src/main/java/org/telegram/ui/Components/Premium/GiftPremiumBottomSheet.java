@@ -297,6 +297,10 @@ public class GiftPremiumBottomSheet extends BottomSheetWithRecyclerListView impl
     }
 
     private void onGiftPremium() {
+        // Leemen: this fork does not process Telegram Premium gifting (bot/invoice or Google Play).
+        if (BillingController.showLeemenPurchaseBlocked()) {
+            return;
+        }
         GiftTier tier = giftTiers.get(selectedTierIndex);
         if (BuildVars.useInvoiceBilling()) {
             if (getBaseFragment().getParentActivity() instanceof LaunchActivity) {

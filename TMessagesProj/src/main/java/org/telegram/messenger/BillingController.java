@@ -37,6 +37,7 @@ import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.LaunchActivity;
 import org.telegram.ui.LoginActivity;
 import org.telegram.ui.PremiumPreviewFragment;
+import org.telegram.ui.Components.Premium.PremiumNotAvailableBottomSheet;
 import org.telegram.ui.Stars.StarsController;
 
 import java.text.NumberFormat;
@@ -209,7 +210,27 @@ public class BillingController implements PurchasesUpdatedListener, BillingClien
         launchBillingFlow(activity, accountInstance, paymentPurpose, productDetails, null, false);
     }
 
+    /**
+     * Leemen: this fork sells no Telegram products (Premium, gifts, Stars, boosts). Every payment
+     * entry point routes here and shows the "use the official app" sheet instead of charging.
+     * Returns {@code true} so callers can write {@code if (showLeemenPurchaseBlocked()) return;}
+     * — a runtime value, so the compiler keeps any following code reachable.
+     */
+    public static boolean showLeemenPurchaseBlocked() {
+        AndroidUtilities.runOnUIThread(() -> {
+            BaseFragment f = LaunchActivity.getSafeLastFragment();
+            if (f != null && f.getParentActivity() != null) {
+                f.showDialog(new PremiumNotAvailableBottomSheet(f));
+            }
+        });
+        return true;
+    }
+
     public void launchBillingFlow(Activity activity, AccountInstance accountInstance, TLRPC.InputStorePaymentPurpose paymentPurpose, List<BillingFlowParams.ProductDetailsParams> productDetails, BillingFlowParams.SubscriptionUpdateParams subscriptionUpdateParams, boolean checkedConsume) {
+        // Leemen: backstop for native Google Play billing (Premium, gifts, Stars, boosts).
+        if (showLeemenPurchaseBlocked()) {
+            return;
+        }
         if (!isReady() || activity == null) {
             return;
         }

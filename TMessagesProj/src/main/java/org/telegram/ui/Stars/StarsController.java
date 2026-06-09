@@ -748,6 +748,10 @@ public class StarsController {
         Utilities.Callback2<Boolean, String> whenDone,
         TLRPC.InputPeer purposePeer
     ) {
+        // Leemen: this fork does not process Telegram Stars purchases.
+        if (BillingController.showLeemenPurchaseBlocked()) {
+            return;
+        }
         if (activity == null) {
             return;
         }
@@ -877,6 +881,10 @@ public class StarsController {
     }
 
     public void buyGift(Activity activity, TL_stars.TL_starsGiftOption option, long user_id, Utilities.Callback2<Boolean, String> whenDone) {
+        // Leemen: this fork does not process Telegram Stars purchases.
+        if (BillingController.showLeemenPurchaseBlocked()) {
+            return;
+        }
         if (activity == null) {
             return;
         }
@@ -1026,6 +1034,10 @@ public class StarsController {
             boolean withAdditionPrize, String prizeDescription,
             Utilities.Callback2<Boolean, String> whenDone
     ) {
+        // Leemen: this fork does not process Telegram Stars purchases.
+        if (BillingController.showLeemenPurchaseBlocked()) {
+            return;
+        }
         if (activity == null) {
             return;
         }

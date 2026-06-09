@@ -46,6 +46,7 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
+import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
@@ -123,6 +124,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
     private int sessionsRow;
     @Keep
     private int passcodeRow;
+    private int privateSpaceEnterRow;
     @Keep
     private int autoDeleteMesages;
     @Keep
@@ -492,6 +494,8 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                 }
             } else if (position == passcodeRow) {
                 presentFragment(PasscodeActivity.determineOpenFragment());
+            } else if (position == privateSpaceEnterRow) {
+                enterPrivateSpace();
             } else if (position == secretWebpageRow) {
                 if (getMessagesController().secretWebpagePreview == 1) {
                     getMessagesController().secretWebpagePreview = 0;
@@ -701,6 +705,33 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         updateRows(true);
     }
 
+    /** Enter the hidden space from the Privacy & Security entry row. Mirrors the old top-level
+     *  Settings entry: PIN prompt when required, otherwise direct, then jump to the chat list. */
+    private void enterPrivateSpace() {
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        Runnable afterEnter = () -> {
+            if (getParentLayout() != null) {
+                for (org.telegram.ui.ActionBar.BaseFragment f : getParentLayout().getFragmentStack()) {
+                    if (f instanceof MainTabsActivity) {
+                        ((MainTabsActivity) f).switchToChatsTab();
+                        break;
+                    }
+                }
+            }
+            finishFragment();
+        };
+        boolean hasPin = ssc.hasRealPassword();
+        if (hasPin && !ssc.isPinPromptSkippable()) {
+            presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_ENTER).setOnSuccess(afterEnter));
+        } else if (hasPin) {
+            ssc.setActiveMode(SecondSpaceController.MODE_REAL);
+            afterEnter.run();
+        } else {
+            ssc.setActive(true);
+            afterEnter.run();
+        }
+    }
+
     public void updateRows(boolean notify) {
         passkeysRow = -1;
         rowCount = 0;
@@ -709,6 +740,15 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         passwordRow = rowCount++;
         autoDeleteMesages = rowCount++;
         passcodeRow = rowCount++;
+        // Leemen: the off-mode entry point into the hidden space lives here, deep in Security,
+        // not at the top level. Hidden while in-space or when the user opted to hide it (and a
+        // working entry shortcut has been verified — see isEntryButtonEffectivelyVisible()).
+        SecondSpaceController privateSpace = SecondSpaceController.getInstance(currentAccount);
+        if (!privateSpace.isActive() && privateSpace.isEntryButtonEffectivelyVisible()) {
+            privateSpaceEnterRow = rowCount++;
+        } else {
+            privateSpaceEnterRow = -1;
+        }
         if (getMessagesController().config.settingsDisplayPasskeys.get() && Build.VERSION.SDK_INT >= 28 && BuildVars.SUPPORTS_PASSKEYS) {
             passkeysRow = rowCount++;
         }
@@ -1366,6 +1406,8 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                             icon = R.drawable.msg2_secret;
                         }
                         textCell2.setTextAndValueAndIcon(getString(R.string.Passcode), value, true, icon, true);
+                    } else if (position == privateSpaceEnterRow) {
+                        textCell2.setTextAndValueAndIcon(getString(R.string.PrivateSpaceEnter), "", true, R.drawable.msg2_secret, true);
                     } else if (position == blockedRow) {
                         int totalCount = getMessagesController().totalBlockedCount;
                         if (totalCount == 0) {
@@ -1397,7 +1439,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                 return 3;
             } else if (position == botsAndWebsitesShadowRow) {
                 return 4;
-            } else if (position == autoDeleteMesages || position == sessionsRow || position == emailLoginRow || position == passwordRow || position == passkeysRow || position == passcodeRow || position == blockedRow) {
+            } else if (position == autoDeleteMesages || position == sessionsRow || position == emailLoginRow || position == passwordRow || position == passkeysRow || position == passcodeRow || position == privateSpaceEnterRow || position == blockedRow) {
                 return 5;
             }
             return 0;

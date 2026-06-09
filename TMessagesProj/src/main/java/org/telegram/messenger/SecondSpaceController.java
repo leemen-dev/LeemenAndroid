@@ -30,15 +30,29 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private static final String PREF_SHORTCUT_TESTED = "second_space_shortcut_tested";
     private static final String PREF_PIN_TIMEOUT_MIN = "second_space_pin_timeout_min";
     private static final String PREF_PIN_LAST_OK_MS = "second_space_pin_last_ok_ms";
-    private static final String PREF_ENTRY_PASSWORD_HASH = "second_space_entry_password_hash";
+    // Storage key kept as "entry_password" for backward compatibility; semantics are now
+    // the main account's single switch password (see the switch-password section below).
+    private static final String PREF_SWITCH_PASSWORD_HASH = "second_space_entry_password_hash";
     private static final String PREF_HIDDEN_ACCOUNTS = "second_space_hidden_accounts";
     private static final String PREF_EYE_HINT_SHOWN = "second_space_eye_hint_shown";
     private static final String PREF_TOOLBAR_HINT_SHOWN = "second_space_toolbar_hint_shown";
     private static final String PREF_SELF_PINNED = "second_space_self_pinned";
     private static final String PREF_ALLOW_SCREENSHOTS = "second_space_allow_screenshots";
+    private static final String PREF_ONBOARDING_DONE = "second_space_onboarding_done";
+    private static final String PREF_PAYWALL_SHOWN = "second_space_paywall_shown";
+    /** Leemen Premium expiry, epoch ms. {@code 0} = never subscribed. Local-only for now:
+     *  set by {@link #activateLeemenPremiumLocally(int)} until real billing is wired. */
+    private static final String PREF_PREMIUM_UNTIL = "second_space_premium_until";
 
     public static final int MODE_OFF = 0;
     public static final int MODE_REAL = 1;
+
+    /** Free tier: how many chats a user may hide without a Leemen Premium subscription.
+     *  Hard-enforced at every add-chat site via {@link #canAddChats(int)} (the picker, the
+     *  long-press preview menu, and multi-select), which blocks the add and offers the paywall.
+     *  Billing itself is still a local stub ({@link #activateLeemenPremiumLocally(int)}) until
+     *  real Leemen billing is wired. */
+    public static final int MAX_HIDDEN_CHATS_FREE = 1;
 
     /** A single step in the tab-tap gesture sequence. */
     public static final class TabStep {
@@ -92,13 +106,19 @@ public class SecondSpaceController extends BaseController implements Notificatio
     /** Active mode: {@link #MODE_OFF} or {@link #MODE_REAL}.
      *  Non-persistent — always {@code MODE_OFF} on next launch (deniability). */
     private int activeMode = MODE_OFF;
-    private String entryPasswordHash;
+    /** Single switch password owned by THIS account when it acts as the main account:
+     *  gates switching into any account this account hides ({@link #hiddenAccounts}).
+     *  Empty = no password. Independent of the Private Space {@link #passwordHash}. */
+    private String switchPasswordHash;
     /** Hidden-other-accounts list — accounts whose tray notifications / switcher
      *  presence are suppressed while private space is not active (i.e. in OFF mode). */
     private final Set<Integer> hiddenAccounts = new HashSet<>();
     /** When {@code true}, screenshots / screen-recording are permitted while this account's
      *  Private Space is open. Default {@code false}: FLAG_SECURE blocks capture in-space. */
     private boolean allowScreenshots;
+
+    /** Leemen Premium expiry (epoch ms); {@code 0} = no subscription. */
+    private long leemenPremiumUntil;
 
     private boolean entryButtonVisible;
 
@@ -108,6 +128,12 @@ public class SecondSpaceController extends BaseController implements Notificatio
         // activeMode is intentionally non-persistent: always starts MODE_OFF on app launch (deniability)
         entryButtonVisible = prefs.getBoolean(PREF_SHOW_ENTRY_BUTTON, true);
         loadDialogIds(dialogIds, prefs.getString(PREF_DIALOG_IDS, ""));
+        // Existing users who already hid chats before onboarding shipped: treat them as having
+        // finished onboarding so they skip the first-hide coach-marks and go straight to the
+        // one-time paywall offer on their next entry into the space.
+        if (!prefs.contains(PREF_ONBOARDING_DONE) && !dialogIds.isEmpty()) {
+            prefs.edit().putBoolean(PREF_ONBOARDING_DONE, true).apply();
+        }
         loadExposed(prefs.getString(PREF_EXPOSED, ""));
         loadLastDecided(prefs.getString(PREF_LAST_DECIDED, ""));
         loadPendingMessages(prefs.getString(PREF_PENDING_MESSAGES, ""));
@@ -127,8 +153,9 @@ public class SecondSpaceController extends BaseController implements Notificatio
         shortcutTested = prefs.getBoolean(PREF_SHORTCUT_TESTED, false);
         pinTimeoutMinutes = prefs.getInt(PREF_PIN_TIMEOUT_MIN, 0);
         pinLastVerifiedAt = prefs.getLong(PREF_PIN_LAST_OK_MS, 0L);
-        entryPasswordHash = prefs.getString(PREF_ENTRY_PASSWORD_HASH, "");
+        switchPasswordHash = prefs.getString(PREF_SWITCH_PASSWORD_HASH, "");
         allowScreenshots = prefs.getBoolean(PREF_ALLOW_SCREENSHOTS, false);
+        leemenPremiumUntil = prefs.getLong(PREF_PREMIUM_UNTIL, 0L);
         loadHiddenAccounts(hiddenAccounts, prefs.getString(PREF_HIDDEN_ACCOUNTS, ""), num);
         // We need to track placeholder-id → server-id renames globally, not just while a
         // ChatActivity for that dialog happens to be open. Otherwise: user sends in off
@@ -802,6 +829,83 @@ public class SecondSpaceController extends BaseController implements Notificatio
         getMessagesController().getMainSettings().edit().putBoolean(PREF_TOOLBAR_HINT_SHOWN, true).apply();
     }
 
+    // --- First-run onboarding & paywall (one-shot) ---
+
+    /** True once the user has hidden their first chat (or is a pre-onboarding existing user).
+     *  Gates the first-hide coach-marks (shown only while this is false). */
+    public boolean isOnboardingDone() {
+        return getMessagesController().getMainSettings().getBoolean(PREF_ONBOARDING_DONE, false);
+    }
+
+    public void markOnboardingDone() {
+        getMessagesController().getMainSettings().edit().putBoolean(PREF_ONBOARDING_DONE, true).apply();
+    }
+
+    /** True once the "unlimited hidden chats" offer has been shown. Shown at most once,
+     *  on a re-entry into the space after the first chat was hidden. */
+    public boolean isPaywallShown() {
+        return getMessagesController().getMainSettings().getBoolean(PREF_PAYWALL_SHOWN, false);
+    }
+
+    public void markPaywallShown() {
+        getMessagesController().getMainSettings().edit().putBoolean(PREF_PAYWALL_SHOWN, true).apply();
+    }
+
+    /** Free-tier hidden-chat allowance. */
+    public int getFreeHiddenLimit() {
+        return MAX_HIDDEN_CHATS_FREE;
+    }
+
+    /** Whether the user holds more hidden chats than the free tier allows, ignoring subscription.
+     *  Kept for callers that need the raw count test; prefer {@link #isOverChatLimit()} for
+     *  premium-aware enforcement. */
+    public boolean isOverFreeLimit() {
+        return dialogIds.size() > MAX_HIDDEN_CHATS_FREE;
+    }
+
+    // --- Leemen Premium subscription (local stub until real billing) ---
+
+    /** True while a Leemen Premium subscription is active (unlimited hidden chats). */
+    public boolean hasLeemenPremium() {
+        return leemenPremiumUntil > System.currentTimeMillis();
+    }
+
+    /** Subscription expiry as epoch ms; {@code 0} when never subscribed. */
+    public long getLeemenPremiumUntil() {
+        return leemenPremiumUntil;
+    }
+
+    /** Set the subscription expiry directly (epoch ms). Fires UI refresh so paywall / limit
+     *  state and the dialog list re-evaluate. */
+    public void setLeemenPremiumUntil(long whenMs) {
+        if (leemenPremiumUntil == whenMs) {
+            return;
+        }
+        leemenPremiumUntil = whenMs;
+        getMessagesController().getMainSettings().edit().putLong(PREF_PREMIUM_UNTIL, whenMs).apply();
+        NotificationCenter nc = getNotificationCenter();
+        nc.postNotificationName(NotificationCenter.secondSpaceModeChanged);
+        nc.postNotificationName(NotificationCenter.dialogsNeedReload);
+    }
+
+    /** Grant {@code months} of Leemen Premium locally, extending from now (or current expiry if
+     *  still active). TODO(billing): replace with Google Play / backend-verified entitlement. */
+    public void activateLeemenPremiumLocally(int months) {
+        long base = Math.max(leemenPremiumUntil, System.currentTimeMillis());
+        setLeemenPremiumUntil(base + (long) months * 31L * 24L * 60L * 60L * 1000L);
+    }
+
+    /** Whether {@code n} more chats can be hidden under the current entitlement. Premium = always. */
+    public boolean canAddChats(int n) {
+        return hasLeemenPremium() || dialogIds.size() + n <= MAX_HIDDEN_CHATS_FREE;
+    }
+
+    /** Premium-aware: holds more hidden chats than allowed and has no active subscription.
+     *  Triggers the renew-or-trim prompt on entry into the space. */
+    public boolean isOverChatLimit() {
+        return !hasLeemenPremium() && dialogIds.size() > MAX_HIDDEN_CHATS_FREE;
+    }
+
     /** Put {@code message} into Telegram's global {@code dialogMessagesByIds} so that
      *  resolve methods can find it for dialog-list preview. Works for both exposed and
      *  pending messages — the name is historical. PS code holds no MessageObject
@@ -1153,26 +1257,28 @@ public class SecondSpaceController extends BaseController implements Notificatio
         }
     }
 
-    // --- Entry password (own account) ---
+    // --- Switch password (main account) ---
     //
-    // Optional per-account PIN that gates *switching INTO* this account from any other
-    // selected account. Independent of the Private Space PIN (which gates entering PS
-    // *within* an already-open account). Same SHA-256 4–6-digit format.
+    // Optional single PIN owned by this account when it acts as the *main* account. It gates
+    // *switching INTO* any account this one hides ({@link #hiddenAccounts}). Configured in the
+    // hidden-accounts block of this account's Private Space settings — not on the hidden target.
+    // Independent of the Private Space PIN (which gates entering PS *within* an already-open
+    // account). Same SHA-256 4–6-digit format.
 
-    public boolean hasEntryPassword() {
-        return !TextUtils.isEmpty(entryPasswordHash);
+    public boolean hasSwitchPassword() {
+        return !TextUtils.isEmpty(switchPasswordHash);
     }
 
-    public boolean verifyEntryPassword(String pin) {
+    public boolean verifySwitchPassword(String pin) {
         if (pin == null) return false;
-        if (!hasEntryPassword()) return true;
-        return hashPassword(pin).equals(entryPasswordHash);
+        if (!hasSwitchPassword()) return true;
+        return hashPassword(pin).equals(switchPasswordHash);
     }
 
     /** Pass empty/null to clear. */
-    public void setEntryPassword(String pin) {
-        entryPasswordHash = TextUtils.isEmpty(pin) ? "" : hashPassword(pin);
-        getMessagesController().getMainSettings().edit().putString(PREF_ENTRY_PASSWORD_HASH, entryPasswordHash).apply();
+    public void setSwitchPassword(String pin) {
+        switchPasswordHash = TextUtils.isEmpty(pin) ? "" : hashPassword(pin);
+        getMessagesController().getMainSettings().edit().putString(PREF_SWITCH_PASSWORD_HASH, switchPasswordHash).apply();
     }
 
     // --- Hidden other accounts ---
