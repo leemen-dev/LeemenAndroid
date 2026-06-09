@@ -35,7 +35,7 @@ public final class LeemenConfig {
 
     // --- Identity binding (MTProto WebApp / initData) ---
     /** Bot whose Mini App signs the Telegram user id; we call messages.requestWebView headless. */
-    public static final String AUTH_BOT_USERNAME = "LeemenAuthBot";
+    public static final String AUTH_BOT_USERNAME = "leemen_auth_bot";
     public static final String AUTH_WEBAPP_URL   = "https://auth.leemen.app";
 
     // --- Supabase Realtime (notify-only broadcast; connected DIRECTLY, not via the gateway) ---

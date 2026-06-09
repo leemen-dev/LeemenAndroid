@@ -22,7 +22,7 @@ import java.util.Set;
  * Phase 1 — invisible per-Telegram-account Leemen identity binding.
  *
  * After a Telegram login (and for already-logged-in accounts on app start), we obtain a Telegram-signed
- * statement of the user id WITHOUT opening a WebView: resolve @LeemenAuthBot, call MTProto
+ * statement of the user id WITHOUT opening a WebView: resolve @leemen_auth_bot, call MTProto
  * messages.requestWebView headless, pull the `tgWebAppData` (= initData) out of the returned URL fragment,
  * and POST it to /v1/auth/telegram. The backend verifies the HMAC, finds/creates the master_account +
  * sync_account, and returns {token, sync_account_id, privacy_mode}. We persist that per account.
@@ -51,7 +51,10 @@ public final class LeemenIdentity {
         if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return;
         try {
             if (!UserConfig.getInstance(account).isClientActivated()) return;
-            if (LeemenAccount.hasBinding(account)) return;
+            if (LeemenAccount.hasBinding(account)) {
+                LeemenKey.ensureKey(account); // bound already; make sure the key was fetched too
+                return;
+            }
             synchronized (inFlight) {
                 if (inFlight.contains(account)) return;
                 inFlight.add(account);
@@ -145,6 +148,7 @@ public final class LeemenIdentity {
                     String privacy = resp.has("privacy_mode") && !resp.get("privacy_mode").isJsonNull()
                             ? resp.get("privacy_mode").getAsString() : null;
                     LeemenAccount.save(account, token, syncId, privacy);
+                    LeemenKey.ensureKey(account); // chain Phase 2: acquire K_master right after bind
                     if (BuildVars.LOGS_ENABLED) {
                         FileLog.d("Leemen: bound account " + account + " sync_account_id=" + syncId
                                 + " mode=" + privacy + " created=" + (resp.has("created") ? resp.get("created") : "?"));

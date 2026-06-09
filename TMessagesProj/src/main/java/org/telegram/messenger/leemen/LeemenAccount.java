@@ -43,6 +43,19 @@ public final class LeemenAccount {
         return !TextUtils.isEmpty(getToken(account)) && !TextUtils.isEmpty(getSyncAccountId(account));
     }
 
+    /** K_master (the blob E2E key) stored Keystore-wrapped (see LeemenKeyStore). Never the raw key here. */
+    public static String getWrappedKMaster(int account) {
+        return prefs().getString("kmaster_" + account, null);
+    }
+
+    public static void setWrappedKMaster(int account, String wrapped) {
+        prefs().edit().putString("kmaster_" + account, wrapped).apply();
+    }
+
+    public static boolean hasKMaster(int account) {
+        return !TextUtils.isEmpty(getWrappedKMaster(account));
+    }
+
     /** Persist the result of a successful /v1/auth/telegram bind. */
     public static void save(int account, String token, String syncAccountId, String privacyMode) {
         SharedPreferences.Editor e = prefs().edit()
@@ -60,6 +73,7 @@ public final class LeemenAccount {
                 .remove("token_" + account)
                 .remove("sync_" + account)
                 .remove("privacy_" + account)
+                .remove("kmaster_" + account)
                 .apply();
     }
 }

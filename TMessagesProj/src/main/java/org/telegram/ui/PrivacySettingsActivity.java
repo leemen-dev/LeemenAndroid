@@ -1073,7 +1073,8 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                     position == newChatsRow && !getContactsController().getLoadingGlobalSettings() ||
                     position == emailLoginRow || position == paymentsClearRow || position == secretMapRow ||
                     position == contactsSyncRow || position == passportRow || position == contactsDeleteRow ||
-                    position == contactsSuggestRow || position == autoDeleteMesages || position == botsBiometryRow;
+                    position == contactsSuggestRow || position == autoDeleteMesages || position == botsBiometryRow ||
+                    position == privateSpaceEnterRow;
         }
 
         @Override
