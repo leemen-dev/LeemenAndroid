@@ -86,6 +86,9 @@ public final class LeemenSync {
         everSynced[account] = true;
         everSyncedLoaded[account] = true;
         gatePrefs().edit().putBoolean("ever_synced_" + account, true).apply();
+        if (BuildVars.LOGS_ENABLED) {
+            FileLog.d("Leemen: anti-leak gate OPENED (first conclusive sync) account " + account);
+        }
     }
 
     private static void resetEverSynced(int account) {

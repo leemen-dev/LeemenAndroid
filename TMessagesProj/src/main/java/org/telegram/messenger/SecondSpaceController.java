@@ -662,6 +662,21 @@ public class SecondSpaceController extends BaseController implements Notificatio
     }
 
     private static void replaceMsgMap(Map<Long, Set<Integer>> target, Map<Long, Set<Integer>> src) {
+        // Preserve LOCAL in-flight placeholders (negative message ids). They are deliberately NOT in the
+        // synced blob (§4b never syncs negative ids), so a wholesale replace from the blob would wipe a
+        // just-sent, not-yet-server-confirmed message out of the OFF-mode view — making the first pending
+        // message vanish whenever any sync projects (e.g. when leaving the chat triggers an id migration).
+        Map<Long, Set<Integer>> keepNegatives = new HashMap<>();
+        for (Map.Entry<Long, Set<Integer>> e : target.entrySet()) {
+            Set<Integer> negs = null;
+            for (Integer mid : e.getValue()) {
+                if (mid != null && mid < 0) {
+                    if (negs == null) negs = new HashSet<>();
+                    negs.add(mid);
+                }
+            }
+            if (negs != null) keepNegatives.put(e.getKey(), negs);
+        }
         target.clear();
         if (src != null) {
             for (Map.Entry<Long, Set<Integer>> e : src.entrySet()) {
@@ -669,6 +684,14 @@ public class SecondSpaceController extends BaseController implements Notificatio
                     target.put(e.getKey(), new HashSet<>(e.getValue()));
                 }
             }
+        }
+        for (Map.Entry<Long, Set<Integer>> e : keepNegatives.entrySet()) {
+            Set<Integer> dst = target.get(e.getKey());
+            if (dst == null) {
+                dst = new HashSet<>();
+                target.put(e.getKey(), dst);
+            }
+            dst.addAll(e.getValue());
         }
     }
 
