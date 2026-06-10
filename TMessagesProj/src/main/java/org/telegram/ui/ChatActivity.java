@@ -20179,6 +20179,18 @@ public class ChatActivity extends BaseFragment implements
     private final java.util.HashSet<Integer> privateSpaceExposurePending = new java.util.HashSet<>();
     private int privateSpaceExposureUpTo = 0;
 
+    /** Preview ordering for OFF mode: the "latest" exposed/pending message is the one with the highest DATE
+     *  (then id). Comparing by id alone is wrong — a just-sent local placeholder has a NEGATIVE id that sorts
+     *  below every positive (server) id, so it would never become the OFF-mode dialog preview. */
+    private static boolean isNewerForPreview(MessageObject candidate, MessageObject current) {
+        if (candidate == null) return false;
+        if (current == null) return true;
+        int cd = candidate.messageOwner != null ? candidate.messageOwner.date : 0;
+        int dd = current.messageOwner != null ? current.messageOwner.date : 0;
+        if (cd != dd) return cd > dd;
+        return candidate.getId() > current.getId();
+    }
+
     private ArrayList<MessageObject> filterToExposedSecondSpace(ArrayList<MessageObject> messages) {
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
         ArrayList<MessageObject> filtered = new ArrayList<>(messages.size());
@@ -20214,7 +20226,7 @@ public class ChatActivity extends BaseFragment implements
             boolean pending = !exposed && ssc.isMessagePending(dialog_id, id);
             if (exposed) {
                 filtered.add(mo);
-                if (latestExposedOrPending == null || id > latestExposedOrPending.getId()) {
+                if (isNewerForPreview(mo, latestExposedOrPending)) {
                     latestExposedOrPending = mo;
                 }
             } else if (pending) {
@@ -20224,15 +20236,20 @@ public class ChatActivity extends BaseFragment implements
                 if (id > privateSpacePendingMaxId) {
                     privateSpacePendingMaxId = id;
                 }
-                if (latestExposedOrPending == null || id > latestExposedOrPending.getId()) {
+                if (isNewerForPreview(mo, latestExposedOrPending)) {
                     latestExposedOrPending = mo;
                 }
             } else if (mo.isOut() && (id < 0 || mo.isSending() || mo.isSendError())) {
                 // Local outgoing placeholder, not yet tagged pending on this first pass. The caller
                 // (processNewMessages) tags it pending immediately after this filter returns, as it
                 // enters `messages`. Keep it visible here so the user's own in-flight bubble doesn't
-                // flicker out. It's the user's own work-in-progress; never an incoming.
+                // flicker out. It's the user's own work-in-progress; never an incoming. It is also the
+                // newest message the user just sent → let it drive the OFF-mode dialog preview (its
+                // negative id sorts "below" positive ids, so the preview must compare by date, not id).
                 filtered.add(mo);
+                if (isNewerForPreview(mo, latestExposedOrPending)) {
+                    latestExposedOrPending = mo;
+                }
             }
         }
         // Strip reply previews that reference hidden (non-exposed, non-pending) messages

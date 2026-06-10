@@ -186,17 +186,12 @@ public class SecondSpaceController extends BaseController implements Notificatio
             Integer oldId = args.length > 0 && args[0] instanceof Integer ? (Integer) args[0] : null;
             Integer newId = args.length > 1 && args[1] instanceof Integer ? (Integer) args[1] : null;
             if (oldId == null || newId == null || oldId.equals(newId)) return;
-            // Placeholder ids are negative and unique per account, so a single iteration to
-            // find which chat (if any) holds the renamed id is fine — there's at most one.
-            Long owningDialog = null;
-            for (Map.Entry<Long, Set<Integer>> e : pendingMessages.entrySet()) {
-                if (e.getValue().contains(oldId)) {
-                    owningDialog = e.getKey();
-                    break;
-                }
-            }
+            // Placeholder ids are negative and unique per account, so a single iteration to find which chat
+            // (if any) holds the renamed id is fine — there's at most one. Search ALL id-keyed tag sets
+            // (exposed + pending + self-pinned), not just pending, or an exposed message would strand.
+            Long owningDialog = findDialogHoldingMessage(oldId);
             if (owningDialog != null) {
-                replacePendingMessageId(owningDialog, oldId, newId);
+                replaceMessageId(owningDialog, oldId, newId);
             }
         } else if (id == NotificationCenter.messagesDeleted) {
             // args: (ArrayList<Integer> mids, long channelId, ...). channelId > 0 → channel
@@ -1222,14 +1217,50 @@ public class SecondSpaceController extends BaseController implements Notificatio
      *  id at confirmation time (mutates the same MessageObject). Anything tracking that id
      *  must follow the rename — otherwise the set holds a phantom negative id and the now-
      *  positive-id message looks "not pending" to the filter. */
-    public void replacePendingMessageId(long dialogId, int oldId, int newId) {
+    /** Migrate a message's id (negative placeholder → positive server id, on messageReceivedByServer) across
+     *  ALL id-keyed PS tag sets — exposed, pending AND self-pinned — so a confirmed message keeps its tag and
+     *  doesn't drop out of the OFF-mode view / preview on the next reload. (Was pending-only, so exposed /
+     *  self-pinned messages stranded on the dead negative id and vanished on re-entry.) */
+    public void replaceMessageId(long dialogId, int oldId, int newId) {
         if (oldId == newId) return;
-        Set<Integer> set = pendingMessages.get(dialogId);
-        if (set != null && set.remove(oldId)) {
-            set.add(newId);
+        boolean changed = false;
+        changed |= migrateIdInSet(exposedMessages.get(dialogId), oldId, newId);
+        changed |= migrateIdInSet(pendingMessages.get(dialogId), oldId, newId);
+        changed |= migrateIdInSet(selfPinnedMessages.get(dialogId), oldId, newId);
+        if (changed) {
+            persistExposed();
             persistPendingMessages();
+            persistSelfPinned();
+            notifyLeemenSync(); // the tag now lives on the syncable positive id → push it
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
+    }
+
+    private static boolean migrateIdInSet(Set<Integer> set, int oldId, int newId) {
+        if (set != null && set.remove(oldId)) {
+            set.add(newId);
+            return true;
+        }
+        return false;
+    }
+
+    /** @deprecated use {@link #replaceMessageId} — kept for existing call sites. */
+    public void replacePendingMessageId(long dialogId, int oldId, int newId) {
+        replaceMessageId(dialogId, oldId, newId);
+    }
+
+    /** Which tracked dialog (if any) holds {@code messageId} in its exposed / pending / self-pinned set. */
+    private Long findDialogHoldingMessage(int messageId) {
+        for (Map.Entry<Long, Set<Integer>> e : pendingMessages.entrySet()) {
+            if (e.getValue().contains(messageId)) return e.getKey();
+        }
+        for (Map.Entry<Long, Set<Integer>> e : exposedMessages.entrySet()) {
+            if (e.getValue().contains(messageId)) return e.getKey();
+        }
+        for (Map.Entry<Long, Set<Integer>> e : selfPinnedMessages.entrySet()) {
+            if (e.getValue().contains(messageId)) return e.getKey();
+        }
+        return null;
     }
 
     /** Backwards-compat alias used by the existing decision-flow paths that conceptually
