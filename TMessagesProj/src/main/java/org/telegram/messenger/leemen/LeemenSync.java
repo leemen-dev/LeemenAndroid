@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.UserConfig;
 
@@ -43,7 +44,9 @@ public final class LeemenSync {
     private LeemenSync() {}
 
     private static final int N = UserConfig.MAX_ACCOUNT_COUNT;
-    private static final long DEBOUNCE_MS = 5000;
+    // Short coalescing window: collapses the multi-write storm of a single PS operation (e.g. un-hide
+    // fires 5 persist calls) into one push, while still feeling instant. Not a throttle.
+    private static final long DEBOUNCE_MS = 500;
     private static final int MAX_CAS_RETRY = 4;
 
     private static final LeemenSyncState[] STATES = new LeemenSyncState[N];
@@ -51,6 +54,7 @@ public final class LeemenSync {
     private static final boolean[] dirty = new boolean[N];
     private static final Runnable[] debounce = new Runnable[N];
     private static final Runnable[] watchdog = new Runnable[N];
+    private static final boolean[] pending = new boolean[N]; // OFF-mode list gated until first sync (anti-flash)
 
     private interface RawCb { void on(Object blob, long version); }
 
@@ -92,7 +96,35 @@ public final class LeemenSync {
             debounce[account] = null;
         }
         cancelWatchdog(account);
+        pending[account] = false;
         LeemenSyncState.clear(account);
+    }
+
+    /** Suppress the OFF-mode chat list for this account until its first sync resolves (no hidden-chat
+     *  flash on fresh login, when the local hidden set is still empty). Auto-clears after the first sync
+     *  projects the real set, or after a fallback timeout if sync never completes (e.g. offline login),
+     *  so the list is never stuck empty. */
+    public static void markSyncPending(final int account) {
+        if (!inRange(account)) return;
+        pending[account] = true;
+        reloadDialogs(account);
+        AndroidUtilities.runOnUIThread(() -> clearPending(account), 15000);
+    }
+
+    public static boolean isInitialSyncPending(int account) {
+        return inRange(account) && pending[account];
+    }
+
+    private static void clearPending(int account) {
+        if (!inRange(account) || !pending[account]) return;
+        pending[account] = false;
+        reloadDialogs(account);
+    }
+
+    private static void reloadDialogs(int account) {
+        try {
+            NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.dialogsNeedReload);
+        } catch (Throwable ignore) {}
     }
 
     // ===== orchestration (UI thread) =====
@@ -127,6 +159,7 @@ public final class LeemenSync {
                     if (fver >= 0) st.filterVersion = fver;
 
                     final Runnable projectAndPush = () -> {
+                        pending[account] = false; // gate off: we now have the latest hidden set to project
                         LeemenMerge.recomputeOffModeVisible(st.filter, st.content);
                         projectToController(account, st);
                         st.persist();

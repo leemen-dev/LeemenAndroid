@@ -719,7 +719,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 org.telegram.messenger.leemen.LeemenHeartbeat.maybeSendAll();
                 org.telegram.messenger.leemen.LeemenAnalytics.onAppStart();
             } catch (Throwable ignore) {}
-        }, 3000);
+        }, 1200);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             FingerprintController.checkKeyReady();

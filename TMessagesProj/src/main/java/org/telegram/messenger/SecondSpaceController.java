@@ -542,6 +542,11 @@ public class SecondSpaceController extends BaseController implements Notificatio
                 return false;
             case MODE_OFF:
             default:
+                // Until the first PS sync resolves, suppress the whole OFF-mode view so a server-hidden
+                // chat never flashes before we know the hidden set (e.g. on fresh login).
+                if (org.telegram.messenger.leemen.LeemenSync.isInitialSyncPending(currentAccount)) {
+                    return true;
+                }
                 return dialogIds.contains(dialogId);
         }
     }
