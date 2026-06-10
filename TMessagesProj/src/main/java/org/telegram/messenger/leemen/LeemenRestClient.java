@@ -108,8 +108,13 @@ public final class LeemenRestClient {
                 final String fErrCode = errCode, fErrMsg = errMsg;
                 AndroidUtilities.runOnUIThread(() -> cb.onResult(fBody, fCode, fErrCode, fErrMsg));
             } catch (Exception e) {
-                FileLog.e(e);
+                // Network failures (offline, DNS, timeout) are EXPECTED and handled by the callback — keep
+                // them out of Crashlytics (FileLog.e reports there): they're noise and would leak the backend
+                // host into crash reports. Quiet debug log only.
                 final String msg = e.getMessage();
+                if (org.telegram.messenger.BuildVars.LOGS_ENABLED) {
+                    FileLog.d("Leemen: REST " + method + " " + path + " failed: " + msg);
+                }
                 AndroidUtilities.runOnUIThread(() -> cb.onResult(null, -1, "network_error", msg));
             } finally {
                 if (conn != null) {

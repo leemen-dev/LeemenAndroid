@@ -36376,6 +36376,11 @@ public class ChatActivity extends BaseFragment implements
             } else {
                 messages = ChatActivity.this.messages;
             }
+            // OFF mode (hidden chat) shows a FIXED, filtered message set with no pagination — never add the
+            // loading-up/down spinner rows. They are the root of the RecyclerView "Inconsistency detected"
+            // crash: on the empty→first-message transition they appear as extra rows, but processNewMessages
+            // emits only a single notifyItemInserted, so getItemCount() grows by more than the notify reports.
+            final boolean offModeNoLoadingRows = isSecondSpaceContentSuppressed() && !isFiltered && !isFrozen;
             if (chatMode == MODE_SAVED && isInsideContainer) {
                 hintRow = rowCount++;
             } else {
@@ -36392,7 +36397,7 @@ public class ChatActivity extends BaseFragment implements
             }
 
             if (!messages.isEmpty()) {
-                if (!isFiltered && (!forwardEndReached[0] || mergeDialogId != 0 && !forwardEndReached[1]) && !hideForwardEndReached) {
+                if (!offModeNoLoadingRows && !isFiltered && (!forwardEndReached[0] || mergeDialogId != 0 && !forwardEndReached[1]) && !hideForwardEndReached) {
                     loadingDownRow = rowCount++;
                 } else {
                     loadingDownRow = -5;
@@ -36430,7 +36435,7 @@ public class ChatActivity extends BaseFragment implements
                     hintRow = rowCount++;
                 }
 
-                if (isFiltered ? !filteredEndReached : (!endReached[0] || mergeDialogId != 0 && !endReached[1]) && !(DISABLE_PROGRESS_VIEW && !AndroidUtilities.isTablet() && !isComments && currentUser == null)) {
+                if (!offModeNoLoadingRows && (isFiltered ? !filteredEndReached : (!endReached[0] || mergeDialogId != 0 && !endReached[1]) && !(DISABLE_PROGRESS_VIEW && !AndroidUtilities.isTablet() && !isComments && currentUser == null))) {
                     loadingUpRow = rowCount++;
                 } else {
                     loadingUpRow = -5;
