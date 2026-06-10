@@ -56,12 +56,44 @@ public final class LeemenSync {
     private static final boolean[] dirty = new boolean[N];
     private static final Runnable[] debounce = new Runnable[N];
     private static final Runnable[] watchdog = new Runnable[N];
-    // ===== Anti-leak gate (FAIL-CLOSED) =====
-    // In OFF mode a non-system chat is shown ONLY after the Leemen server has CONCLUSIVELY delivered the
-    // hidden set this session (syncConfirmed). Until then everything except the Telegram service chat stays
-    // hidden — a server-hidden chat must NEVER appear, even briefly, even if the backend is unreachable.
-    // There is deliberately NO timer that reveals the list without server confirmation.
-    private static final boolean[] syncConfirmed = new boolean[N]; // a conclusive filter pull projected the set this session
+    // ===== Anti-leak gate (cache-first, else FAIL-CLOSED) =====
+    // OFF-mode visibility uses CACHED data when we have it: once an account has EVER conclusively synced on
+    // this install (everSynced, persisted), we trust the locally-persisted hidden set (dialogIds) and show
+    // non-hidden chats immediately — even offline, even before this session's sync completes. Only when there
+    // is NO cache yet (fresh install / never synced) do we fail closed: hide EVERY non-service chat until the
+    // server conclusively delivers the hidden set. There is NO timer that reveals without server confirmation.
+    private static final boolean[] everSynced = new boolean[N];      // in-memory cache of the persisted flag
+    private static final boolean[] everSyncedLoaded = new boolean[N];
+
+    private static android.content.SharedPreferences gatePrefs() {
+        return org.telegram.messenger.ApplicationLoader.applicationContext
+                .getSharedPreferences("leemen_sync_gate", android.content.Context.MODE_PRIVATE);
+    }
+
+    /** Has this account ever completed a conclusive sync on this install? (Persisted; false on fresh install
+     *  / after logout. Cheap: in-memory after first read.) */
+    private static boolean hasEverSynced(int account) {
+        if (!inRange(account)) return false;
+        if (!everSyncedLoaded[account]) {
+            everSynced[account] = gatePrefs().getBoolean("ever_synced_" + account, false);
+            everSyncedLoaded[account] = true;
+        }
+        return everSynced[account];
+    }
+
+    private static void markEverSynced(int account) {
+        if (!inRange(account) || hasEverSynced(account)) return;
+        everSynced[account] = true;
+        everSyncedLoaded[account] = true;
+        gatePrefs().edit().putBoolean("ever_synced_" + account, true).apply();
+    }
+
+    private static void resetEverSynced(int account) {
+        if (!inRange(account)) return;
+        everSynced[account] = false;
+        everSyncedLoaded[account] = true;
+        gatePrefs().edit().remove("ever_synced_" + account).apply();
+    }
 
     private interface RawCb { void on(Object blob, long version); }
 
@@ -103,37 +135,35 @@ public final class LeemenSync {
             debounce[account] = null;
         }
         cancelWatchdog(account);
-        syncConfirmed[account] = false;
+        // Logout/delete wipes the cached hidden set, so the next login must fail closed again until it
+        // re-syncs (don't trust a stale/absent cache).
+        resetEverSynced(account);
         LeemenSyncState.clear(account);
     }
 
-    /** Suppress the OFF-mode chat list for this account until its first sync resolves (no hidden-chat
-     *  flash on fresh login, when the local hidden set is still empty). Auto-clears after the first sync
-     *  projects the real set, or after a fallback timeout if sync never completes (e.g. offline login),
-     *  so the list is never stuck empty. */
-    /** Nudge the OFF-mode list to its gated state right after login. The gate is already closed by default
-     *  for every activated account (see {@link #isInitialSyncPending}); this just forces an immediate refresh. */
+    /** Nudge the OFF-mode list to refresh right after login. On a fresh install (no cache) this shows the
+     *  fail-closed gated state; on a returning account it re-applies the cached hidden set. */
     public static void markSyncPending(final int account) {
         if (!inRange(account)) return;
         reloadDialogs(account);
     }
 
-    /** True while the OFF-mode list must stay gated (FAIL-CLOSED): the account is logged in and the Leemen
-     *  server has not yet conclusively confirmed the hidden set THIS session. Closed by default on every
-     *  launch; opened only by a conclusive filter pull ({@link #markSyncConfirmed}) — never by a timer.
-     *  Covers the whole window from login (even before the binding exists, or after a force-stop mid-login)
-     *  until sync; every activated account in this fork is a Leemen account. */
+    /** True while the OFF-mode list must stay FAIL-CLOSED (hide every non-service chat): the account is
+     *  logged in AND has NO cached hidden set yet (never conclusively synced on this install). Once we have
+     *  a cache (everSynced), this returns false and hiding falls back to the cached dialogIds — so a
+     *  returning account shows its chats instantly, even offline, while sync refreshes in the background. */
     public static boolean isInitialSyncPending(int account) {
         return inRange(account)
                 && UserConfig.getInstance(account).isClientActivated()
-                && !syncConfirmed[account];
+                && !hasEverSynced(account);
     }
 
-    /** Open the gate: a conclusive sync has projected the real hidden set this session. No reloadDialogs
+    /** Open the gate permanently for this install: a conclusive sync has projected the real hidden set, so
+     *  from now on (this session AND future launches) we trust the cached set. Persisted. No reloadDialogs
      *  here — the caller's projectToController applies the set and posts the reload (so the list never
      *  rebuilds with the gate open before the hidden set is in place). */
     private static void markSyncConfirmed(int account) {
-        if (inRange(account)) syncConfirmed[account] = true;
+        markEverSynced(account);
     }
 
     private static void reloadDialogs(int account) {
@@ -173,14 +203,12 @@ public final class LeemenSync {
                     if (cver >= 0) st.contentVersion = cver;
                     if (fver >= 0) st.filterVersion = fver;
 
-                    // Conclusive = at least one blob endpoint answered (200 with data, or 404 → version 0).
-                    // On a purely transient failure (both versions -1) we must NOT lift the anti-flash gate:
-                    // we don't yet know the hidden set, so revealing now would flash a server-hidden chat.
-                    // Membership (which chats are hidden) lives ONLY in the filter blob, so ONLY a conclusive
-                    // filter pull (200 with data, or 404 → version 0) lets us open the fail-closed gate. A
-                    // content-only success with a filter timeout must keep the gate closed (we don't yet know
-                    // the real hidden set → a server-hidden chat could otherwise leak).
-                    final boolean conclusivePull = (fver >= 0);
+                    // Open the fail-closed gate ONLY when we actually KNOW the hidden set. Membership lives
+                    // solely in the filter blob, so that means either: the filter DECODED (rf is a FilterBlob —
+                    // 200 + successful decrypt), OR a definitive 404 (fver == 0 → no blob → genuinely no hidden
+                    // chats). A 200 whose decrypt FAILED (fver >= 1 but rf == null) is NOT conclusive: the
+                    // hidden set is unknown, so we must keep the gate closed instead of revealing everything.
+                    final boolean conclusivePull = (rf instanceof LeemenBlob.FilterBlob) || (fver == 0);
                     final Runnable projectAndPush = () -> {
                         if (conclusivePull) {
                             markSyncConfirmed(account); // open the fail-closed gate: the real hidden set is known

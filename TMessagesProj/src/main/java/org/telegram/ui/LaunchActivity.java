@@ -710,12 +710,20 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         }
         MediaController.getInstance().setBaseActivity(this, true);
         ApplicationLoader.startAppCenter(this);
-        // Leemen: backfill backend identity for already-logged-in accounts (deferred off the busy startup).
+        // Leemen: open the fail-closed chat gate ASAP — kick the blob sync for already-bound accounts EARLY
+        // (the actual GETs run off the UI thread on globalQueue), instead of waiting for the 1200ms batch.
+        // This is what the OFF-mode list waits on, so getting it off the critical path shortens the gated
+        // "only the service chat" window on every launch.
+        AndroidUtilities.runOnUIThread(() -> {
+            try { org.telegram.messenger.leemen.LeemenSync.syncAll(); } catch (Throwable ignore) {}
+        }, 200);
+        // The rest (bind backfill, device register, realtime, heartbeat, analytics, attribution) stays
+        // deferred off the busy startup.
         AndroidUtilities.runOnUIThread(() -> {
             try {
                 if (org.telegram.messenger.BuildVars.DEBUG_VERSION) org.telegram.messenger.leemen.LeemenCrypto.selfTestOk();
                 org.telegram.messenger.leemen.LeemenIdentity.bindAllActivated();
-                org.telegram.messenger.leemen.LeemenSync.syncAll();
+                org.telegram.messenger.leemen.LeemenSync.syncAll(); // re-sync any account bind just activated
                 org.telegram.messenger.leemen.LeemenDevice.ensureRegisteredAll();
                 org.telegram.messenger.leemen.LeemenRealtime.connectAll();
                 org.telegram.messenger.leemen.LeemenHeartbeat.maybeSendAll();

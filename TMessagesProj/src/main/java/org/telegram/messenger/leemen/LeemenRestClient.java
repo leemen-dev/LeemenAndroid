@@ -7,7 +7,6 @@ import com.google.gson.JsonObject;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
-import org.telegram.messenger.Utilities;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -19,8 +18,8 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * Minimal REST client for the Leemen backend gateway (api[-dev].leemen.app/v1). JSON in/out, optional
- * Bearer auth, error envelope {error:{code,message}}. Network runs off the main thread on
- * Utilities.globalQueue; the callback is delivered on the UI thread.
+ * Bearer auth, error envelope {error:{code,message}}. Network runs off the main thread on a dedicated
+ * Leemen I/O pool (decoupled from Telegram's startup work); the callback is delivered on the UI thread.
  *
  * Intentionally tiny (HttpURLConnection + Gson, both already in the project) — no OkHttp/Retrofit added.
  * Blob PUT/GET (which need raw status codes + headers) layer their own helpers on top in the sync phase.
@@ -30,6 +29,17 @@ public final class LeemenRestClient {
     private LeemenRestClient() {}
 
     private static final Gson GSON = new Gson();
+
+    // Dedicated I/O pool: Leemen requests must NOT queue behind Telegram's own startup work (which is what
+    // Utilities.globalQueue carries). Our data only needs the session token, so it can be fetched the moment
+    // we're authorized — independent of the Telegram UI loading. The small pool also lets the two blob GETs
+    // run concurrently instead of serializing.
+    private static final java.util.concurrent.Executor IO =
+            java.util.concurrent.Executors.newFixedThreadPool(3, r -> {
+                Thread t = new Thread(r, "leemen-rest");
+                t.setDaemon(true);
+                return t;
+            });
 
     public interface Callback {
         /**
@@ -54,7 +64,7 @@ public final class LeemenRestClient {
     }
 
     private static void request(String method, String path, @Nullable String bearer, @Nullable Object jsonBody, Callback cb) {
-        Utilities.globalQueue.postRunnable(() -> {
+        IO.execute(() -> {
             HttpURLConnection conn = null;
             try {
                 conn = (HttpURLConnection) new URL(LeemenConfig.BASE_URL + path).openConnection();
