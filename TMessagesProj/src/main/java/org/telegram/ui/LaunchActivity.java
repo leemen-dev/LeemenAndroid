@@ -712,7 +712,13 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         ApplicationLoader.startAppCenter(this);
         // Leemen: backfill backend identity for already-logged-in accounts (deferred off the busy startup).
         AndroidUtilities.runOnUIThread(() -> {
-            try { org.telegram.messenger.leemen.LeemenIdentity.bindAllActivated(); } catch (Throwable ignore) {}
+            try {
+                if (org.telegram.messenger.BuildVars.DEBUG_VERSION) org.telegram.messenger.leemen.LeemenCrypto.selfTestOk();
+                org.telegram.messenger.leemen.LeemenIdentity.bindAllActivated();
+                org.telegram.messenger.leemen.LeemenSync.syncAll();
+                org.telegram.messenger.leemen.LeemenHeartbeat.maybeSendAll();
+                org.telegram.messenger.leemen.LeemenAnalytics.onAppStart();
+            } catch (Throwable ignore) {}
         }, 3000);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

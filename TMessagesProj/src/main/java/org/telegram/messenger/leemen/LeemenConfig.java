@@ -43,6 +43,10 @@ public final class LeemenConfig {
     public static final String SUPABASE_REF = BuildVars.DEBUG_VERSION
             ? "xprbsvntzmqgkkxysdqb"   // dev
             : "voyoecrgmtdtplazsvih";  // prod
+    /** Public anon key — safe to embed (RLS-protected); used only to open the Realtime websocket. */
+    public static final String SUPABASE_ANON_KEY = BuildVars.DEBUG_VERSION
+            ? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwcmJzdm50em1xZ2treHlzZHFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTI4NjUsImV4cCI6MjA5NjA4ODg2NX0.cVRRCXwI7N3RrEhld57FdMnvsky9oKOLtMS9bnkgFu0"
+            : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZveW9lY3JnbXRkdHBsYXpzdmloIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMDM1NzQsImV4cCI6MjA5NDU3OTU3NH0.Y_L1FO1EaLUo9T6UNkY_C-2EkqnSg37yLDQ0TplkAHA";
     public static String supabaseRealtimeUrl() {
         return "wss://" + SUPABASE_REF + ".supabase.co/realtime/v1";
     }

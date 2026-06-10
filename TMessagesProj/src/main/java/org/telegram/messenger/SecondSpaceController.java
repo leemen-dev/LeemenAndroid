@@ -117,6 +117,10 @@ public class SecondSpaceController extends BaseController implements Notificatio
      *  Private Space is open. Default {@code false}: FLAG_SECURE blocks capture in-space. */
     private boolean allowScreenshots;
 
+    /** True while applying a merged sync blob (LeemenSync projection) — suppresses the
+     *  local-change → sync-push hook so remote application doesn't echo back as a push. */
+    private boolean applyingRemoteSync;
+
     /** Leemen Premium expiry (epoch ms); {@code 0} = no subscription. */
     private long leemenPremiumUntil;
 
@@ -280,6 +284,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
     public void setPinTimeoutMinutes(int minutes) {
         pinTimeoutMinutes = Math.max(0, minutes);
         getMessagesController().getMainSettings().edit().putInt(PREF_PIN_TIMEOUT_MIN, pinTimeoutMinutes).apply();
+        notifyLeemenSync();
     }
 
     public boolean isPinPromptSkippable() {
@@ -310,6 +315,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
         }
         allowScreenshots = allowed;
         getMessagesController().getMainSettings().edit().putBoolean(PREF_ALLOW_SCREENSHOTS, allowed).apply();
+        notifyLeemenSync();
         // Re-evaluate FLAG_SECURE immediately: the in-space secure flag now depends on this toggle.
         try {
             org.telegram.ui.LaunchActivity la = org.telegram.ui.LaunchActivity.instance;
@@ -585,6 +591,74 @@ public class SecondSpaceController extends BaseController implements Notificatio
     /** All private-space chat ids. */
     public Set<Long> getDialogIds() {
         return Collections.unmodifiableSet(dialogIds);
+    }
+
+    // --- Leemen sync (Phase 3): bulk accessors + merged-state projection ---
+
+    public Set<Integer> getSelfPinnedMessageIds(long dialogId) {
+        Set<Integer> s = selfPinnedMessages.get(dialogId);
+        return s == null ? Collections.emptySet() : new HashSet<>(s);
+    }
+
+    public Set<Long> getPrivateSearchDialogIds() {
+        return new HashSet<>(privateSearchDialogs);
+    }
+
+    /** Replace Core PS state from a merged sync blob (LeemenSync projection): persist + one reload,
+     *  guarded so these writes don't re-trigger a push. PIN is NOT synced yet (§7.2 migration). */
+    public void applySyncedState(Set<Long> members,
+                                 Map<Long, Set<Integer>> exposed,
+                                 Map<Long, Set<Integer>> pending,
+                                 Map<Long, Set<Integer>> selfPinned,
+                                 Set<Long> privateSearch,
+                                 Integer pinTimeout,
+                                 Boolean allowScreenshotsVal) {
+        applyingRemoteSync = true;
+        try {
+            dialogIds.clear();
+            if (members != null) dialogIds.addAll(members);
+            replaceMsgMap(exposedMessages, exposed);
+            replaceMsgMap(pendingMessages, pending);
+            replaceMsgMap(selfPinnedMessages, selfPinned);
+            privateSearchDialogs.clear();
+            if (privateSearch != null) privateSearchDialogs.addAll(privateSearch);
+            lastDecidedMessageId.keySet().retainAll(dialogIds);
+            if (pinTimeout != null) pinTimeoutMinutes = Math.max(0, pinTimeout);
+            if (allowScreenshotsVal != null) allowScreenshots = allowScreenshotsVal;
+            persistDialogIds();
+            persistExposed();
+            persistPendingMessages();
+            persistSelfPinned();
+            persistLastDecided();
+            persistPrivateSearches();
+            getMessagesController().getMainSettings().edit()
+                    .putInt(PREF_PIN_TIMEOUT_MIN, pinTimeoutMinutes)
+                    .putBoolean(PREF_ALLOW_SCREENSHOTS, allowScreenshots)
+                    .apply();
+        } finally {
+            applyingRemoteSync = false;
+        }
+        getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+    }
+
+    private static void replaceMsgMap(Map<Long, Set<Integer>> target, Map<Long, Set<Integer>> src) {
+        target.clear();
+        if (src != null) {
+            for (Map.Entry<Long, Set<Integer>> e : src.entrySet()) {
+                if (e.getValue() != null && !e.getValue().isEmpty()) {
+                    target.put(e.getKey(), new HashSet<>(e.getValue()));
+                }
+            }
+        }
+    }
+
+    /** Local PS-state change → schedule a debounced sync push (no-op while applying remote state). */
+    private void notifyLeemenSync() {
+        if (applyingRemoteSync) return;
+        try {
+            org.telegram.messenger.leemen.LeemenSync.onLocalMutation(currentAccount);
+        } catch (Throwable ignored) {
+        }
     }
 
     /** Alias for {@link #getDialogIds()}. */
@@ -980,6 +1054,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
             first = false;
         }
         getMessagesController().getMainSettings().edit().putString(PREF_PRIVATE_SEARCHES, sb.toString()).apply();
+        notifyLeemenSync();
     }
 
     // --- Pending off-mode messages (per chat, per message id) ---
@@ -1132,6 +1207,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
             getMessagesController().getMainSettings().edit().putString(PREF_PENDING_MESSAGES, obj.toString()).apply();
         } catch (Exception ignored) {
         }
+        notifyLeemenSync();
     }
 
     // --- Self-pinned messages tracking ---
@@ -1170,6 +1246,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
             getMessagesController().getMainSettings().edit().putString(PREF_SELF_PINNED, obj.toString()).apply();
         } catch (Exception ignored) {
         }
+        notifyLeemenSync();
     }
 
     public void addSelfPinnedMessage(long dialogId, int messageId) {
@@ -1218,6 +1295,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
 
     private void persistDialogIds() {
         persistLongCsv(dialogIds, PREF_DIALOG_IDS);
+        notifyLeemenSync();
     }
 
     private void persistLongCsv(Set<Long> ids, String key) {
@@ -1244,6 +1322,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
             getMessagesController().getMainSettings().edit().putString(PREF_EXPOSED, obj.toString()).apply();
         } catch (Exception ignored) {
         }
+        notifyLeemenSync();
     }
 
     private void persistLastDecided() {

@@ -109,6 +109,7 @@ public final class LeemenKey {
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("Leemen: K_master ready for account " + account + (created ? " (generated + wrapped)" : " (fetched)"));
             }
+            LeemenSync.onRemoteChanged(account); // key ready → kick off the first sync
         } finally {
             Arrays.fill(k, (byte) 0);
         }

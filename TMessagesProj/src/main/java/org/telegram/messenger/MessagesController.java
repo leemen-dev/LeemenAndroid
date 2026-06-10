@@ -15385,6 +15385,9 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void performLogout(int type) {
+        // Leemen: drop this account's backend identity + sync state on logout, before the slot is reused.
+        org.telegram.messenger.leemen.LeemenSync.clearAccount(currentAccount);
+        org.telegram.messenger.leemen.LeemenAccount.clear(currentAccount);
         if (type == 1) {
             unregistedPush();
             TLRPC.TL_auth_logOut req = new TLRPC.TL_auth_logOut();

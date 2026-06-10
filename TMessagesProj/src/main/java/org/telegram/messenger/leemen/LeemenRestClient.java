@@ -49,6 +49,10 @@ public final class LeemenRestClient {
         request("POST", path, bearer, jsonBody, cb);
     }
 
+    public static void put(String path, @Nullable String bearer, @Nullable Object jsonBody, Callback cb) {
+        request("PUT", path, bearer, jsonBody, cb);
+    }
+
     private static void request(String method, String path, @Nullable String bearer, @Nullable Object jsonBody, Callback cb) {
         Utilities.globalQueue.postRunnable(() -> {
             HttpURLConnection conn = null;
