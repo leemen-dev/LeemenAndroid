@@ -4,6 +4,7 @@ import com.goterl.lazysodium.LazySodiumAndroid;
 import com.goterl.lazysodium.SodiumAndroid;
 import com.goterl.lazysodium.interfaces.AEAD;
 import com.goterl.lazysodium.interfaces.PwHash;
+import com.goterl.lazysodium.interfaces.Sign;
 
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.FileLog;
@@ -104,6 +105,21 @@ public final class LeemenCrypto {
                     PwHash.OPSLIMIT_INTERACTIVE, PwHash.MEMLIMIT_INTERACTIVE,
                     PwHash.Alg.PWHASH_ALG_ARGON2ID13);
             return ok ? out : null;
+        } catch (Throwable e) {
+            FileLog.e(e);
+            return null;
+        }
+    }
+
+    public static final int SIGN_PUBLICKEYBYTES = Sign.PUBLICKEYBYTES; // 32
+    public static final int SIGN_SECRETKEYBYTES = Sign.SECRETKEYBYTES; // 64
+
+    /** Ed25519 keypair for device registration: {publicKey(32), secretKey(64)}, or null on failure. */
+    public static byte[][] signKeypair() {
+        try {
+            byte[] pk = new byte[SIGN_PUBLICKEYBYTES];
+            byte[] sk = new byte[SIGN_SECRETKEYBYTES];
+            return ls().cryptoSignKeypair(pk, sk) ? new byte[][]{pk, sk} : null;
         } catch (Throwable e) {
             FileLog.e(e);
             return null;

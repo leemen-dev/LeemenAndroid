@@ -484,7 +484,8 @@ public final class LeemenSync {
         return inRange(account)
                 && UserConfig.getInstance(account).isClientActivated()
                 && LeemenAccount.hasBinding(account)
-                && LeemenAccount.hasKMaster(account);
+                && LeemenAccount.hasKMaster(account)
+                && !LeemenAccount.isDisabled(account);
     }
 
     private static LeemenSyncState state(int account) {

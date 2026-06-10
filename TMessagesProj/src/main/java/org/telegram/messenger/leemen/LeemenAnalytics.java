@@ -167,8 +167,8 @@ public final class LeemenAnalytics {
                 synchronized (queue) {
                     if (!queue.isEmpty()) scheduleFlush(); // more pending
                 }
-            } else {
-                // transient failure: requeue (bounded) and retry later
+            } else if (!isOptedOut()) {
+                // transient failure: requeue (bounded); retried on the next event / app start
                 synchronized (queue) {
                     queue.addAll(0, batch);
                     while (queue.size() > QUEUE_CAP) queue.remove(queue.size() - 1);

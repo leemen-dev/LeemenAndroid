@@ -35,6 +35,7 @@ public final class LeemenHeartbeat {
     }
 
     private static void maybeSend(final int account) {
+        if (LeemenAccount.isDisabled(account)) return;
         final String token = LeemenAccount.getToken(account);
         if (token == null) return;
         final long today = System.currentTimeMillis() / 86_400_000L; // UTC-day bucket (date granularity)

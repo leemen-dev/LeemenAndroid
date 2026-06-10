@@ -51,6 +51,7 @@ public final class LeemenIdentity {
         if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return;
         try {
             if (!UserConfig.getInstance(account).isClientActivated()) return;
+            if (LeemenAccount.isDisabled(account)) return; // user deleted their Leemen account
             if (LeemenAccount.hasBinding(account)) {
                 LeemenKey.ensureKey(account); // bound already; make sure the key was fetched too
                 return;
@@ -150,7 +151,8 @@ public final class LeemenIdentity {
                     LeemenAccount.save(account, token, syncId, privacy);
                     LeemenKey.ensureKey(account); // chain Phase 2: acquire K_master right after bind
                     if (BuildVars.LOGS_ENABLED) {
-                        FileLog.d("Leemen: bound account " + account + " sync_account_id=" + syncId
+                        // NB: never log sync_account_id — it's the Realtime channel secret (LeemenConfig).
+                        FileLog.d("Leemen: bound account " + account
                                 + " mode=" + privacy + " created=" + (resp.has("created") ? resp.get("created") : "?"));
                     }
                 } else if (BuildVars.LOGS_ENABLED) {

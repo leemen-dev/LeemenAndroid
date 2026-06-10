@@ -667,6 +667,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int addToGroupButtonRow;
     private int addToGroupInfoRow;
     private int premiumRow;
+    private int leemenPremiumRow;
     private int starsRow;
     private int tonRow;
     private int businessRow;
@@ -4482,6 +4483,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 presentFragment(new ActionIntroActivity(ActionIntroActivity.ACTION_TYPE_CHANGE_PHONE_NUMBER));
             } else if (position == setAvatarRow) {
                 onWriteButtonClick();
+            } else if (position == leemenPremiumRow) {
+                presentFragment(new LeemenPremiumActivity("settings"));
             } else if (position == premiumRow) {
                 presentFragment(new PremiumPreviewFragment("settings"));
             } else if (position == starsRow) {
@@ -10276,6 +10279,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         settingsSectionRow2 = -1;
         notificationRow = -1;
         languageRow = -1;
+        leemenPremiumRow = -1;
         premiumRow = -1;
         starsRow = -1;
         tonRow = -1;
@@ -10454,6 +10458,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 devicesRow = rowCount++;
                 languageRow = rowCount++;
                 devicesSectionRow = rowCount++;
+                leemenPremiumRow = rowCount++; // Leemen Premium — always shown, above Telegram Premium
                 if (!getMessagesController().premiumFeaturesBlocked()) {
                     premiumRow = rowCount++;
                 }
@@ -10470,7 +10475,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (!getMessagesController().premiumPurchaseBlocked()) {
                     premiumGiftingRow = rowCount++;
                 }
-                if (premiumRow >= 0 || starsRow >= 0 || tonRow >= 0 || businessRow >= 0 || premiumGiftingRow >= 0) {
+                if (leemenPremiumRow >= 0 || premiumRow >= 0 || starsRow >= 0 || tonRow >= 0 || businessRow >= 0 || premiumGiftingRow >= 0) {
                     premiumSectionsRow = rowCount++;
                 }
                 helpHeaderRow = rowCount++;
@@ -13613,6 +13618,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         setAvatarCell = textCell;
                     } else if (position == addToGroupButtonRow) {
                         textCell.setTextAndIcon(LocaleController.getString(R.string.AddToGroupOrChannel), R.drawable.msg_groups_create, false);
+                    } else if (position == leemenPremiumRow) {
+                        textCell.setTextAndIcon(LocaleController.getString(R.string.LeemenPremium), new AnimatedEmojiDrawable.WrapSizeDrawable(PremiumGradient.getInstance().premiumStarMenuDrawable, dp(24), dp(24)), true);
+                        textCell.setImageLeft(23);
                     } else if (position == premiumRow) {
                         textCell.setTextAndIcon(LocaleController.getString(R.string.TelegramPremium), new AnimatedEmojiDrawable.WrapSizeDrawable(PremiumGradient.getInstance().premiumStarMenuDrawable, dp(24), dp(24)), true);
                         textCell.setImageLeft(23);
@@ -14024,7 +14032,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         position == questionRow || position == devicesRow || position == filtersRow || position == stickersRow ||
                         position == faqRow || position == policyRow || position == sendLogsRow || position == sendLastLogsRow ||
                         position == clearLogsRow || position == switchBackendRow || position == setAvatarRow ||
-                        position == addToGroupButtonRow || position == premiumRow || position == premiumGiftingRow ||
+                        position == addToGroupButtonRow || position == leemenPremiumRow || position == premiumRow || position == premiumGiftingRow ||
                         position == businessRow || position == liteModeRow || position == birthdayRow || position == channelRow ||
                         position == starsRow || position == tonRow;
             }
@@ -14105,6 +14113,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 return VIEW_TYPE_SUGGESTION;
             } else if (position == addToGroupInfoRow) {
                 return VIEW_TYPE_ADDTOGROUP_INFO;
+            } else if (position == leemenPremiumRow) {
+                return VIEW_TYPE_PREMIUM_TEXT_CELL;
             } else if (position == premiumRow) {
                 return VIEW_TYPE_PREMIUM_TEXT_CELL;
             } else if (position == starsRow) {
@@ -15421,6 +15431,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             put(++pointer, settingsSectionRow2, sparseIntArray);
             put(++pointer, notificationRow, sparseIntArray);
             put(++pointer, languageRow, sparseIntArray);
+            put(++pointer, leemenPremiumRow, sparseIntArray);
             put(++pointer, premiumRow, sparseIntArray);
             put(++pointer, starsRow, sparseIntArray);
             put(++pointer, businessRow, sparseIntArray);

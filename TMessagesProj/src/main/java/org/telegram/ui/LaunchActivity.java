@@ -716,8 +716,11 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 if (org.telegram.messenger.BuildVars.DEBUG_VERSION) org.telegram.messenger.leemen.LeemenCrypto.selfTestOk();
                 org.telegram.messenger.leemen.LeemenIdentity.bindAllActivated();
                 org.telegram.messenger.leemen.LeemenSync.syncAll();
+                org.telegram.messenger.leemen.LeemenDevice.ensureRegisteredAll();
+                org.telegram.messenger.leemen.LeemenRealtime.connectAll();
                 org.telegram.messenger.leemen.LeemenHeartbeat.maybeSendAll();
                 org.telegram.messenger.leemen.LeemenAnalytics.onAppStart();
+                org.telegram.messenger.leemen.LeemenAttribution.captureIfNeeded();
             } catch (Throwable ignore) {}
         }, 1200);
 

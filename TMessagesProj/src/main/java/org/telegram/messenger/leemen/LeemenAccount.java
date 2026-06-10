@@ -56,6 +56,39 @@ public final class LeemenAccount {
         return !TextUtils.isEmpty(getWrappedKMaster(account));
     }
 
+    /** True if the user deleted their Leemen account — suppresses auto-rebind until they re-login to
+     *  Telegram (performLogout → clear() resets this). */
+    public static boolean isDisabled(int account) {
+        return prefs().getBoolean("disabled_" + account, false);
+    }
+
+    public static void setDisabled(int account, boolean disabled) {
+        prefs().edit().putBoolean("disabled_" + account, disabled).apply();
+    }
+
+    /** Delete the Leemen account + all its data (GDPR): server DSR (best-effort) → local wipe → disable
+     *  auto-rebind. Does NOT touch the Telegram account. onDone runs on the UI thread when finished. */
+    public static void deleteAccountAndData(int account, Runnable onDone) {
+        // Disabled FIRST: blocks sync/realtime/device/heartbeat from racing the async server round-trip
+        // with the still-present token. The token itself stays until clear() so the DSR call can auth.
+        setDisabled(account, true);
+        requestServerDelete(account, () -> {
+            try {
+                LeemenRealtime.disconnect(account);
+                // Full sync teardown (in-memory CRDT cache + debounce/watchdog + persisted state) — a bare
+                // LeemenSyncState.clear would leave the cached working copy alive and a later re-bind
+                // could push the OLD hidden set into the fresh account.
+                LeemenSync.clearAccount(account);
+                org.telegram.messenger.SecondSpaceController.getInstance(account).wipeAllLocalData();
+                clear(account);            // token / sync_account_id / K_master
+                setDisabled(account, true); // don't silently re-create on next launch
+            } catch (Throwable e) {
+                org.telegram.messenger.FileLog.e(e);
+            }
+            if (onDone != null) onDone.run();
+        });
+    }
+
     /** Persist the result of a successful /v1/auth/telegram bind. */
     public static void save(int account, String token, String syncAccountId, String privacyMode) {
         SharedPreferences.Editor e = prefs().edit()
@@ -67,6 +100,28 @@ public final class LeemenAccount {
         e.apply();
     }
 
+    /** Server-side account deletion (GDPR right-to-erasure). POST /v1/account/delete with the contract's
+     *  {confirm:"DELETE"} guard; cascades the whole core graph + analytics trail server-side. Local wipe
+     *  proceeds regardless of the outcome (the user asked for their data gone; a transient server failure
+     *  must not keep local PS data alive) — failures are logged. The session JWT stays cryptographically
+     *  valid until TTL, so the caller MUST drop the token right after (deleteAccountAndData does). */
+    public static void requestServerDelete(int account, Runnable onDone) {
+        String token = getToken(account);
+        if (token == null) {
+            if (onDone != null) onDone.run();
+            return;
+        }
+        com.google.gson.JsonObject body = new com.google.gson.JsonObject();
+        body.addProperty("confirm", "DELETE");
+        LeemenRestClient.post(LeemenConfig.EP_ACCOUNT_DELETE, token, body, (resp, code, ec, em) -> {
+            if (org.telegram.messenger.BuildVars.LOGS_ENABLED) {
+                boolean ok = resp != null && code == 200 && resp.has("ok") && resp.get("ok").getAsBoolean();
+                org.telegram.messenger.FileLog.d("Leemen: /account/delete code=" + code + " ok=" + ok + (ec != null ? " err=" + ec : ""));
+            }
+            if (onDone != null) onDone.run();
+        });
+    }
+
     /** Drop this account's Leemen identity (call on Telegram logout of the account). */
     public static void clear(int account) {
         prefs().edit()
@@ -74,6 +129,7 @@ public final class LeemenAccount {
                 .remove("sync_" + account)
                 .remove("privacy_" + account)
                 .remove("kmaster_" + account)
+                .remove("disabled_" + account)
                 .apply();
     }
 }

@@ -10585,6 +10585,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             return; // no chat to point at (e.g. empty account) — skip gracefully
         }
         privateSpaceOnboardingActive = true;
+        org.telegram.messenger.leemen.LeemenAnalytics.track("onboarding_step_view", java.util.Collections.singletonMap("step", "first_hide"));
 
         final int[] cellLoc = new int[2];
         final int[] rootLoc = new int[2];
@@ -10609,6 +10610,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     }
 
     private void stopPrivateSpaceOnboarding() {
+        if (privateSpaceOnboardingActive && !SecondSpaceController.getInstance(currentAccount).isOnboardingDone()) {
+            org.telegram.messenger.leemen.LeemenAnalytics.track("onboarding_abandoned", java.util.Collections.singletonMap("last_step", "first_hide"));
+        }
         privateSpaceOnboardingActive = false;
         final org.telegram.ui.Stories.recorder.HintView2 hint = privateSpaceOnboardingHint;
         privateSpaceOnboardingHint = null;
@@ -10639,6 +10643,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (getParentActivity() == null) {
             return;
         }
+        // placement deliberately does NOT name the feature (deniability §0): one-shot post-onboarding offer.
+        org.telegram.messenger.leemen.LeemenAnalytics.track("paywall_view", java.util.Collections.singletonMap("placement", "onboarding_offer"));
         // Teaser sheet → open the full Leemen Premium screen (monthly / yearly plan choice).
         showDialog(new PrivateSpacePaywallBottomSheet(getParentActivity(), DialogsActivity.this, () ->
                 presentFragment(new LeemenPremiumActivity())

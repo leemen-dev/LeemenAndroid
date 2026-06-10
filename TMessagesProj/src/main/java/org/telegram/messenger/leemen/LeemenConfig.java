@@ -25,6 +25,7 @@ public final class LeemenConfig {
     public static final String EP_ME              = "/me";
     public static final String EP_ACCOUNT_KEY     = "/account/key";
     public static final String EP_WRAP_DEFAULT    = "/account/wrap-default";
+    public static final String EP_ACCOUNT_DELETE  = "/account/delete"; // GDPR erasure; body {confirm:"DELETE"}
     public static final String EP_FILTER          = "/filter";
     public static final String EP_CONTENT         = "/content";
     public static final String EP_DEVICES_REGISTER= "/devices/register";

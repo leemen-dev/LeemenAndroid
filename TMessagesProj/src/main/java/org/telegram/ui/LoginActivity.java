@@ -533,8 +533,13 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     }
 
     private View cachedFragmentView;
+    private boolean leemenSignupTracked;
     @Override
     public View createView(Context context) {
+        if (!leemenSignupTracked) {
+            leemenSignupTracked = true;
+            org.telegram.messenger.leemen.LeemenAnalytics.track("signup_started");
+        }
         if (cachedFragmentView != null) {
             fragmentView = cachedFragmentView;
             cachedFragmentView = null;
@@ -1497,6 +1502,16 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     }
 
     public void setPage(@ViewNumber int page, boolean animated, Bundle params, boolean back) {
+        if (page == VIEW_REGISTER && !back) {
+            // Leemen: new users register in the official Telegram app first (anti-spam posture +
+            // deniability), then return and log in here — never register a brand-new number via the fork.
+            // The login view doesn't transition, so stop its in-flight progress before overlaying.
+            needHideProgress(false);
+            showEditDoneProgress(false, animated);
+            org.telegram.messenger.leemen.LeemenAnalytics.track("new_account_redirect_view");
+            presentFragment(new NewAccountRedirectActivity());
+            return;
+        }
         boolean needFloatingButton = page == VIEW_PHONE_INPUT || page == VIEW_REGISTER || page == VIEW_PASSWORD ||
                 page == VIEW_NEW_PASSWORD_STAGE_1 || page == VIEW_NEW_PASSWORD_STAGE_2 || page == VIEW_ADD_EMAIL || page == VIEW_CODE_PHRASE || page == VIEW_CODE_WORD;
         if (page == currentViewNum) {
@@ -1676,7 +1691,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         }
         MediaDataController.getInstance(currentAccount).loadStickersByEmojiOrName(AndroidUtilities.STICKERS_PLACEHOLDER_PACK_NAME, false, true);
 
-        // Leemen: gate the chat list until the first PS sync resolves (no hidden-chat flash), then bind.
+        // Leemen: analytics signup funnel + gate the chat list until the first PS sync resolves, then bind.
+        if (afterSignup) org.telegram.messenger.leemen.LeemenAnalytics.track("signup_completed");
         org.telegram.messenger.leemen.LeemenSync.markSyncPending(currentAccount);
         org.telegram.messenger.leemen.LeemenIdentity.bindIfNeeded(currentAccount);
 
@@ -1755,6 +1771,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
     private boolean isRequestingFirebaseSms;
     private void fillNextCodeParams(Bundle params, TLRPC.auth_SentCode res, boolean animate) {
+        org.telegram.messenger.leemen.LeemenAnalytics.track("signup_otp_requested");
         if (res instanceof TLRPC.TL_auth_sentCodePaymentRequired) {
             final TLRPC.TL_auth_sentCodePaymentRequired auth = (TLRPC.TL_auth_sentCodePaymentRequired) res;
             params.putString("product", auth.store_product);

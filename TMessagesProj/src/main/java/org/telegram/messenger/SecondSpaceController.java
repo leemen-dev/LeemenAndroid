@@ -666,6 +666,43 @@ public class SecondSpaceController extends BaseController implements Notificatio
         }
     }
 
+    /** Wipe ALL local private-space data for this account (every second_space_* pref + in-memory state).
+     *  Used by the "delete account &amp; data" flow. Guarded so the cascade of clears doesn't echo back as
+     *  a sync push. Does NOT touch the Telegram account. */
+    public void wipeAllLocalData() {
+        applyingRemoteSync = true;
+        try {
+            android.content.SharedPreferences prefs = getMessagesController().getMainSettings();
+            android.content.SharedPreferences.Editor e = prefs.edit();
+            for (String key : prefs.getAll().keySet()) {
+                if (key != null && key.startsWith("second_space_")) {
+                    e.remove(key);
+                }
+            }
+            e.apply();
+            dialogIds.clear();
+            exposedMessages.clear();
+            pendingMessages.clear();
+            selfPinnedMessages.clear();
+            lastDecidedMessageId.clear();
+            privateSearchDialogs.clear();
+            hiddenAccounts.clear();
+            tabSequence.clear();
+            passwordHash = "";
+            switchPasswordHash = "";
+            pinInSearchEnabled = false;
+            shortcutTested = false;
+            pinTimeoutMinutes = 0;
+            pinLastVerifiedAt = 0;
+            allowScreenshots = false;
+            leemenPremiumUntil = 0;
+            activeMode = MODE_OFF;
+        } finally {
+            applyingRemoteSync = false;
+        }
+        getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+    }
+
     /** Alias for {@link #getDialogIds()}. */
     public Set<Long> getRealSpaceDialogIds() {
         return Collections.unmodifiableSet(dialogIds);
@@ -917,7 +954,11 @@ public class SecondSpaceController extends BaseController implements Notificatio
     }
 
     public void markOnboardingDone() {
+        boolean was = isOnboardingDone();
         getMessagesController().getMainSettings().edit().putBoolean(PREF_ONBOARDING_DONE, true).apply();
+        if (!was) {
+            org.telegram.messenger.leemen.LeemenAnalytics.track("onboarding_completed", java.util.Collections.singletonMap("last_step", "first_hide"));
+        }
     }
 
     /** True once the "unlimited hidden chats" offer has been shown. Shown at most once,

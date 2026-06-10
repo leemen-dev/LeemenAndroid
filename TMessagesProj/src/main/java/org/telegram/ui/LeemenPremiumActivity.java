@@ -7,9 +7,11 @@ import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -21,6 +23,8 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SecondSpaceController;
+import org.telegram.messenger.leemen.LeemenAnalytics;
+import org.telegram.messenger.leemen.LeemenPromo;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -30,13 +34,17 @@ import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.RadioButton;
 
 import java.util.Date;
+import java.util.HashMap;
 
 /**
- * Leemen Premium subscription screen. Leemen's own subscription (unlimited hidden chats) on top,
- * with a link down to the bundled Telegram Premium screen.
+ * Leemen Premium subscription screen — Telegram-Premium-style: premium-gradient hero, feature list,
+ * plan cards, a gradient Subscribe button, and a "Redeem promo code" row. Sits above the bundled
+ * Telegram Premium screen (link at the bottom).
  *
- * Billing is local-only for now: tapping Subscribe grants the entitlement via
- * {@link SecondSpaceController#activateLeemenPremiumLocally(int)}.
+ * Billing is local-only for now: Subscribe grants the entitlement via
+ * {@link SecondSpaceController#activateLeemenPremiumLocally(int)}; a redeemed promo grants it via the
+ * backend ({@link LeemenPromo}) and reflects the returned expiry. Analytics fires paywall_view /
+ * paywall_cta_tap / subscribe_flow_started (allowlisted, non-PS).
  * TODO(billing): replace local activation with a Google Play / backend-verified purchase.
  */
 public class LeemenPremiumActivity extends BaseFragment {
@@ -46,6 +54,25 @@ public class LeemenPremiumActivity extends BaseFragment {
     private PlanRow yearlyRow;
     private TextView subscribeButton;
     private TextView statusView;
+    private final String placement;
+
+    public LeemenPremiumActivity() {
+        this("direct");
+    }
+
+    /** @param placement analytics placement tag (e.g. "settings", "limit", "second_space"). */
+    public LeemenPremiumActivity(String placement) {
+        this.placement = placement == null ? "direct" : placement;
+    }
+
+    private static int[] premiumColors() {
+        return new int[]{
+                Theme.getColor(Theme.key_premiumGradient1),
+                Theme.getColor(Theme.key_premiumGradient2),
+                Theme.getColor(Theme.key_premiumGradient3),
+                Theme.getColor(Theme.key_premiumGradient4),
+        };
+    }
 
     @Override
     public View createView(Context context) {
@@ -72,36 +99,63 @@ public class LeemenPremiumActivity extends BaseFragment {
         content.setPadding(0, 0, 0, dp(16));
         scrollView.addView(content, LayoutHelper.createScroll(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP));
 
+        // --- gradient hero ---
+        LinearLayout hero = new LinearLayout(context);
+        hero.setOrientation(LinearLayout.VERTICAL);
+        hero.setGravity(Gravity.CENTER);
+        GradientDrawable heroBg = new GradientDrawable(GradientDrawable.Orientation.TL_BR, premiumColors());
+        hero.setBackground(heroBg);
+        hero.setPadding(dp(22), dp(28), dp(22), dp(28));
+
         ImageView icon = new ImageView(context);
         icon.setScaleType(ImageView.ScaleType.CENTER);
         icon.setImageResource(R.drawable.large_hidden);
         icon.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN));
-        icon.setBackground(Theme.createCircleDrawable(dp(80), Theme.getColor(Theme.key_featuredStickers_addButton)));
-        content.addView(icon, LayoutHelper.createLinear(80, 80, Gravity.CENTER_HORIZONTAL, 0, 24, 0, 0));
+        hero.addView(icon, LayoutHelper.createLinear(64, 64, Gravity.CENTER_HORIZONTAL, 0, 4, 0, 8));
 
         TextView title = new TextView(context);
         title.setText(LocaleController.getString(R.string.LeemenPremium));
         title.setTypeface(AndroidUtilities.bold());
-        title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 22);
-        title.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-        title.setGravity(Gravity.CENTER_HORIZONTAL);
-        content.addView(title, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 22, 16, 22, 0));
+        title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 24);
+        title.setTextColor(Color.WHITE);
+        title.setGravity(Gravity.CENTER);
+        hero.addView(title, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 2, 0, 0));
 
         TextView subtitle = new TextView(context);
         subtitle.setText(LocaleController.getString(R.string.LeemenPremiumScreenSubtitle));
-        subtitle.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-        subtitle.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
-        subtitle.setGravity(Gravity.CENTER_HORIZONTAL);
-        content.addView(subtitle, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 22, 6, 22, 8));
+        subtitle.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+        subtitle.setTextColor(0xCCFFFFFF);
+        subtitle.setGravity(Gravity.CENTER);
+        hero.addView(subtitle, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 12, 6, 12, 0));
 
+        content.addView(hero, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+
+        // --- active-until status ---
         statusView = new TextView(context);
         statusView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         statusView.setTypeface(AndroidUtilities.bold());
         statusView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGreenText));
         statusView.setGravity(Gravity.CENTER_HORIZONTAL);
         statusView.setVisibility(View.GONE);
-        content.addView(statusView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 22, 2, 22, 6));
+        content.addView(statusView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 22, 10, 22, 2));
 
+        // --- feature list (placeholder copy — refine per product) ---
+        LinearLayout features = new LinearLayout(context);
+        features.setOrientation(LinearLayout.VERTICAL);
+        features.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+        features.setPadding(0, dp(6), 0, dp(6));
+        addFeature(features, R.drawable.large_hidden,
+                LocaleController.getString(R.string.LeemenPremiumFeatureUnlimited),
+                LocaleController.getString(R.string.LeemenPremiumFeat1Desc));
+        addFeature(features, R.drawable.menu_devices,
+                LocaleController.getString(R.string.LeemenPremiumFeat2Title),
+                LocaleController.getString(R.string.LeemenPremiumFeat2Desc));
+        addFeature(features, R.drawable.msg_premium_liststar,
+                LocaleController.getString(R.string.LeemenPremiumFeat3Title),
+                LocaleController.getString(R.string.LeemenPremiumFeat3Desc));
+        content.addView(features, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 12, 0, 0));
+
+        // --- plan cards ---
         LinearLayout plans = new LinearLayout(context);
         plans.setOrientation(LinearLayout.VERTICAL);
         plans.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
@@ -123,35 +177,29 @@ public class LeemenPremiumActivity extends BaseFragment {
         monthlyRow.setOnClickListener(v -> selectPlan(1));
         plans.addView(monthlyRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 60));
 
-        TextView feature = new TextView(context);
-        feature.setText(LocaleController.getString(R.string.LeemenPremiumFeatureUnlimited));
-        feature.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
-        feature.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
-        content.addView(feature, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 21, 10, 21, 0));
+        // --- redeem promo code ---
+        TextView promoRow = linkRow(context, LocaleController.getString(R.string.LeemenPromoRow));
+        promoRow.setOnClickListener(v -> showPromoDialog());
+        content.addView(promoRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 50, 0, 12, 0, 0));
 
-        TextView tgRow = new TextView(context);
-        tgRow.setText(LocaleController.getString(R.string.LeemenPremiumTelegramRow));
-        tgRow.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
-        tgRow.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-        tgRow.setBackground(Theme.getSelectorDrawable(true));
-        tgRow.setGravity(Gravity.CENTER_VERTICAL);
-        tgRow.setPadding(dp(21), 0, dp(21), 0);
-        Drawable arrow = context.getResources().getDrawable(R.drawable.msg_arrowright).mutate();
-        arrow.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText), PorterDuff.Mode.MULTIPLY));
-        tgRow.setCompoundDrawablesWithIntrinsicBounds(null, null, arrow, null);
+        // --- bundled Telegram Premium link ---
+        TextView tgRow = linkRow(context, LocaleController.getString(R.string.LeemenPremiumTelegramRow));
         tgRow.setOnClickListener(v -> presentFragment(new PremiumPreviewFragment("settings")));
-        content.addView(tgRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 50, 0, 0, 24, 0, 0));
+        content.addView(tgRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 50, 0, 12, 24, 0));
 
         root.addView(scrollView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP, 0, 0, 0, 72));
 
+        // --- bottom gradient Subscribe button ---
         FrameLayout buttonContainer = new FrameLayout(context);
         buttonContainer.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
         subscribeButton = new TextView(context);
         subscribeButton.setGravity(Gravity.CENTER);
-        subscribeButton.setTextColor(Theme.getColor(Theme.key_featuredStickers_buttonText));
+        subscribeButton.setTextColor(Color.WHITE);
         subscribeButton.setTypeface(AndroidUtilities.bold());
         subscribeButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-        subscribeButton.setBackground(Theme.AdaptiveRipple.filledRect(Theme.getColor(Theme.key_featuredStickers_addButton), 8));
+        GradientDrawable btnBg = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, premiumColors());
+        btnBg.setCornerRadius(dp(8));
+        subscribeButton.setBackground(btnBg);
         subscribeButton.setOnClickListener(v -> onSubscribeClick());
         buttonContainer.addView(subscribeButton, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.CENTER_VERTICAL, 16, 0, 16, 0));
         root.addView(buttonContainer, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 72, Gravity.BOTTOM));
@@ -159,7 +207,59 @@ public class LeemenPremiumActivity extends BaseFragment {
         fragmentView = root;
         selectPlan(selectedMonths);
         updateState();
+
+        HashMap<String, String> props = new HashMap<>();
+        props.put("placement", placement);
+        LeemenAnalytics.track("paywall_view", props);
         return root;
+    }
+
+    private void addFeature(LinearLayout container, int iconRes, CharSequence title, CharSequence desc) {
+        Context context = container.getContext();
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(21), dp(9), dp(21), dp(9));
+
+        ImageView iv = new ImageView(context);
+        iv.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        iv.setImageResource(iconRes);
+        iv.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN));
+        GradientDrawable sq = new GradientDrawable(GradientDrawable.Orientation.TL_BR, premiumColors());
+        sq.setCornerRadius(dp(10));
+        iv.setBackground(sq);
+        iv.setPadding(dp(7), dp(7), dp(7), dp(7));
+        row.addView(iv, LayoutHelper.createLinear(38, 38, Gravity.CENTER_VERTICAL, 0, 0, 14, 0));
+
+        LinearLayout texts = new LinearLayout(context);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        TextView t = new TextView(context);
+        t.setText(title);
+        t.setTypeface(AndroidUtilities.bold());
+        t.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+        t.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+        texts.addView(t);
+        TextView d = new TextView(context);
+        d.setText(desc);
+        d.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+        d.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
+        texts.addView(d, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 1, 0, 0));
+        row.addView(texts, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
+        container.addView(row, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+    }
+
+    private TextView linkRow(Context context, CharSequence text) {
+        TextView row = new TextView(context);
+        row.setText(text);
+        row.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
+        row.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+        row.setBackground(Theme.getSelectorDrawable(true));
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(21), 0, dp(21), 0);
+        Drawable arrow = context.getResources().getDrawable(R.drawable.msg_arrowright).mutate();
+        arrow.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText), PorterDuff.Mode.MULTIPLY));
+        row.setCompoundDrawablesWithIntrinsicBounds(null, null, arrow, null);
+        return row;
     }
 
     private void selectPlan(int months) {
@@ -173,6 +273,11 @@ public class LeemenPremiumActivity extends BaseFragment {
     }
 
     private void onSubscribeClick() {
+        HashMap<String, String> props = new HashMap<>();
+        props.put("plan", selectedMonths == 12 ? "yearly" : "monthly");
+        LeemenAnalytics.track("paywall_cta_tap", props);
+        LeemenAnalytics.track("subscribe_flow_started");
+
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
         // TODO(billing): replace with Google Play / backend-verified purchase.
         ssc.activateLeemenPremiumLocally(selectedMonths);
@@ -180,6 +285,82 @@ public class LeemenPremiumActivity extends BaseFragment {
         BulletinFactory.of(this)
                 .createSimpleBulletin(R.raw.chats_infotip, LocaleController.getString(R.string.LeemenPremiumActivated))
                 .show();
+    }
+
+    private void showPromoDialog() {
+        if (getParentActivity() == null) {
+            return;
+        }
+        Context context = getParentActivity();
+        EditText input = new EditText(context);
+        input.setTextColor(Theme.getColor(Theme.key_dialogTextBlack));
+        input.setHintTextColor(Theme.getColor(Theme.key_dialogTextHint));
+        input.setText("");
+        input.setHint(LocaleController.getString(R.string.LeemenPromoHint));
+        input.setSingleLine(true);
+        FrameLayout container = new FrameLayout(context);
+        container.setPadding(dp(22), dp(4), dp(22), 0);
+        container.addView(input, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+
+        AlertDialog.Builder b = new AlertDialog.Builder(context);
+        b.setTitle(LocaleController.getString(R.string.LeemenPromoTitle));
+        b.setView(container);
+        b.setPositiveButton(LocaleController.getString(R.string.LeemenPromoButton), (d, w) -> {
+            String code = input.getText().toString().trim();
+            if (!code.isEmpty()) {
+                redeemPromo(code);
+            }
+        });
+        b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        showDialog(b.create());
+    }
+
+    private void redeemPromo(String code) {
+        if (getParentActivity() == null) {
+            return;
+        }
+        AlertDialog progress = new AlertDialog(getParentActivity(), AlertDialog.ALERT_TYPE_SPINNER);
+        progress.setCanCancel(false);
+        progress.show();
+        LeemenPromo.redeem(currentAccount, code, (ok, entId, kind, expiresAt, reason) -> {
+            try { progress.dismiss(); } catch (Exception ignore) {}
+            if (getParentActivity() == null || fragmentView == null) {
+                return; // fragment left while the request was in flight
+            }
+            if (ok) {
+                long until = parseExpiry(expiresAt);
+                SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+                if (until > 0) {
+                    ssc.setLeemenPremiumUntil(until);
+                } else {
+                    ssc.activateLeemenPremiumLocally(1);
+                }
+                updateState();
+                BulletinFactory.of(this)
+                        .createSimpleBulletin(R.raw.chats_infotip, LocaleController.getString(R.string.LeemenPromoSuccess))
+                        .show();
+            } else {
+                BulletinFactory.of(this)
+                        .createErrorBulletin(LocaleController.getString(R.string.LeemenPromoError))
+                        .show();
+            }
+        });
+    }
+
+    /** Parse the backend expires_at (epoch ms / epoch s / ISO-8601) → epoch ms, or 0 if unknown. */
+    private static long parseExpiry(String s) {
+        if (s == null || s.isEmpty()) {
+            return 0;
+        }
+        try {
+            if (s.matches("\\d+")) {
+                long v = Long.parseLong(s);
+                return v > 1_000_000_000_000L ? v : v * 1000L;
+            }
+            return java.time.Instant.parse(s).toEpochMilli();
+        } catch (Throwable e) {
+            return 0;
+        }
     }
 
     private void updateState() {
@@ -250,7 +431,7 @@ public class LeemenPremiumActivity extends BaseFragment {
         if (fragment == null || fragment.getParentActivity() == null) {
             return;
         }
-        PrivateSpacePaywallBottomSheet.show(fragment, () -> fragment.presentFragment(new LeemenPremiumActivity()));
+        PrivateSpacePaywallBottomSheet.show(fragment, () -> fragment.presentFragment(new LeemenPremiumActivity("limit")));
     }
 
     /** Renew-or-trim prompt shown on entering the space while over the free limit without a sub. */
@@ -261,7 +442,7 @@ public class LeemenPremiumActivity extends BaseFragment {
         AlertDialog.Builder b = new AlertDialog.Builder(fragment.getParentActivity());
         b.setTitle(LocaleController.getString(R.string.PrivateSpaceOverLimitTitle));
         b.setMessage(LocaleController.getString(R.string.PrivateSpaceOverLimitMessage));
-        b.setPositiveButton(LocaleController.getString(R.string.LeemenPremiumRenew), (d, w) -> fragment.presentFragment(new LeemenPremiumActivity()));
+        b.setPositiveButton(LocaleController.getString(R.string.LeemenPremiumRenew), (d, w) -> fragment.presentFragment(new LeemenPremiumActivity("limit")));
         b.setNegativeButton(LocaleController.getString(R.string.PrivateSpaceOverLimitRemove), (d, w) -> fragment.presentFragment(new SecondSpaceSettingsActivity()));
         b.show();
     }
