@@ -21,9 +21,12 @@ import android.widget.TextView;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.leemen.LeemenAnalytics;
+import org.telegram.messenger.leemen.LeemenBilling;
+import org.telegram.messenger.leemen.LeemenConfig;
 import org.telegram.messenger.leemen.LeemenPromo;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -47,7 +50,7 @@ import java.util.HashMap;
  * paywall_cta_tap / subscribe_flow_started (allowlisted, non-PS).
  * TODO(billing): replace local activation with a Google Play / backend-verified purchase.
  */
-public class LeemenPremiumActivity extends BaseFragment {
+public class LeemenPremiumActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
 
     private int selectedMonths = 12; // yearly by default (better value)
     private PlanRow monthlyRow;
@@ -207,11 +210,70 @@ public class LeemenPremiumActivity extends BaseFragment {
         fragmentView = root;
         selectPlan(selectedMonths);
         updateState();
+        loadPrices();
+        // Sync entitlement from Play (cross-device restore + acknowledgement retry); server is truth.
+        LeemenBilling.getInstance().restore(currentAccount);
 
         HashMap<String, String> props = new HashMap<>();
         props.put("placement", placement);
         LeemenAnalytics.track("paywall_view", props);
         return root;
+    }
+
+    /** Replace the static fallback prices with Google Play's localized (region-aware) prices. */
+    private void loadPrices() {
+        LeemenBilling.getInstance().queryProduct(details -> {
+            if (details == null || monthlyRow == null || yearlyRow == null) {
+                return; // keep string fallbacks (product not configured / offline)
+            }
+            String monthly = LeemenBilling.formattedPrice(details, LeemenConfig.PLAY_BASE_PLAN_MONTHLY);
+            String yearly = LeemenBilling.formattedPrice(details, LeemenConfig.PLAY_BASE_PLAN_YEARLY);
+            if (monthly != null) {
+                monthlyRow.setPrice(monthly);
+            }
+            if (yearly != null) {
+                yearlyRow.setPrice(yearly);
+            }
+        });
+    }
+
+    private LeemenBilling.FlowListener billingFlowListener;
+
+    @Override
+    public boolean onFragmentCreate() {
+        boolean created = super.onFragmentCreate();
+        getNotificationCenter().addObserver(this, NotificationCenter.secondSpaceModeChanged);
+        billingFlowListener = (ok, reason) -> {
+            if (fragmentView == null || getParentActivity() == null) {
+                return;
+            }
+            if (ok) {
+                updateState();
+                BulletinFactory.of(this)
+                        .createSimpleBulletin(R.raw.chats_infotip, LocaleController.getString(R.string.LeemenPremiumActivated))
+                        .show();
+            } else if (!"canceled".equals(reason)) {
+                BulletinFactory.of(this)
+                        .createErrorBulletin(LocaleController.getString(R.string.LeemenPremiumPurchaseError))
+                        .show();
+            }
+        };
+        LeemenBilling.getInstance().setFlowListener(billingFlowListener);
+        return created;
+    }
+
+    @Override
+    public void onFragmentDestroy() {
+        getNotificationCenter().removeObserver(this, NotificationCenter.secondSpaceModeChanged);
+        LeemenBilling.getInstance().removeFlowListener(billingFlowListener);
+        super.onFragmentDestroy();
+    }
+
+    @Override
+    public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.secondSpaceModeChanged) {
+            updateState();
+        }
     }
 
     private void addFeature(LinearLayout container, int iconRes, CharSequence title, CharSequence desc) {
@@ -278,13 +340,16 @@ public class LeemenPremiumActivity extends BaseFragment {
         LeemenAnalytics.track("paywall_cta_tap", props);
         LeemenAnalytics.track("subscribe_flow_started");
 
-        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        // TODO(billing): replace with Google Play / backend-verified purchase.
-        ssc.activateLeemenPremiumLocally(selectedMonths);
-        updateState();
-        BulletinFactory.of(this)
-                .createSimpleBulletin(R.raw.chats_infotip, LocaleController.getString(R.string.LeemenPremiumActivated))
-                .show();
+        if (getParentActivity() == null) {
+            return;
+        }
+        String basePlan = selectedMonths == 12
+                ? org.telegram.messenger.leemen.LeemenConfig.PLAY_BASE_PLAN_YEARLY
+                : org.telegram.messenger.leemen.LeemenConfig.PLAY_BASE_PLAN_MONTHLY;
+        // Real Google Play purchase → backend verifies the token → entitlement reflected via the
+        // FlowListener / secondSpaceModeChanged. No local grant on the happy path (server is truth).
+        org.telegram.messenger.leemen.LeemenBilling.getInstance()
+                .launchPurchase(getParentActivity(), currentAccount, basePlan);
     }
 
     private void showPromoDialog() {
@@ -328,7 +393,7 @@ public class LeemenPremiumActivity extends BaseFragment {
                 return; // fragment left while the request was in flight
             }
             if (ok) {
-                long until = parseExpiry(expiresAt);
+                long until = LeemenBilling.parseExpiryMs(expiresAt);
                 SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
                 if (until > 0) {
                     ssc.setLeemenPremiumUntil(until);
@@ -345,22 +410,6 @@ public class LeemenPremiumActivity extends BaseFragment {
                         .show();
             }
         });
-    }
-
-    /** Parse the backend expires_at (epoch ms / epoch s / ISO-8601) → epoch ms, or 0 if unknown. */
-    private static long parseExpiry(String s) {
-        if (s == null || s.isEmpty()) {
-            return 0;
-        }
-        try {
-            if (s.matches("\\d+")) {
-                long v = Long.parseLong(s);
-                return v > 1_000_000_000_000L ? v : v * 1000L;
-            }
-            return java.time.Instant.parse(s).toEpochMilli();
-        } catch (Throwable e) {
-            return 0;
-        }
     }
 
     private void updateState() {
@@ -383,6 +432,7 @@ public class LeemenPremiumActivity extends BaseFragment {
 
     private class PlanRow extends FrameLayout {
         private final RadioButton radio;
+        private final TextView priceView;
 
         PlanRow(Context context, CharSequence name, CharSequence price, CharSequence badge, boolean topDivider) {
             super(context);
@@ -404,7 +454,7 @@ public class LeemenPremiumActivity extends BaseFragment {
             nameView.setText(n);
             addView(nameView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL | (rtl ? Gravity.RIGHT : Gravity.LEFT), 60, 0, 60, 0));
 
-            TextView priceView = new TextView(context);
+            priceView = new TextView(context);
             priceView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
             priceView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
             priceView.setText(price);
@@ -413,6 +463,10 @@ public class LeemenPremiumActivity extends BaseFragment {
 
         void setChecked(boolean checked) {
             radio.setChecked(checked, true);
+        }
+
+        void setPrice(CharSequence price) {
+            priceView.setText(price);
         }
     }
 

@@ -2468,6 +2468,7 @@
     <string name="LeemenPremiumSubscribe">Subscribe</string>
     <string name="LeemenPremiumActiveUntil">Active until %1$s</string>
     <string name="LeemenPremiumActivated">Leemen Premium activated</string>
+    <string name="LeemenPremiumPurchaseError">Couldn\'t complete the purchase</string>
     <string name="LeemenPremiumStatusUnlimited">Unlimited chats</string>
     <string name="LeemenPremiumFeat1Desc">Hide as many chats as you want.</string>
     <string name="LeemenPremiumFeat2Title">Sync across devices</string>

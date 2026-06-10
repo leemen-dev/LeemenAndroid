@@ -30,9 +30,18 @@ public final class LeemenConfig {
     public static final String EP_CONTENT         = "/content";
     public static final String EP_DEVICES_REGISTER= "/devices/register";
     public static final String EP_PROMO_REDEEM    = "/promo/redeem";
+    public static final String EP_ENTITLEMENTS_PLAY = "/entitlements/play"; // verify Play purchase_token (backend Phase 2)
     public static final String EP_EVENTS          = "/events";
     public static final String EP_ATTRIBUTION     = "/attribution";
     public static final String EP_HEARTBEAT       = "/heartbeat";
+
+    // --- Google Play Billing (Leemen Premium subscription) ---
+    // TODO(release): these MUST match the subscription product + base plan IDs created in Play Console.
+    /** Single subscription product holding both base plans. */
+    public static final String PLAY_PRODUCT_PREMIUM = "leemen_premium";
+    /** Base-plan ids within {@link #PLAY_PRODUCT_PREMIUM}. */
+    public static final String PLAY_BASE_PLAN_MONTHLY = "monthly";
+    public static final String PLAY_BASE_PLAN_YEARLY  = "yearly";
 
     // --- Identity binding (MTProto WebApp / initData) ---
     /** Bot whose Mini App signs the Telegram user id; we call messages.requestWebView headless. */

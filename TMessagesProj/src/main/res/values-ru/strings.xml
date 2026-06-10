@@ -303,6 +303,7 @@
     <string name="LeemenPremiumSubscribe">Оформить подписку</string>
     <string name="LeemenPremiumActiveUntil">Активна до %1$s</string>
     <string name="LeemenPremiumActivated">Leemen Premium активирован</string>
+    <string name="LeemenPremiumPurchaseError">Не удалось завершить покупку</string>
     <string name="LeemenPremiumStatusUnlimited">Безлимит чатов</string>
     <string name="LeemenPremiumFeat1Desc">Прячьте сколько угодно чатов.</string>
     <string name="LeemenPremiumFeat2Title">Синхронизация устройств</string>
