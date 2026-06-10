@@ -54,7 +54,12 @@ public final class LeemenSync {
     private static final boolean[] dirty = new boolean[N];
     private static final Runnable[] debounce = new Runnable[N];
     private static final Runnable[] watchdog = new Runnable[N];
-    private static final boolean[] pending = new boolean[N]; // OFF-mode list gated until first sync (anti-flash)
+    // ===== Anti-leak gate (FAIL-CLOSED) =====
+    // In OFF mode a non-system chat is shown ONLY after the Leemen server has CONCLUSIVELY delivered the
+    // hidden set this session (syncConfirmed). Until then everything except the Telegram service chat stays
+    // hidden — a server-hidden chat must NEVER appear, even briefly, even if the backend is unreachable.
+    // There is deliberately NO timer that reveals the list without server confirmation.
+    private static final boolean[] syncConfirmed = new boolean[N]; // a conclusive filter pull projected the set this session
 
     private interface RawCb { void on(Object blob, long version); }
 
@@ -96,7 +101,7 @@ public final class LeemenSync {
             debounce[account] = null;
         }
         cancelWatchdog(account);
-        pending[account] = false;
+        syncConfirmed[account] = false;
         LeemenSyncState.clear(account);
     }
 
@@ -104,21 +109,29 @@ public final class LeemenSync {
      *  flash on fresh login, when the local hidden set is still empty). Auto-clears after the first sync
      *  projects the real set, or after a fallback timeout if sync never completes (e.g. offline login),
      *  so the list is never stuck empty. */
+    /** Nudge the OFF-mode list to its gated state right after login. The gate is already closed by default
+     *  for every activated account (see {@link #isInitialSyncPending}); this just forces an immediate refresh. */
     public static void markSyncPending(final int account) {
         if (!inRange(account)) return;
-        pending[account] = true;
         reloadDialogs(account);
-        AndroidUtilities.runOnUIThread(() -> clearPending(account), 15000);
     }
 
+    /** True while the OFF-mode list must stay gated (FAIL-CLOSED): the account is logged in and the Leemen
+     *  server has not yet conclusively confirmed the hidden set THIS session. Closed by default on every
+     *  launch; opened only by a conclusive filter pull ({@link #markSyncConfirmed}) — never by a timer.
+     *  Covers the whole window from login (even before the binding exists, or after a force-stop mid-login)
+     *  until sync; every activated account in this fork is a Leemen account. */
     public static boolean isInitialSyncPending(int account) {
-        return inRange(account) && pending[account];
+        return inRange(account)
+                && UserConfig.getInstance(account).isClientActivated()
+                && !syncConfirmed[account];
     }
 
-    private static void clearPending(int account) {
-        if (!inRange(account) || !pending[account]) return;
-        pending[account] = false;
-        reloadDialogs(account);
+    /** Open the gate: a conclusive sync has projected the real hidden set this session. No reloadDialogs
+     *  here — the caller's projectToController applies the set and posts the reload (so the list never
+     *  rebuilds with the gate open before the hidden set is in place). */
+    private static void markSyncConfirmed(int account) {
+        if (inRange(account)) syncConfirmed[account] = true;
     }
 
     private static void reloadDialogs(int account) {
@@ -158,8 +171,18 @@ public final class LeemenSync {
                     if (cver >= 0) st.contentVersion = cver;
                     if (fver >= 0) st.filterVersion = fver;
 
+                    // Conclusive = at least one blob endpoint answered (200 with data, or 404 → version 0).
+                    // On a purely transient failure (both versions -1) we must NOT lift the anti-flash gate:
+                    // we don't yet know the hidden set, so revealing now would flash a server-hidden chat.
+                    // Membership (which chats are hidden) lives ONLY in the filter blob, so ONLY a conclusive
+                    // filter pull (200 with data, or 404 → version 0) lets us open the fail-closed gate. A
+                    // content-only success with a filter timeout must keep the gate closed (we don't yet know
+                    // the real hidden set → a server-hidden chat could otherwise leak).
+                    final boolean conclusivePull = (fver >= 0);
                     final Runnable projectAndPush = () -> {
-                        pending[account] = false; // gate off: we now have the latest hidden set to project
+                        if (conclusivePull) {
+                            markSyncConfirmed(account); // open the fail-closed gate: the real hidden set is known
+                        }
                         LeemenMerge.recomputeOffModeVisible(st.filter, st.content);
                         projectToController(account, st);
                         st.persist();
@@ -325,7 +348,12 @@ public final class LeemenSync {
         long[] lam = {0};
         boolean[] membershipRemoved = {false};
 
-        Set<Long> members = new HashSet<>(c.getDialogIds());
+        Set<Long> members = new HashSet<>();
+        for (Long id : c.getDialogIds()) {
+            // never let the Telegram service chat (login codes) into the hidden set / blob, even if a prior
+            // version or corruption left it in dialogIds — it would tombstone-clean out of the server blob.
+            if (!org.telegram.messenger.UserObject.isService(id)) members.add(id);
+        }
 
         // membership adds
         for (Long id : members) {
@@ -437,7 +465,11 @@ public final class LeemenSync {
 
         Set<Long> members = new HashSet<>();
         for (Map.Entry<String, LeemenBlob.Reg> e : st.filter.hidden_chat_ids.entrySet()) {
-            if (LeemenBlob.isLive(e.getValue())) members.add(parseLong(e.getKey()));
+            if (LeemenBlob.isLive(e.getValue())) {
+                long id = parseLong(e.getKey());
+                // defense-in-depth: a server bug / corrupt blob must never hide the service chat
+                if (!org.telegram.messenger.UserObject.isService(id)) members.add(id);
+            }
         }
 
         Map<Long, Set<Integer>> exposed = new HashMap<>();

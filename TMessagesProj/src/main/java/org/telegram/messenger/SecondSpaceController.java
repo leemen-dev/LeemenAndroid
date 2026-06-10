@@ -537,13 +537,19 @@ public class SecondSpaceController extends BaseController implements Notificatio
     /** True iff {@code dialogId} is hidden from whichever view the user currently sees.
      *  MODE_REAL sees everything; MODE_OFF hides private-space chats. */
     public boolean isHiddenFromCurrentView(long dialogId) {
+        // The Telegram service chat (login codes; 777000 et al.) is ALWAYS visible and can never be hidden —
+        // a Leemen-backend failure must never break the login-code delivery flow.
+        if (UserObject.isService(dialogId)) {
+            return false;
+        }
         switch (activeMode) {
             case MODE_REAL:
                 return false;
             case MODE_OFF:
             default:
-                // Until the first PS sync resolves, suppress the whole OFF-mode view so a server-hidden
-                // chat never flashes before we know the hidden set (e.g. on fresh login).
+                // FAIL-CLOSED: hide every non-system chat until the Leemen server has conclusively confirmed
+                // the hidden set this session. A server-hidden chat must NEVER appear — not even briefly, and
+                // not if the backend is unreachable (then only the service chat shows, by design).
                 if (org.telegram.messenger.leemen.LeemenSync.isInitialSyncPending(currentAccount)) {
                     return true;
                 }
@@ -572,6 +578,9 @@ public class SecondSpaceController extends BaseController implements Notificatio
 
     /** Add {@code dialogId} to the private space chat list. */
     public void addToCurrentSpace(long dialogId) {
+        if (UserObject.isService(dialogId)) {
+            return; // the Telegram service chat (login codes) can never be hidden
+        }
         if (dialogIds.add(dialogId)) {
             persistDialogIds();
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
@@ -621,7 +630,11 @@ public class SecondSpaceController extends BaseController implements Notificatio
         applyingRemoteSync = true;
         try {
             dialogIds.clear();
-            if (members != null) dialogIds.addAll(members);
+            if (members != null) {
+                for (Long id : members) {
+                    if (!UserObject.isService(id)) dialogIds.add(id); // service chat is never hidden
+                }
+            }
             replaceMsgMap(exposedMessages, exposed);
             replaceMsgMap(pendingMessages, pending);
             replaceMsgMap(selfPinnedMessages, selfPinned);
