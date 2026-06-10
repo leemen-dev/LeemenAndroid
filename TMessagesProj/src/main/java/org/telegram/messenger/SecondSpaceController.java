@@ -359,6 +359,8 @@ public class SecondSpaceController extends BaseController implements Notificatio
         // Entry method changed → user must re-verify before the entry button can be hidden.
         if (changed) {
             clearShortcutTested();
+            // Tier-P: propagate the gesture to same-platform devices. Suppressed while applying a remote sync.
+            notifyLeemenSync();
         }
     }
 
@@ -626,9 +628,14 @@ public class SecondSpaceController extends BaseController implements Notificatio
                                  Map<Long, Set<Integer>> selfPinned,
                                  Set<Long> privateSearch,
                                  Integer pinTimeout,
-                                 Boolean allowScreenshotsVal) {
+                                 Boolean allowScreenshotsVal,
+                                 java.util.List<TabStep> tabSeq) {
         applyingRemoteSync = true;
         try {
+            // Tier-P: apply our platform's synced tab gesture under the SAME guard (no spurious back-push).
+            if (tabSeq != null && !sameSequence(tabSequence, tabSeq)) {
+                setTabSequence(tabSeq);
+            }
             dialogIds.clear();
             if (members != null) {
                 for (Long id : members) {

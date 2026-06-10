@@ -140,16 +140,35 @@ public final class LeemenMerge {
         local.platform = mergePlatform(local.platform, remote.platform);
     }
 
-    /** Union of platform sub-objects; never clobber a platform section we already hold (§6.6). */
+    /** Per-platform last-writer-wins (§6.6): union across platforms, but for a section present on BOTH
+     *  sides take the one with the higher lamport "c" (tiebreak by "dev"). This is what lets two
+     *  same-platform devices actually converge on a Tier-P setting (e.g. the tab gesture) instead of each
+     *  keeping its own section forever. (The old union-only logic never propagated a same-platform change.) */
     private static JsonObject mergePlatform(JsonObject local, JsonObject remote) {
         if (remote == null) return local;
         if (local == null) return remote.deepCopy();
         for (Map.Entry<String, JsonElement> e : remote.entrySet()) {
-            if (!local.has(e.getKey())) {
-                local.add(e.getKey(), e.getValue());
+            String plat = e.getKey();
+            JsonElement rEl = e.getValue();
+            if (!local.has(plat)) {
+                local.add(plat, rEl);
+            } else {
+                long lc = platLamport(local.get(plat));
+                long rc = platLamport(rEl);
+                if (rc > lc || (rc == lc && platDev(rEl).compareTo(platDev(local.get(plat))) > 0)) {
+                    local.add(plat, rEl); // JsonObject.add replaces the existing section
+                }
             }
         }
         return local;
+    }
+
+    private static long platLamport(JsonElement el) {
+        try { return el.getAsJsonObject().get("c").getAsLong(); } catch (Throwable e) { return 0; }
+    }
+
+    private static String platDev(JsonElement el) {
+        try { return el.getAsJsonObject().get("dev").getAsString(); } catch (Throwable e) { return ""; }
     }
 
     // ---- derived cache: chats_off_mode_visible ----

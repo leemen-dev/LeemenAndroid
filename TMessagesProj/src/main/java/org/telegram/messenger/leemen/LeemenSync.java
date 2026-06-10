@@ -2,6 +2,8 @@ package org.telegram.messenger.leemen;
 
 import android.util.Base64;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import org.telegram.messenger.AndroidUtilities;
@@ -455,6 +457,19 @@ public final class LeemenSync {
             st.content.private_space_settings.allow_screenshots = new LeemenBlob.BoolVal(allowSs, lam(st, lam), dev);
         }
 
+        // Tier-P (platform-specific) — synced ONLY between same-platform devices. We own only the "android"
+        // sub-object; mergePlatform preserves other platforms' sections. Write a fresh register (lamport "c")
+        // iff the local tab gesture differs from what the blob already holds for android.
+        java.util.List<SecondSpaceController.TabStep> localSeq = c.getTabSequence();
+        if (platformTabSeqDiffers(st.content.platform, localSeq)) {
+            if (st.content.platform == null) st.content.platform = new JsonObject();
+            JsonObject android = new JsonObject();
+            android.addProperty("c", lam(st, lam));
+            android.addProperty("dev", dev);
+            android.add("tab_sequence", tabSequenceToJson(localSeq));
+            st.content.platform.add(PLATFORM_ANDROID, android);
+        }
+
         return membershipRemoved[0];
     }
 
@@ -503,7 +518,10 @@ public final class LeemenSync {
         Boolean allowSs = st.content.private_space_settings.allow_screenshots != null
                 ? st.content.private_space_settings.allow_screenshots.v : null;
 
-        c.applySyncedState(members, exposed, pending, selfPinned, privateSearch, pinTimeout, allowSs);
+        // Tier-P: our own platform's synced tab gesture (same-platform only) is applied inside applySyncedState
+        // under its single applyingRemoteSync guard (no spurious back-push).
+        c.applySyncedState(members, exposed, pending, selfPinned, privateSearch, pinTimeout, allowSs,
+                platformTabSeqFromBlob(st.content.platform));
     }
 
     // ===== helpers =====
@@ -528,6 +546,49 @@ public final class LeemenSync {
     private static long lam(LeemenSyncState st, long[] holder) {
         if (holder[0] == 0) holder[0] = st.nextLamport();
         return holder[0];
+    }
+
+    // ---- Tier-P: the tab gesture, synced only within this platform's blob sub-object ----
+    private static final String PLATFORM_ANDROID = "android";
+
+    private static JsonArray tabSequenceToJson(java.util.List<SecondSpaceController.TabStep> seq) {
+        JsonArray arr = new JsonArray();
+        if (seq != null) {
+            for (SecondSpaceController.TabStep s : seq) {
+                JsonObject o = new JsonObject();
+                o.addProperty("t", s.tabIndex);
+                o.addProperty("l", s.longPress);
+                arr.add(o);
+            }
+        }
+        return arr;
+    }
+
+    /** Parse the android tab_sequence out of the blob's platform section, or null if absent/malformed. */
+    private static java.util.List<SecondSpaceController.TabStep> platformTabSeqFromBlob(JsonObject platform) {
+        try {
+            if (platform == null || !platform.has(PLATFORM_ANDROID)) return null;
+            JsonObject android = platform.getAsJsonObject(PLATFORM_ANDROID);
+            if (android == null || !android.has("tab_sequence")) return null;
+            JsonArray arr = android.getAsJsonArray("tab_sequence");
+            java.util.List<SecondSpaceController.TabStep> out = new java.util.ArrayList<>();
+            for (JsonElement el : arr) {
+                JsonObject o = el.getAsJsonObject();
+                out.add(new SecondSpaceController.TabStep(o.get("t").getAsInt(), o.get("l").getAsBoolean()));
+            }
+            return out;
+        } catch (Throwable e) {
+            return null;
+        }
+    }
+
+    /** True iff the local tab gesture differs from the one stored in the blob's android section. Compares
+     *  SEMANTICALLY (TabStep t/l) via sameSequence — never JsonArray.equals — so a serialize/round-trip can
+     *  never cause false-positive lamport churn (spurious re-push every cycle). */
+    private static boolean platformTabSeqDiffers(JsonObject platform, java.util.List<SecondSpaceController.TabStep> localSeq) {
+        java.util.List<SecondSpaceController.TabStep> blobSeq = platformTabSeqFromBlob(platform);
+        if (blobSeq == null) return localSeq != null && !localSeq.isEmpty();
+        return !SecondSpaceController.sameSequence(blobSeq, localSeq);
     }
 
     private static LeemenBlob.PerChat perChat(LeemenSyncState st, String dialogKey) {
