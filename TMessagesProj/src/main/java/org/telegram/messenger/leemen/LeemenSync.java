@@ -64,6 +64,9 @@ public final class LeemenSync {
     // server conclusively delivers the hidden set. There is NO timer that reveals without server confirmation.
     private static final boolean[] everSynced = new boolean[N];      // in-memory cache of the persisted flag
     private static final boolean[] everSyncedLoaded = new boolean[N];
+    private static final boolean[] loginPending = new boolean[N];    // forced gate from onAuthSuccess until 1st sync
+    private static final int[] gateLogState = new int[N];            // debug: last-logged gate state per account
+    static { java.util.Arrays.fill(gateLogState, -1); }
 
     private static android.content.SharedPreferences gatePrefs() {
         return org.telegram.messenger.ApplicationLoader.applicationContext
@@ -82,7 +85,9 @@ public final class LeemenSync {
     }
 
     private static void markEverSynced(int account) {
-        if (!inRange(account) || hasEverSynced(account)) return;
+        if (!inRange(account)) return;
+        loginPending[account] = false; // the first conclusive sync supersedes the login-window force
+        if (hasEverSynced(account)) return;
         everSynced[account] = true;
         everSyncedLoaded[account] = true;
         gatePrefs().edit().putBoolean("ever_synced_" + account, true).apply();
@@ -127,6 +132,28 @@ public final class LeemenSync {
         AndroidUtilities.runOnUIThread(() -> { if (ready(account)) syncAccount(account); });
     }
 
+    /** Realtime blob_changed notify. IGNORES the echo of our OWN write — a version we already hold — so we
+     *  don't loop push → server-broadcast → pull → push forever (the version-bump loop seen when realtime is
+     *  connected). Only a version NEWER than what we hold (a genuine remote change) re-syncs. Unknown
+     *  table/version falls through to a normal sync (fail-safe). */
+    public static void onRemoteChanged(final int account, final String table, final long version) {
+        AndroidUtilities.runOnUIThread(() -> {
+            if (!ready(account)) return;
+            if (version > 0 && table != null) {
+                LeemenSyncState st = state(account);
+                long held = "filter".equals(table) ? st.filterVersion
+                        : "content".equals(table) ? st.contentVersion : -1;
+                if (held >= version) {
+                    if (BuildVars.LOGS_ENABLED) {
+                        FileLog.d("Leemen: realtime echo ignored " + table + " v" + version + " (held " + held + ")");
+                    }
+                    return;
+                }
+            }
+            syncAccount(account);
+        });
+    }
+
     /** Drop all sync state for an account (call on logout, before the slot is reused). */
     public static void clearAccount(int account) {
         if (!inRange(account)) return;
@@ -138,27 +165,37 @@ public final class LeemenSync {
             debounce[account] = null;
         }
         cancelWatchdog(account);
+        loginPending[account] = false;
         // Logout/delete wipes the cached hidden set, so the next login must fail closed again until it
         // re-syncs (don't trust a stale/absent cache).
         resetEverSynced(account);
         LeemenSyncState.clear(account);
     }
 
-    /** Nudge the OFF-mode list to refresh right after login. On a fresh install (no cache) this shows the
-     *  fail-closed gated state; on a returning account it re-applies the cached hidden set. */
+    /** Called at onAuthSuccess: force the fail-closed gate closed for this freshly-logged-in account RIGHT
+     *  NOW, before the first sync (and even before isClientActivated may have flipped true), so a server-hidden
+     *  chat can't show in the gap between login and the first conclusive sync. Cleared by markEverSynced. */
     public static void markSyncPending(final int account) {
         if (!inRange(account)) return;
+        loginPending[account] = true;
         reloadDialogs(account);
     }
 
-    /** True while the OFF-mode list must stay FAIL-CLOSED (hide every non-service chat): the account is
-     *  logged in AND has NO cached hidden set yet (never conclusively synced on this install). Once we have
-     *  a cache (everSynced), this returns false and hiding falls back to the cached dialogIds — so a
-     *  returning account shows its chats instantly, even offline, while sync refreshes in the background. */
+    /** True while the OFF-mode list must stay FAIL-CLOSED (hide every non-service chat): the account is logged
+     *  in (or a fresh login is in progress) AND has NO cached hidden set yet (never conclusively synced on
+     *  this install). Once we have a cache (everSynced), this returns false and hiding falls back to the cached
+     *  dialogIds — so a returning account shows its chats instantly, even offline, while sync refreshes. */
     public static boolean isInitialSyncPending(int account) {
-        return inRange(account)
-                && UserConfig.getInstance(account).isClientActivated()
-                && !hasEverSynced(account);
+        if (!inRange(account)) return false;
+        boolean activated = loginPending[account] || UserConfig.getInstance(account).isClientActivated();
+        boolean pending = activated && !hasEverSynced(account);
+        if (BuildVars.LOGS_ENABLED && gateLogState[account] != (pending ? 1 : 0)) {
+            gateLogState[account] = pending ? 1 : 0;
+            FileLog.d("Leemen: gate pending=" + pending + " (loginPending=" + loginPending[account]
+                    + " activated=" + UserConfig.getInstance(account).isClientActivated()
+                    + " everSynced=" + hasEverSynced(account) + ") account " + account);
+        }
+        return pending;
     }
 
     /** Open the gate permanently for this install: a conclusive sync has projected the real hidden set, so
@@ -199,7 +236,13 @@ public final class LeemenSync {
                             rf instanceof LeemenBlob.FilterBlob ? ((LeemenBlob.FilterBlob) rf).lamport : 0);
                     st.observeLamport(remoteLamport);
 
-                    boolean membershipRemoved = reconcileFromController(account, st);
+                    final long[] reconcileLam = {0};
+                    boolean membershipRemoved = reconcileFromController(account, st, reconcileLam);
+                    // reconcile consumes a lamport ONLY when it stamps a local change. Still 0 ⇒ nothing local
+                    // to propagate ⇒ skip the push, so a no-op sync doesn't bump the blob version + broadcast
+                    // (that unconditional push is what created the realtime push→echo→push loop, and a
+                    // cross-device variant where two online devices ping-pong no-op pushes forever).
+                    final boolean reconcileChanged = reconcileLam[0] != 0;
 
                     if (rc instanceof LeemenBlob.ContentBlob) LeemenMerge.mergeContent(st.content, (LeemenBlob.ContentBlob) rc);
                     if (rf instanceof LeemenBlob.FilterBlob) LeemenMerge.mergeFilter(st.filter, (LeemenBlob.FilterBlob) rf);
@@ -230,7 +273,11 @@ public final class LeemenSync {
                             st.persist();
                             finish(account);
                         };
-                        if (membershipRemoved) {
+                        if (!reconcileChanged) {
+                            // Nothing local changed (we just pulled/merged remote state, or it was a no-op
+                            // realtime notify) → don't push; just finish. Stops the version-bump loop.
+                            done.run();
+                        } else if (membershipRemoved) {
                             // removes: filter first (membership gone), then content (cascade)
                             pushBlob(LeemenConfig.EP_FILTER, true, st, key, token, MAX_CAS_RETRY, () ->
                                     pushBlob(LeemenConfig.EP_CONTENT, false, st, key, token, MAX_CAS_RETRY, done));
@@ -375,10 +422,9 @@ public final class LeemenSync {
 
     // ===== reconcile: controller -> blob registers. Returns true iff a membership REMOVE was stamped. =====
 
-    private static boolean reconcileFromController(int account, LeemenSyncState st) {
+    private static boolean reconcileFromController(int account, LeemenSyncState st, long[] lam) {
         SecondSpaceController c = SecondSpaceController.getInstance(account);
         String dev = st.deviceId();
-        long[] lam = {0};
         boolean[] membershipRemoved = {false};
 
         Set<Long> members = new HashSet<>();

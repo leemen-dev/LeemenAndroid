@@ -104,7 +104,14 @@ public final class LeemenRealtime {
                 if ("broadcast".equals(optStr(m, "event"))) {
                     JsonObject payload = m.has("payload") && m.get("payload").isJsonObject() ? m.getAsJsonObject("payload") : null;
                     if (payload != null && "blob_changed".equals(optStr(payload, "event"))) {
-                        LeemenSync.onRemoteChanged(account); // marshals to UI + runs the GET→merge backstop
+                        // Supabase broadcast nests the data one level deeper: payload.payload = {table, version}.
+                        // Pass them so LeemenSync can ignore the echo of our own write (no push→echo→push loop).
+                        JsonObject data = payload.has("payload") && payload.get("payload").isJsonObject()
+                                ? payload.getAsJsonObject("payload") : null;
+                        String table = data != null ? optStr(data, "table") : null;
+                        long version = data != null && data.has("version") && data.get("version").isJsonPrimitive()
+                                ? data.get("version").getAsLong() : -1;
+                        LeemenSync.onRemoteChanged(account, table, version); // marshals to UI + GET→merge backstop
                     }
                 }
             } catch (Throwable e) {
