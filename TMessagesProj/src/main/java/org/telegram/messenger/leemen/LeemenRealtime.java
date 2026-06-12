@@ -49,6 +49,23 @@ public final class LeemenRealtime {
         }
     }
 
+    /** Foreground / network-restored: drop any pending backoff and reconnect immediately for accounts
+     *  whose socket is down. Idempotent — a live socket is left alone (connect() no-ops when already up).
+     *  We also reset the backoff so the NEXT drop starts the 2s→60s climb over rather than resuming the
+     *  old cap; without this, a long outage leaves recovery up to 60s away even after the network is back.
+     *  Called from LaunchActivity.onResume and on ConnectionStateConnected (per-account, but iterates all). */
+    public static void reconnectAllNow() {
+        AndroidUtilities.runOnUIThread(() -> {
+            for (int a = 0; a < N; a++) {
+                try {
+                    if (!ready(a)) continue;
+                    backoffMs[a] = 0;
+                    connect(a); // cancels the pending delayed reconnect, then connects iff socket == null
+                } catch (Throwable ignore) {}
+            }
+        });
+    }
+
     public static void disconnectAll() {
         for (int a = 0; a < N; a++) disconnect(a);
     }

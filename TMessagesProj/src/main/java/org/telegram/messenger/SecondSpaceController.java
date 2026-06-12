@@ -96,6 +96,16 @@ public class SecondSpaceController extends BaseController implements Notificatio
      *  Off-mode-only sends go here directly so they can never be confused with normal active-
      *  mode sends — those simply don't get tracked. */
     private final Map<Long, Set<Integer>> pendingMessages = new HashMap<>();
+    /** In-memory bodies of the latest exposed/pending messages, keyed dialogId → (msgId → object). Telegram's
+     *  {@code dialogMessagesByIds} holds ONLY each dialog's CURRENT top message and evicts older ones, so once a
+     *  hidden chat receives a newer (hidden) message the exposed message vanishes from that cache and the OFF-mode
+     *  preview goes blank. We keep the exposed/pending bodies here so the preview resolves regardless of top-message
+     *  status or load timing. EXPOSED/PENDING messages are the ones shown in OFF mode anyway, so caching their bodies
+     *  leaks nothing the user hasn't chosen to surface. NOT persisted — repopulated each session from the local DB
+     *  warmup; main-thread access only (DialogCell.update + messagesDidLoad + applySyncedState all run on UI). */
+    private final Map<Long, Map<Integer, MessageObject>> safePreviewCache = new HashMap<>();
+    /** Stable class-guid for the dialog-list preview warmup loads (results route through messagesDidLoad). */
+    private int previewWarmGuid = 0;
     private final Set<Long> privateSearchDialogs = new HashSet<>();
     private String passwordHash;
     private final java.util.List<TabStep> tabSequence = new java.util.ArrayList<>();
@@ -177,6 +187,11 @@ public class SecondSpaceController extends BaseController implements Notificatio
             // linger in the dialog cell preview (stale cached MessageObject) until the
             // chat is opened again to repopulate the cache.
             getNotificationCenter().addObserver(this, NotificationCenter.messagesDeleted);
+            // Warm the OFF-mode preview cache: whenever ANY chat's messages load (chat open, pagination, or our
+            // own dialog-list warmup), capture the ones that are exposed/pending so the dialog cell can render
+            // them even after they stop being the dialog's top message. Cheap for non-hidden chats (a couple of
+            // map misses), so a blanket observer is fine.
+            getNotificationCenter().addObserver(this, NotificationCenter.messagesDidLoad);
         });
     }
 
@@ -215,7 +230,51 @@ public class SecondSpaceController extends BaseController implements Notificatio
                     purgeDeletedFromTracking(did, mids);
                 }
             }
+        } else if (id == NotificationCenter.messagesDidLoad) {
+            // args: (dialogId, count, ArrayList<MessageObject> objects, isCache, ..., classGuid[10], ...)
+            long dialogId = args.length > 0 && args[0] instanceof Long ? (Long) args[0] : 0L;
+            @SuppressWarnings("unchecked")
+            ArrayList<MessageObject> objects = args.length > 2 && args[2] instanceof ArrayList ? (ArrayList<MessageObject>) args[2] : null;
+            if (objects == null || objects.isEmpty()) return;
+            boolean any = false;
+            for (int i = 0, n = objects.size(); i < n; i++) {
+                MessageObject mo = objects.get(i);
+                if (mo != null && isSafeMessage(dialogId, mo.getId())) {
+                    cacheSafePreview(dialogId, mo);
+                    any = true;
+                }
+            }
+            // Repaint the dialog cell now that its exposed/pending body is resolvable.
+            if (any) getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
+    }
+
+    /** True when {@code messageId} is currently tracked as exposed or pending for {@code dialogId}. */
+    private boolean isSafeMessage(long dialogId, int messageId) {
+        Set<Integer> ex = exposedMessages.get(dialogId);
+        if (ex != null && ex.contains(messageId)) return true;
+        Set<Integer> pe = pendingMessages.get(dialogId);
+        return pe != null && pe.contains(messageId);
+    }
+
+    /** Stash a safe (exposed/pending) message body for the OFF-mode preview. No-op if the message isn't
+     *  actually safe for this dialog (so we never cache a hidden message). */
+    private void cacheSafePreview(long dialogId, MessageObject mo) {
+        if (mo == null || mo.getDialogId() != dialogId) return;
+        if (!isSafeMessage(dialogId, mo.getId())) return;
+        Map<Integer, MessageObject> m = safePreviewCache.get(dialogId);
+        if (m == null) { m = new HashMap<>(); safePreviewCache.put(dialogId, m); }
+        m.put(mo.getId(), mo);
+    }
+
+    /** Drop a message id from the preview cache once it is no longer exposed OR pending. Guarded so un-exposing a
+     *  message that is still pending (or vice-versa) keeps it cached. Call AFTER mutating the exposed/pending set. */
+    private void evictSafePreview(long dialogId, int messageId) {
+        if (isSafeMessage(dialogId, messageId)) return; // still surfaced via the other set — keep the body
+        Map<Integer, MessageObject> m = safePreviewCache.get(dialogId);
+        if (m == null) return;
+        m.remove(messageId);
+        if (m.isEmpty()) safePreviewCache.remove(dialogId);
     }
 
     /** Drop {@code mids} from {@code dialogId}'s exposed / pending sets. Idempotent —
@@ -659,6 +718,8 @@ public class SecondSpaceController extends BaseController implements Notificatio
             applyingRemoteSync = false;
         }
         getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+        // Drop preview-cache entries that are no longer exposed/pending after this apply.
+        pruneSafePreviewCache();
         if (org.telegram.messenger.BuildVars.LOGS_ENABLED) {
             int ex = 0, pe = 0;
             for (Set<Integer> s : exposedMessages.values()) ex += s.size();
@@ -673,11 +734,54 @@ public class SecondSpaceController extends BaseController implements Notificatio
                 }
             }
         }
-        // The exposed/pending MessageObjects may not be in Telegram's cache YET at sync time (dialogs still
-        // loading), so the reload just posted resolves an empty preview. Re-post shortly so the list/preview
-        // re-resolve once those messages are cached — the same end state as a relaunch, no extra fetch.
-        org.telegram.messenger.AndroidUtilities.runOnUIThread(
-                () -> getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload), 1200);
+        // Reactive warmup (replaces the old fixed 1200ms re-post): load the exposed/pending bodies that aren't
+        // resolvable yet from the local DB. Each load returns via messagesDidLoad → cacheSafePreview → a fresh
+        // dialogsNeedReload, so the preview fills in exactly when the data is ready — no guesswork, and it works
+        // even when the exposed message isn't the dialog's top message (where the old timer could never help).
+        warmSafePreviews();
+        // Tell any OPEN OFF-mode chat that the synced exposed/pending set changed so it re-filters its messages.
+        // Narrow event (only ChatActivity listens) — deliberately NOT secondSpaceModeChanged, which would churn
+        // the whole mode-transition UI (tabs, settings, shared-media) on every sync.
+        getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceSyncApplied);
+    }
+
+    /** Load the exposed/pending message bodies for every hidden dialog from the local DB, so the OFF-mode dialog
+     *  preview can render them without waiting for (or depending on) Telegram's top-message cache. Skips ids that
+     *  already resolve (cheap idempotent re-sync). Results arrive via messagesDidLoad → {@link #cacheSafePreview}. */
+    private void warmSafePreviews() {
+        if (previewWarmGuid == 0) previewWarmGuid = getConnectionsManager().generateClassGuid();
+        for (Long did : dialogIds) {
+            if (did == null) continue;
+            Set<Integer> ids = collectSafeIds(did);
+            if (ids.isEmpty()) continue;
+            int[] arr = new int[ids.size()];
+            int i = 0;
+            for (Integer id : ids) arr[i++] = id;
+            getMessagesController().loadExposedMessages(did, arr, previewWarmGuid, 0);
+        }
+    }
+
+    /** Exposed ∪ pending ids for {@code dialogId} that aren't resolvable yet (positive ids only — negative ids are
+     *  local in-flight placeholders, not in the DB). Empty when everything already resolves. */
+    private Set<Integer> collectSafeIds(long dialogId) {
+        Set<Integer> out = new HashSet<>();
+        Set<Integer> ex = exposedMessages.get(dialogId);
+        if (ex != null) out.addAll(ex);
+        Set<Integer> pe = pendingMessages.get(dialogId);
+        if (pe != null) out.addAll(pe);
+        out.removeIf(id -> id == null || id <= 0 || resolveMessageFromCache(dialogId, id) != null);
+        return out;
+    }
+
+    /** Forget cached bodies for ids that are no longer exposed/pending (or whole dialogs no longer tracked). */
+    private void pruneSafePreviewCache() {
+        java.util.Iterator<Map.Entry<Long, Map<Integer, MessageObject>>> it = safePreviewCache.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<Long, Map<Integer, MessageObject>> e = it.next();
+            long did = e.getKey();
+            e.getValue().keySet().removeIf(id -> id == null || !isSafeMessage(did, id));
+            if (e.getValue().isEmpty()) it.remove();
+        }
     }
 
     private static void replaceMsgMap(Map<Long, Set<Integer>> target, Map<Long, Set<Integer>> src) {
@@ -741,6 +845,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
             exposedMessages.clear();
             pendingMessages.clear();
             selfPinnedMessages.clear();
+            safePreviewCache.clear();
             lastDecidedMessageId.clear();
             privateSearchDialogs.clear();
             hiddenAccounts.clear();
@@ -978,10 +1083,19 @@ public class SecondSpaceController extends BaseController implements Notificatio
     }
 
     private MessageObject resolveMessageFromCache(long dialogId, int id) {
+        // Prefer Telegram's top-message cache (freshest), and opportunistically mirror the hit into our own
+        // cache so the preview keeps resolving after this message stops being the dialog's top message.
         MessageObject mo = getMessagesController().dialogMessagesByIds.get(id);
-        if (mo == null) return null;
-        if (mo.getDialogId() != dialogId) return null;
-        return mo;
+        if (mo != null && mo.getDialogId() == dialogId) {
+            cacheSafePreview(dialogId, mo);
+            return mo;
+        }
+        // Fallback: the exposed/pending message is no longer (or not yet) the dialog's top message, so it was
+        // evicted from / never present in dialogMessagesByIds. Resolve from our warmed safe-preview cache.
+        Map<Integer, MessageObject> m = safePreviewCache.get(dialogId);
+        MessageObject cached = m != null ? m.get(id) : null;
+        if (cached != null && cached.getDialogId() == dialogId) return cached;
+        return null;
     }
 
     // --- One-shot UX hints ---
@@ -1110,6 +1224,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
             if (set.isEmpty()) {
                 exposedMessages.remove(dialogId);
             }
+            evictSafePreview(dialogId, messageId);
             persistExposed();
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
@@ -1121,6 +1236,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
     public void clearAllExposedMessages(long dialogId) {
         Set<Integer> removed = exposedMessages.remove(dialogId);
         if (removed != null && !removed.isEmpty()) {
+            pruneSafePreviewCache();
             persistExposed();
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
@@ -1243,6 +1359,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
             if (set.isEmpty()) {
                 pendingMessages.remove(dialogId);
             }
+            evictSafePreview(dialogId, messageId);
             persistPendingMessages();
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
@@ -1250,6 +1367,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
 
     public void clearAllPendingMessages(long dialogId) {
         if (pendingMessages.remove(dialogId) != null) {
+            pruneSafePreviewCache();
             persistPendingMessages();
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }

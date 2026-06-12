@@ -7022,6 +7022,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.startAllHeavyOperations, 4096);
         MediaController.getInstance().setFeedbackView(feedbackView = actionBarLayout.getView(), true);
         ApplicationLoader.mainInterfacePaused = false;
+        // Leemen: app returned to foreground — reconnect the Realtime push immediately instead of waiting
+        // out a backoff that may have climbed to 60s while backgrounded during a network drop.
+        try { org.telegram.messenger.leemen.LeemenRealtime.reconnectAllNow(); } catch (Throwable ignore) {}
         MessagesController.getInstance(currentAccount).sortDialogs(null);
         showLanguageAlert(false);
         Utilities.stageQueue.postRunnable(() -> {
@@ -7222,6 +7225,11 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 }
                 currentConnectionState = state;
                 updateCurrentConnectionState(account);
+                // Leemen: network just came back (Telegram reconnected) — kick the Realtime push too so it
+                // recovers now instead of after its own backoff. Best-effort; the GET+CAS backstop already ran.
+                if (state == ConnectionsManager.ConnectionStateConnected) {
+                    try { org.telegram.messenger.leemen.LeemenRealtime.reconnectAllNow(); } catch (Throwable ignore) {}
+                }
             }
         } else if (id == NotificationCenter.mainUserInfoChanged) {
 

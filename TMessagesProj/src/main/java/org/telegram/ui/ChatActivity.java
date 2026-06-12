@@ -2817,6 +2817,7 @@ public class ChatActivity extends BaseFragment implements
         getNotificationCenter().addObserver(this, NotificationCenter.updatedChatRanks);
         getNotificationCenter().addObserver(this, NotificationCenter.premiumFloodWaitReceived);
         getNotificationCenter().addObserver(this, NotificationCenter.messagesDidLoad);
+        getNotificationCenter().addObserver(this, NotificationCenter.secondSpaceSyncApplied);
         getNotificationCenter().addObserver(this, NotificationCenter.loadingMessagesFailed);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.emojiLoaded);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.invalidateMotionBackground);
@@ -3331,6 +3332,7 @@ public class ChatActivity extends BaseFragment implements
         getNotificationCenter().removePostponeNotificationsCallback(postponeNotificationsWhileLoadingCallback);
         getMessagesController().setLastCreatedDialogId(dialog_id, chatMode == MODE_SCHEDULED, false);
         getNotificationCenter().removeObserver(this, NotificationCenter.messagesDidLoad);
+        getNotificationCenter().removeObserver(this, NotificationCenter.secondSpaceSyncApplied);
         getNotificationCenter().removeObserver(this, NotificationCenter.loadingMessagesFailed);
         getNotificationCenter().removeObserver(this, NotificationCenter.premiumFloodWaitReceived);
         getNotificationCenter().removeObserver(this, NotificationCenter.updatedChatRanks);
@@ -20540,6 +20542,16 @@ public class ChatActivity extends BaseFragment implements
 
     @Override
     public void didReceivedNotification(int id, int account, final Object... args) {
+        if (id == NotificationCenter.secondSpaceSyncApplied) {
+            // A remote private-space sync changed the exposed/pending set while this chat is open. If we're an
+            // OFF-mode hidden chat that loaded via the exposed-id path, reload from scratch so the now-current
+            // set is re-fetched and re-filtered. Guarded tightly so it never fires for normal chats or teardown.
+            if (firstMessagesLoaded && ssLoadedByExposedIds && isSecondSpaceContentSuppressed()) {
+                resetForReload();
+                firstLoadMessages();
+            }
+            return;
+        }
         if (id == NotificationCenter.messagesDidLoad) {
             int guid = (Integer) args[10];
             if (guid != classGuid) {

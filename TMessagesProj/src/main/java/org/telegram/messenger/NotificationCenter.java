@@ -379,6 +379,10 @@ public class NotificationCenter {
     public static final int callTabsVisibleToggled = totalEvents++;
     public static final int contactsPermissionBadgeCheck = totalEvents++;
     public static final int secondSpaceModeChanged = totalEvents++;
+    /** A remote private-space sync just applied a new exposed/pending/membership state. Narrow signal observed
+     *  only by an open ChatActivity so it can re-filter its OFF-mode message list — distinct from the broad
+     *  {@link #secondSpaceModeChanged} (which many surfaces rebuild on) to avoid per-sync UI churn. */
+    public static final int secondSpaceSyncApplied = totalEvents++;
 
     public static boolean alreadyLogged;
 
