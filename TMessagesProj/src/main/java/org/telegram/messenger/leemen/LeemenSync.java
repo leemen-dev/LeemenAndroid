@@ -65,13 +65,8 @@ public final class LeemenSync {
     private static final boolean[] everSynced = new boolean[N];      // in-memory cache of the persisted flag
     private static final boolean[] everSyncedLoaded = new boolean[N];
     private static final boolean[] loginPending = new boolean[N];    // forced gate from onAuthSuccess until 1st sync
-    // Fresh-install preview-warmup gate: after the security gate opens (hidden set known), keep the OFF-mode list
-    // fail-closed a little longer until the exposed-message PREVIEWS are warmed, so chats never flash with empty
-    // previews. Only armed on the FIRST conclusive sync of an install (no local save). Lifts REACTIVELY — driven
-    // purely by warmup-fetch completion (SecondSpaceController.isPreviewWarmupPending), no timer — and can't hang
-    // because every fetch settles (success or failure). The service chat stays visible throughout
-    // (isHiddenFromCurrentView exempts it regardless of any gate).
-    private static final boolean[] warmupGate = new boolean[N];
+    // The preview-warmup launch gate (hold the OFF-mode list until exposed previews are warmed) lives in
+    // SecondSpaceController (isWarmupGateActive) — it owns the warmup state. isInitialSyncPending just ORs it in.
     private static final int[] gateLogState = new int[N];            // debug: last-logged gate state per account
     static { java.util.Arrays.fill(gateLogState, -1); }
 
@@ -110,15 +105,6 @@ public final class LeemenSync {
         gatePrefs().edit().remove("ever_synced_" + account).apply();
     }
 
-    /** Arm the fresh-install preview-warmup gate. Called optimistically right BEFORE projecting the synced set, so
-     *  the project's own dialogsNeedReload already evaluates the (now-armed) gate — no flash of empty-preview chats.
-     *  isInitialSyncPending lifts it the moment the warmup fetches settle (SecondSpaceController posts a reload from
-     *  onWarmupFetchSettled). No timer: every fetch settles, so the gate always lifts. */
-    private static void armWarmupGate(final int account) {
-        if (!inRange(account)) return;
-        warmupGate[account] = true;
-        if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: preview-warmup gate armed account " + account);
-    }
 
     private interface RawCb { void on(Object blob, long version); }
 
@@ -183,7 +169,6 @@ public final class LeemenSync {
         }
         cancelWatchdog(account);
         loginPending[account] = false;
-        warmupGate[account] = false;
         // Logout/delete wipes the cached hidden set, so the next login must fail closed again until it
         // re-syncs (don't trust a stale/absent cache).
         resetEverSynced(account);
@@ -207,20 +192,18 @@ public final class LeemenSync {
         if (!inRange(account)) return false;
         boolean activated = loginPending[account] || UserConfig.getInstance(account).isClientActivated();
         boolean pending = activated && !hasEverSynced(account);
-        if (!pending && warmupGate[account]) {
-            // Security gate already open (hidden set known) — now hold the fresh-install list until the exposed
-            // previews are warmed. Lifts reactively the moment the warmup fetches settle (no timer).
-            if (!SecondSpaceController.getInstance(account).isPreviewWarmupPending()) {
-                warmupGate[account] = false;
-            } else {
-                pending = true;
-            }
+        if (!pending && SecondSpaceController.getInstance(account).isWarmupGateActive()) {
+            // Security gate open (hidden set known) — but hold the list until the INITIAL preview warmup settles,
+            // so chats never appear with empty previews. SecondSpaceController owns that state and lifts it
+            // reactively the moment the warmup completes (no timer). The system chat stays visible throughout.
+            pending = true;
         }
         if (BuildVars.LOGS_ENABLED && gateLogState[account] != (pending ? 1 : 0)) {
             gateLogState[account] = pending ? 1 : 0;
             FileLog.d("Leemen: gate pending=" + pending + " (loginPending=" + loginPending[account]
                     + " activated=" + UserConfig.getInstance(account).isClientActivated()
-                    + " everSynced=" + hasEverSynced(account) + " warmupGate=" + warmupGate[account] + ") account " + account);
+                    + " everSynced=" + hasEverSynced(account)
+                    + " warmupGate=" + SecondSpaceController.getInstance(account).isWarmupGateActive() + ") account " + account);
         }
         return pending;
     }
@@ -283,16 +266,11 @@ public final class LeemenSync {
                     // hidden set is unknown, so we must keep the gate closed instead of revealing everything.
                     final boolean conclusivePull = (rf instanceof LeemenBlob.FilterBlob) || (fver == 0);
                     final Runnable projectAndPush = () -> {
-                        // Capture BEFORE markSyncConfirmed flips everSynced: is this the first conclusive sync of
-                        // the install (no local save)? Only then do we hold the list for the preview warmup.
-                        final boolean freshOpen = conclusivePull && !hasEverSynced(account);
                         if (conclusivePull) {
                             markSyncConfirmed(account); // open the fail-closed gate: the real hidden set is known
                         }
-                        if (freshOpen) {
-                            // Arm BEFORE projecting so applySyncedState's own reload already sees the gate (no flash).
-                            armWarmupGate(account);
-                        }
+                        // The preview-warmup launch gate is armed inside applySyncedState (projectToController),
+                        // which both populates the hidden set and kicks the warmup — so it owns the hold/lift.
                         LeemenMerge.recomputeOffModeVisible(st.filter, st.content);
                         projectToController(account, st);
                         st.persist();
