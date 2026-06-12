@@ -659,6 +659,25 @@ public class SecondSpaceController extends BaseController implements Notificatio
             applyingRemoteSync = false;
         }
         getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+        if (org.telegram.messenger.BuildVars.LOGS_ENABLED) {
+            int ex = 0, pe = 0;
+            for (Set<Integer> s : exposedMessages.values()) ex += s.size();
+            for (Set<Integer> s : pendingMessages.values()) pe += s.size();
+            org.telegram.messenger.FileLog.d("Leemen: applySyncedState members=" + dialogIds.size()
+                    + " exposedMsgs=" + ex + " pendingMsgs=" + pe);
+            for (Long did : dialogIds) {
+                int lid = getLatestExposedMessageId(did);
+                if (lid != 0) {
+                    org.telegram.messenger.FileLog.d("Leemen: PS dialog " + did + " latestExposedId=" + lid
+                            + " cached=" + (resolveMessageFromCache(did, lid) != null));
+                }
+            }
+        }
+        // The exposed/pending MessageObjects may not be in Telegram's cache YET at sync time (dialogs still
+        // loading), so the reload just posted resolves an empty preview. Re-post shortly so the list/preview
+        // re-resolve once those messages are cached — the same end state as a relaunch, no extra fetch.
+        org.telegram.messenger.AndroidUtilities.runOnUIThread(
+                () -> getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload), 1200);
     }
 
     private static void replaceMsgMap(Map<Long, Set<Integer>> target, Map<Long, Set<Integer>> src) {
