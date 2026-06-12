@@ -106,6 +106,10 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private final Map<Long, Map<Integer, MessageObject>> safePreviewCache = new HashMap<>();
     /** Stable class-guid for the dialog-list preview warmup loads (results route through messagesDidLoad). */
     private int previewWarmGuid = 0;
+    /** Count of in-flight server warmup fetches. The fresh-install gate stays closed while this is > 0 and lifts
+     *  REACTIVELY (no timer) the moment the last fetch settles — success or failure — because every fetch invokes
+     *  its completion callback in both cases. UI-thread only. */
+    private int warmupInFlight = 0;
     private final Set<Long> privateSearchDialogs = new HashSet<>();
     private String passwordHash;
     private final java.util.List<TabStep> tabSequence = new java.util.ArrayList<>();
@@ -306,6 +310,16 @@ public class SecondSpaceController extends BaseController implements Notificatio
         if (m == null) return;
         m.remove(messageId);
         if (m.isEmpty()) safePreviewCache.remove(dialogId);
+    }
+
+    /** True while any server warmup fetch is still outstanding. The fresh-install gate
+     *  (see {@link org.telegram.messenger.leemen.LeemenSync#isInitialSyncPending}) uses this to keep the OFF-mode
+     *  list hidden until the exposed previews have been fetched, so chats don't flash with empty previews. Driven
+     *  purely by fetch completion (no timer): every warmup fetch decrements the counter when it settles, so this
+     *  always returns to false. Returns false outside OFF mode (the gate is OFF-mode only). */
+    public boolean isPreviewWarmupPending() {
+        if (activeMode != MODE_OFF) return false;
+        return warmupInFlight > 0;
     }
 
     /** Drop {@code mids} from {@code dialogId}'s exposed / pending sets. Idempotent —
@@ -748,15 +762,22 @@ public class SecondSpaceController extends BaseController implements Notificatio
         } finally {
             applyingRemoteSync = false;
         }
-        getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         // Drop preview-cache entries that are no longer exposed/pending after this apply.
         pruneSafePreviewCache();
+        // Reactive warmup (replaces the old fixed 1200ms re-post): load the exposed/pending bodies that aren't
+        // resolvable yet — from the local DB AND, for the fresh-install case (empty DB), from the server. Each
+        // result lands via messagesDidLoad / replaceMessagesObjects → cacheSafePreview → a fresh dialogsNeedReload,
+        // so the preview fills in exactly when the data is ready. Run BEFORE the reload below so that reload (and
+        // the fresh-install gate it drives) already sees the fetches as in-flight, keeping the list hidden until
+        // they settle. Works even when the exposed message isn't the dialog's top message (old timer never could).
+        warmSafePreviews();
+        getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         if (org.telegram.messenger.BuildVars.LOGS_ENABLED) {
             int ex = 0, pe = 0;
             for (Set<Integer> s : exposedMessages.values()) ex += s.size();
             for (Set<Integer> s : pendingMessages.values()) pe += s.size();
             org.telegram.messenger.FileLog.d("Leemen: applySyncedState members=" + dialogIds.size()
-                    + " exposedMsgs=" + ex + " pendingMsgs=" + pe);
+                    + " exposedMsgs=" + ex + " pendingMsgs=" + pe + " warmupInFlight=" + warmupInFlight);
             for (Long did : dialogIds) {
                 int lid = getLatestExposedMessageId(did);
                 if (lid != 0) {
@@ -765,11 +786,6 @@ public class SecondSpaceController extends BaseController implements Notificatio
                 }
             }
         }
-        // Reactive warmup (replaces the old fixed 1200ms re-post): load the exposed/pending bodies that aren't
-        // resolvable yet from the local DB. Each load returns via messagesDidLoad → cacheSafePreview → a fresh
-        // dialogsNeedReload, so the preview fills in exactly when the data is ready — no guesswork, and it works
-        // even when the exposed message isn't the dialog's top message (where the old timer could never help).
-        warmSafePreviews();
         // Tell any OPEN OFF-mode chat that the synced exposed/pending set changed so it re-filters its messages.
         // Narrow event (only ChatActivity listens) — deliberately NOT secondSpaceModeChanged, which would churn
         // the whole mode-transition UI (tabs, settings, shared-media) on every sync.
@@ -793,11 +809,26 @@ public class SecondSpaceController extends BaseController implements Notificatio
             getMessagesController().loadExposedMessages(did, arr, previewWarmGuid, 0);
             // Server warmup: fetch the exact ids over the network for the fresh-reinstall case (empty DB). The
             // fetch stores them to the DB and posts replaceMessagesObjects → cacheSafePreview + open-chat reload.
-            getMessagesController().reloadMessages(new ArrayList<>(ids), did);
+            // Counted so the fresh-install gate lifts REACTIVELY when the last fetch settles (no timer).
+            warmupInFlight++;
+            getMessagesController().reloadMessages(new ArrayList<>(ids), did, this::onWarmupFetchSettled);
             if (org.telegram.messenger.BuildVars.LOGS_ENABLED) {
                 org.telegram.messenger.FileLog.d("Leemen: preview warmup dialog " + did + " unresolved ids=" + ids
-                        + " (DB + server fetch)");
+                        + " (DB + server fetch), inFlight=" + warmupInFlight);
             }
+        }
+    }
+
+    /** A server warmup fetch just settled (success or failure). When the LAST one settles, repaint the list — which
+     *  re-evaluates and lifts the fresh-install gate (isPreviewWarmupPending → false) — and nudge any open chat. */
+    private void onWarmupFetchSettled() {
+        if (warmupInFlight > 0) warmupInFlight--;
+        if (warmupInFlight == 0) {
+            if (org.telegram.messenger.BuildVars.LOGS_ENABLED) {
+                org.telegram.messenger.FileLog.d("Leemen: preview warmup all fetches settled — lifting gate");
+            }
+            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+            getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceSyncApplied);
         }
     }
 

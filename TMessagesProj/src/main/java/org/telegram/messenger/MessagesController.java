@@ -7771,11 +7771,23 @@ public class MessagesController extends BaseController implements NotificationCe
      *  reinstall), where the DB-only {@link #loadExposedMessages} path finds nothing. Fetched messages are stored
      *  to the DB and broadcast via {@code replaceMessagesObjects}. */
     public void reloadMessages(ArrayList<Integer> mids, long dialogId) {
-        reloadMessages(mids, dialogId, ChatActivity.MODE_DEFAULT);
+        reloadMessages(mids, dialogId, ChatActivity.MODE_DEFAULT, null);
+    }
+
+    /** As {@link #reloadMessages(ArrayList, long)} but invokes {@code onComplete} exactly once on the UI thread
+     *  when the fetch SETTLES (success or failure) — so the private-space preview-warmup gate can count completions
+     *  and lift reactively (no timer) instead of waiting on a fixed timeout. */
+    public void reloadMessages(ArrayList<Integer> mids, long dialogId, Runnable onComplete) {
+        reloadMessages(mids, dialogId, ChatActivity.MODE_DEFAULT, onComplete);
     }
 
     private void reloadMessages(ArrayList<Integer> mids, long dialogId, int mode) {
+        reloadMessages(mids, dialogId, mode, null);
+    }
+
+    private void reloadMessages(ArrayList<Integer> mids, long dialogId, int mode, Runnable onDone) {
         if (mids.isEmpty()) {
+            if (onDone != null) AndroidUtilities.runOnUIThread(onDone);
             return;
         }
         final boolean scheduled = mode == ChatActivity.MODE_SCHEDULED;
@@ -7807,6 +7819,7 @@ public class MessagesController extends BaseController implements NotificationCe
             result.add(mid);
         }
         if (result.isEmpty()) {
+            if (onDone != null) AndroidUtilities.runOnUIThread(onDone);
             return;
         }
         if (arrayList == null) {
@@ -7884,7 +7897,12 @@ public class MessagesController extends BaseController implements NotificationCe
                         }
                     }
                     getNotificationCenter().postNotificationName(NotificationCenter.replaceMessagesObjects, dialogId, objects);
+                    // Settle AFTER replaceMessagesObjects so observers (PS warmup) have cached the body before
+                    // the gate, counting this completion, re-evaluates and reveals the list.
+                    if (onDone != null) onDone.run();
                 });
+            } else {
+                if (onDone != null) AndroidUtilities.runOnUIThread(onDone);
             }
         });
     }
