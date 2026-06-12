@@ -37779,6 +37779,21 @@ public class ChatActivity extends BaseFragment implements
             return null;
         }
 
+        /** OFF-mode (private space) safety chokepoint. In OFF mode the message list is FILTERED to the exposed
+         *  set, so any GRANULAR adapter notify (item changed/inserted/removed/moved/range*) can disagree with the
+         *  loadingUp/Down rows that updateRowsInternal adds — RecyclerView then throws "Inconsistency detected …"
+         *  on the next layout (seen on send, on pinning an exposed message, and potentially any edit/delete/react).
+         *  Routing every granular notify to a full notifyDataSetChanged here makes them all safe at once: a full
+         *  rebuild re-derives the row count so it can never disagree with the notify. OFF-mode chats hold only the
+         *  few exposed messages, so the rebuild is cheap. Returns true when it handled (redirected) the call. */
+        private boolean rebuildInsteadOfGranularInOffMode() {
+            if (isSecondSpaceContentSuppressed()) {
+                notifyDataSetChanged(false);
+                return true;
+            }
+            return false;
+        }
+
         public void notifyDataSetChanged(boolean animated) {
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("notify data set changed fragmentOpened=" + fragmentOpened);
@@ -37820,6 +37835,7 @@ public class ChatActivity extends BaseFragment implements
 
         @Override
         public void notifyItemChanged(int position) {
+            if (rebuildInsteadOfGranularInOffMode()) { return; }
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("notify item changed " + position);
             }
@@ -37838,6 +37854,7 @@ public class ChatActivity extends BaseFragment implements
 
         @Override
         public void notifyItemRangeChanged(int positionStart, int itemCount) {
+            if (rebuildInsteadOfGranularInOffMode()) { return; }
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("notify item range changed " + positionStart + ":" + itemCount);
             }
@@ -37856,6 +37873,7 @@ public class ChatActivity extends BaseFragment implements
 
         @Override
         public void notifyItemInserted(int position) {
+            if (rebuildInsteadOfGranularInOffMode()) { return; }
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("notify item inserted " + position);
             }
@@ -37874,6 +37892,7 @@ public class ChatActivity extends BaseFragment implements
 
         @Override
         public void notifyItemMoved(int fromPosition, int toPosition) {
+            if (rebuildInsteadOfGranularInOffMode()) { return; }
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("notify item moved" + fromPosition + ":"  + toPosition);
             }
@@ -37892,6 +37911,7 @@ public class ChatActivity extends BaseFragment implements
 
         @Override
         public void notifyItemRangeInserted(int positionStart, int itemCount) {
+            if (rebuildInsteadOfGranularInOffMode()) { return; }
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("notify item range inserted " + positionStart + ":" + itemCount);
             }
@@ -37920,6 +37940,7 @@ public class ChatActivity extends BaseFragment implements
 
         @Override
         public void notifyItemRemoved(int position) {
+            if (rebuildInsteadOfGranularInOffMode()) { return; }
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("notify item removed " + position);
             }
@@ -37937,6 +37958,7 @@ public class ChatActivity extends BaseFragment implements
         }
 
         public void notifyItemRemoved(int position, boolean thanos) {
+            if (rebuildInsteadOfGranularInOffMode()) { return; }
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("notify item removed " + position + (thanos ? " with thanos effect" : ""));
             }
@@ -37958,6 +37980,7 @@ public class ChatActivity extends BaseFragment implements
 
         @Override
         public void notifyItemRangeRemoved(int positionStart, int itemCount) {
+            if (rebuildInsteadOfGranularInOffMode()) { return; }
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("notify item range removed" + positionStart + ":" + itemCount);
             }

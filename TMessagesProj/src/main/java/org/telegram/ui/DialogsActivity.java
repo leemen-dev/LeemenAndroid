@@ -11293,7 +11293,13 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             return raw;
         }
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        if (ssc.getDialogIds().isEmpty()) {
+        // FAIL-CLOSED: don't short-circuit on an empty hidden set while the initial sync is still pending. On a
+        // fresh install dialogIds is empty only because the server hasn't delivered the hidden set YET — returning
+        // the raw list here leaks every chat's existence (name/avatar) for the couple seconds until the sync lands,
+        // even though the per-cell mask hides the preview. Running the filter instead lets isHiddenFromCurrentView
+        // (which is gated) drop every non-system chat until the set is known.
+        if (ssc.getDialogIds().isEmpty()
+                && !org.telegram.messenger.leemen.LeemenSync.isInitialSyncPending(currentAccount)) {
             return raw;
         }
         // Widget picker: ALWAYS strip private-space chats — widgets live on the home screen
