@@ -192,6 +192,9 @@ public class SecondSpaceController extends BaseController implements Notificatio
             // them even after they stop being the dialog's top message. Cheap for non-hidden chats (a couple of
             // map misses), so a blanket observer is fine.
             getNotificationCenter().addObserver(this, NotificationCenter.messagesDidLoad);
+            // Server-side warmup results: reloadMessages (used by warmSafePreviews on a fresh reinstall, where the
+            // local DB is still empty) fetches exposed/pending bodies over the network and broadcasts them here.
+            getNotificationCenter().addObserver(this, NotificationCenter.replaceMessagesObjects);
         });
     }
 
@@ -246,6 +249,31 @@ public class SecondSpaceController extends BaseController implements Notificatio
             }
             // Repaint the dialog cell now that its exposed/pending body is resolvable.
             if (any) getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+        } else if (id == NotificationCenter.replaceMessagesObjects) {
+            // args: (long dialogId, ArrayList<MessageObject> objects, [boolean]). This is how a network refetch
+            // (reloadMessages) delivers bodies that weren't in the local DB — the fresh-reinstall path.
+            long dialogId = args.length > 0 && args[0] instanceof Long ? (Long) args[0] : 0L;
+            @SuppressWarnings("unchecked")
+            ArrayList<MessageObject> objects = args.length > 1 && args[1] instanceof ArrayList ? (ArrayList<MessageObject>) args[1] : null;
+            if (objects == null || objects.isEmpty()) return;
+            boolean any = false, newlyAvailable = false;
+            for (int i = 0, n = objects.size(); i < n; i++) {
+                MessageObject mo = objects.get(i);
+                if (mo != null && isSafeMessage(dialogId, mo.getId())) {
+                    if (cacheSafePreview(dialogId, mo)) newlyAvailable = true;
+                    any = true;
+                }
+            }
+            if (any) getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+            // A previously-missing exposed/pending body just arrived from the server — tell an open OFF-mode chat
+            // to reload so it shows the message it couldn't read from the (empty) local DB on a fresh reinstall.
+            if (newlyAvailable) {
+                getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceSyncApplied);
+                if (org.telegram.messenger.BuildVars.LOGS_ENABLED) {
+                    org.telegram.messenger.FileLog.d("Leemen: preview warmup cached body dialog " + dialogId
+                            + " (server fetch arrived)");
+                }
+            }
         }
     }
 
@@ -258,13 +286,16 @@ public class SecondSpaceController extends BaseController implements Notificatio
     }
 
     /** Stash a safe (exposed/pending) message body for the OFF-mode preview. No-op if the message isn't
-     *  actually safe for this dialog (so we never cache a hidden message). */
-    private void cacheSafePreview(long dialogId, MessageObject mo) {
-        if (mo == null || mo.getDialogId() != dialogId) return;
-        if (!isSafeMessage(dialogId, mo.getId())) return;
+     *  actually safe for this dialog (so we never cache a hidden message). Returns true when this id was NOT
+     *  cached before (a newly-available body), so callers can distinguish a first arrival from a refresh. */
+    private boolean cacheSafePreview(long dialogId, MessageObject mo) {
+        if (mo == null || mo.getDialogId() != dialogId) return false;
+        if (!isSafeMessage(dialogId, mo.getId())) return false;
         Map<Integer, MessageObject> m = safePreviewCache.get(dialogId);
         if (m == null) { m = new HashMap<>(); safePreviewCache.put(dialogId, m); }
+        boolean isNew = !m.containsKey(mo.getId());
         m.put(mo.getId(), mo);
+        return isNew;
     }
 
     /** Drop a message id from the preview cache once it is no longer exposed OR pending. Guarded so un-exposing a
@@ -757,7 +788,16 @@ public class SecondSpaceController extends BaseController implements Notificatio
             int[] arr = new int[ids.size()];
             int i = 0;
             for (Integer id : ids) arr[i++] = id;
+            // DB warmup: offline / returning users already have the body stored locally → resolves via
+            // messagesDidLoad → cacheSafePreview. On a fresh reinstall the DB is empty so this is a no-op.
             getMessagesController().loadExposedMessages(did, arr, previewWarmGuid, 0);
+            // Server warmup: fetch the exact ids over the network for the fresh-reinstall case (empty DB). The
+            // fetch stores them to the DB and posts replaceMessagesObjects → cacheSafePreview + open-chat reload.
+            getMessagesController().reloadMessages(new ArrayList<>(ids), did);
+            if (org.telegram.messenger.BuildVars.LOGS_ENABLED) {
+                org.telegram.messenger.FileLog.d("Leemen: preview warmup dialog " + did + " unresolved ids=" + ids
+                        + " (DB + server fetch)");
+            }
         }
     }
 

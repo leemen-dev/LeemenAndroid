@@ -7766,6 +7766,14 @@ public class MessagesController extends BaseController implements NotificationCe
         getConnectionsManager().bindRequestToGuid(reqId, classGuid);
     }
 
+    /** Public entry to refetch specific message ids for a dialog over the network (default chat mode). Used by the
+     *  private-space preview warmup to pull exposed/pending message bodies that aren't in the local DB yet (fresh
+     *  reinstall), where the DB-only {@link #loadExposedMessages} path finds nothing. Fetched messages are stored
+     *  to the DB and broadcast via {@code replaceMessagesObjects}. */
+    public void reloadMessages(ArrayList<Integer> mids, long dialogId) {
+        reloadMessages(mids, dialogId, ChatActivity.MODE_DEFAULT);
+    }
+
     private void reloadMessages(ArrayList<Integer> mids, long dialogId, int mode) {
         if (mids.isEmpty()) {
             return;
