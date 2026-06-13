@@ -8809,7 +8809,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 return true;
             }
         }
-        return false;
+        // No visible archived chats, but archived (hidden) stories also keep the archive present — otherwise
+        // hiding a chat would make the stories-only archive unreachable in OFF mode.
+        return getStoriesController().hasHiddenStories();
     }
 
     private boolean waitingForDialogsAnimationEnd(ViewPage viewPage) {
@@ -11344,7 +11346,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         break;
                     }
                 }
-                if (hasVisible) {
+                // Keep the archive folder if it still has visible chats OR holds archived (hidden) stories.
+                // Telegram itself keeps the folder alive for hidden stories alone (MessagesController.sortDialogs),
+                // so dropping it here would make the stories-only archive vanish in OFF mode the moment any chat
+                // is hidden — even though the archive holds no hidden-chat content at all.
+                if (hasVisible || getStoriesController().hasHiddenStories()) {
                     filtered.add(d);
                 }
                 continue;
