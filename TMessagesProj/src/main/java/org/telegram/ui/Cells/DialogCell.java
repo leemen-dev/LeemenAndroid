@@ -1488,10 +1488,9 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 lastDate = message.messageOwner.date;
             }
 
-            if (org.telegram.messenger.SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(currentDialogId)) {
-                draftVoice = false;
-                draftMessage = null;
-            } else if (isTopic) {
+            // Drafts render normally in every mode. A private-space draft can't surface here because it is
+            // wiped (local + server) when the user leaves the private space — see SecondSpaceController.
+            if (isTopic) {
                 draftVoice = MediaDataController.getInstance(currentAccount).getDraftVoice(currentDialogId, getTopicId()) != null;
                 draftMessage = !draftVoice ? MediaDataController.getInstance(currentAccount).getDraft(currentDialogId, getTopicId()) : null;
                 if (draftMessage != null && TextUtils.isEmpty(draftMessage.message)) {
@@ -6209,13 +6208,15 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
 
             boolean draftVoice = false;
             TLRPC.DraftMessage draftMessage = null;
-            if (!hidden && isTopic) {
+            // Drafts count toward the hash in every mode (they render in OFF mode too); a private-space
+            // draft never reaches here because it is wiped when leaving the private space.
+            if (isTopic) {
                 draftVoice = MediaDataController.getInstance(currentAccount).getDraftVoice(currentDialogId, getTopicId()) != null;
                 draftMessage = !draftVoice ? MediaDataController.getInstance(currentAccount).getDraft(currentDialogId, getTopicId()) : null;
                 if (draftMessage != null && TextUtils.isEmpty(draftMessage.message)) {
                     draftMessage = null;
                 }
-            } else if (!hidden && isDialogCell) {
+            } else if (isDialogCell) {
                 draftVoice = MediaDataController.getInstance(currentAccount).getDraftVoice(currentDialogId, 0) != null;
                 draftMessage = !draftVoice ? MediaDataController.getInstance(currentAccount).getDraft(currentDialogId, 0) : null;
             }

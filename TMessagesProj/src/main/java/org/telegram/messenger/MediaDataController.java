@@ -7724,6 +7724,15 @@ public class MediaDataController extends BaseController {
 
         saveDraft(dialogId, threadId, draftMessage, replyToMessage, false);
 
+        if (threadId == 0) {
+            // Record whether this dialog-level draft was typed in OFF mode (deniable → may stay visible in
+            // the OFF-mode list) or in the private space (secret → masked). See SecondSpaceController.
+            boolean draftNonEmpty = !(draftMessage instanceof TLRPC.TL_draftMessageEmpty)
+                    && (!TextUtils.isEmpty(draftMessage.message)
+                        || (draftMessage.reply_to != null && draftMessage.reply_to.reply_to_msg_id != 0));
+            SecondSpaceController.getInstance(currentAccount).onDraftAuthored(dialogId, draftNonEmpty);
+        }
+
         if (threadId == 0 || ChatObject.isForum(chat) || ChatObject.isMonoForum(chat)) {
             if (!DialogObject.isEncryptedDialog(dialogId)) {
                 TLRPC.TL_messages_saveDraft req = new TLRPC.TL_messages_saveDraft();

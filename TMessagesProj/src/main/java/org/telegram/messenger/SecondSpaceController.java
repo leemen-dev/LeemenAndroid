@@ -23,6 +23,10 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private static final String PREF_SHOW_ENTRY_BUTTON = "second_space_show_entry_button";
     private static final String PREF_PENDING_OFF_MODE = "second_space_pending_off_mode";
     private static final String PREF_PENDING_MESSAGES = "second_space_pending_messages";
+    /** Hidden chats whose CURRENT draft was authored inside the private space (MODE_REAL). These are wiped
+     *  (local + server) on leaving the private space so they can never surface in the OFF-mode list. OFF-mode
+     *  drafts are never listed here and are kept. Persisted so a kill mid-PS is recovered on next launch. */
+    private static final String PREF_PS_DRAFTS = "second_space_ps_drafts";
     private static final String PREF_PRIVATE_SEARCHES = "second_space_private_searches";
     private static final String PREF_PASSWORD_HASH = "second_space_password_hash";
     private static final String PREF_TAB_SEQUENCE = "second_space_tab_sequence";
@@ -96,6 +100,14 @@ public class SecondSpaceController extends BaseController implements Notificatio
      *  Off-mode-only sends go here directly so they can never be confused with normal active-
      *  mode sends — those simply don't get tracked. */
     private final Map<Long, Set<Integer>> pendingMessages = new HashMap<>();
+    /** Hidden chats whose current draft was authored inside the private space (MODE_REAL). Wiped (local +
+     *  server) when the user leaves the private space, so a secret draft can never appear in the OFF-mode
+     *  list. OFF-mode drafts are never listed here and survive. Persisted so a kill mid-PS is recovered on
+     *  the next (always-OFF) launch. */
+    private final Set<Long> psDraftDialogs = new HashSet<>();
+    /** True for the first launch after this feature shipped: pre-existing drafts have unknown origin (the old
+     *  code masked private-space drafts rather than wiping them), so wipe every hidden-chat draft once. */
+    private boolean draftWipeMigrationPending = false;
     /** In-memory bodies of the latest exposed/pending messages, keyed dialogId → (msgId → object). Telegram's
      *  {@code dialogMessagesByIds} holds ONLY each dialog's CURRENT top message and evicts older ones, so once a
      *  hidden chat receives a newer (hidden) message the exposed message vanishes from that cache and the OFF-mode
@@ -161,6 +173,9 @@ public class SecondSpaceController extends BaseController implements Notificatio
         loadExposed(prefs.getString(PREF_EXPOSED, ""));
         loadLastDecided(prefs.getString(PREF_LAST_DECIDED, ""));
         loadPendingMessages(prefs.getString(PREF_PENDING_MESSAGES, ""));
+        loadDialogIds(psDraftDialogs, prefs.getString(PREF_PS_DRAFTS, ""));
+        // First run with the draft feature: no key yet → wipe all hidden-chat drafts once (unknown origin).
+        draftWipeMigrationPending = !prefs.contains(PREF_PS_DRAFTS);
         loadSelfPinned(prefs.getString(PREF_SELF_PINNED, ""));
         String searchCsv = prefs.getString(PREF_PRIVATE_SEARCHES, "");
         if (!TextUtils.isEmpty(searchCsv)) {
@@ -210,6 +225,17 @@ public class SecondSpaceController extends BaseController implements Notificatio
             // Server-side warmup results: reloadMessages (used by warmSafePreviews on a fresh reinstall, where the
             // local DB is still empty) fetches exposed/pending bodies over the network and broadcasts them here.
             getNotificationCenter().addObserver(this, NotificationCenter.replaceMessagesObjects);
+            // Draft deniability on launch (always OFF mode): clear any private-space draft that could otherwise
+            // surface in the OFF-mode list. (a) one-time upgrade wipe of all hidden-chat drafts whose origin
+            // predates this feature; (b) recovery of drafts left marked after a kill mid-private-space. Drafts
+            // are loaded eagerly in MediaDataController's constructor, so getMediaDataController() sees them here.
+            if (draftWipeMigrationPending) {
+                for (Long did : new java.util.ArrayList<>(dialogIds)) {
+                    if (did != null) getMediaDataController().saveDraft(did, 0, "", null, null, false, 0);
+                }
+                persistLongCsv(psDraftDialogs, PREF_PS_DRAFTS); // writes the key → migration not pending next launch
+            }
+            wipePsDrafts();
             // STARTUP warmup: the persisted exposed/pending sets are already loaded (above), so warm their preview
             // bodies NOW — straight from the local DB — instead of waiting for this session's network sync to run
             // applySyncedState (~1s later). On an upgrade/"install over" the bodies are still in the DB from a
@@ -738,6 +764,40 @@ public class SecondSpaceController extends BaseController implements Notificatio
         }
     }
 
+    /** Record the authoring context of a freshly-saved dialog-level draft. A draft typed inside the private
+     *  space (MODE_REAL) on a hidden chat is marked for wipe-on-exit; any other save (OFF mode, emptied, or a
+     *  non-hidden chat) clears the mark so the draft is kept. Called from {@link MediaDataController#saveDraft}
+     *  on the user-typed path only. */
+    public void onDraftAuthored(long dialogId, boolean nonEmpty) {
+        boolean changed;
+        if (activeMode == MODE_REAL && nonEmpty && dialogIds.contains(dialogId)) {
+            // Secret draft written inside the private space → wipe it when leaving the space.
+            changed = psDraftDialogs.add(dialogId);
+        } else {
+            // OFF-mode draft (keep), an emptied draft, or a non-hidden chat → nothing to wipe.
+            changed = psDraftDialogs.remove(dialogId);
+        }
+        if (changed) {
+            persistLongCsv(psDraftDialogs, PREF_PS_DRAFTS);
+        }
+    }
+
+    /** Wipe every draft authored inside the private space (local + server) so it can't surface in the
+     *  OFF-mode list. Pushing an empty draft via {@link MediaDataController#saveDraft} also clears the
+     *  server copy, so a later re-sync can't resurrect it. Safe to call when the set is empty. */
+    private void wipePsDrafts() {
+        if (psDraftDialogs.isEmpty()) {
+            return;
+        }
+        java.util.List<Long> toWipe = new java.util.ArrayList<>(psDraftDialogs);
+        psDraftDialogs.clear();
+        persistLongCsv(psDraftDialogs, PREF_PS_DRAFTS);
+        for (Long did : toWipe) {
+            if (did == null) continue;
+            getMediaDataController().saveDraft(did, 0, "", null, null, false, 0);
+        }
+    }
+
     public void addToSecondSpace(long dialogId) {
         addToCurrentSpace(dialogId);
     }
@@ -748,6 +808,9 @@ public class SecondSpaceController extends BaseController implements Notificatio
             lastDecidedMessageId.remove(dialogId);
             pendingMessages.remove(dialogId);
             selfPinnedMessages.remove(dialogId);
+            if (psDraftDialogs.remove(dialogId)) {
+                persistLongCsv(psDraftDialogs, PREF_PS_DRAFTS);
+            }
             persistDialogIds();
             persistExposed();
             persistLastDecided();
@@ -774,6 +837,9 @@ public class SecondSpaceController extends BaseController implements Notificatio
             lastDecidedMessageId.remove(dialogId);
             pendingMessages.remove(dialogId);
             selfPinnedMessages.remove(dialogId);
+            if (psDraftDialogs.remove(dialogId)) {
+                persistLongCsv(psDraftDialogs, PREF_PS_DRAFTS);
+            }
             persistDialogIds();
             persistExposed();
             persistLastDecided();
@@ -827,6 +893,10 @@ public class SecondSpaceController extends BaseController implements Notificatio
             privateSearchDialogs.clear();
             if (privateSearch != null) privateSearchDialogs.addAll(privateSearch);
             lastDecidedMessageId.keySet().retainAll(dialogIds);
+            // PS-draft wipe marks are local (never synced); drop marks for chats no longer hidden.
+            if (psDraftDialogs.retainAll(dialogIds)) {
+                persistLongCsv(psDraftDialogs, PREF_PS_DRAFTS);
+            }
             if (pinTimeout != null) pinTimeoutMinutes = Math.max(0, pinTimeout);
             if (allowScreenshotsVal != null) allowScreenshots = allowScreenshotsVal;
             persistDialogIds();
@@ -985,6 +1055,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
             exposedMessages.clear();
             pendingMessages.clear();
             selfPinnedMessages.clear();
+            psDraftDialogs.clear();
             safePreviewCache.clear();
             warmupGateActive = false;
             initialWarmupDone = false;
@@ -1064,6 +1135,10 @@ public class SecondSpaceController extends BaseController implements Notificatio
         }
         activeMode = mode;
         // Intentionally NOT persisted: activeMode is per-session, always MODE_OFF on next launch.
+        // Leaving the private space: wipe any draft authored inside it so a secret draft can't show in OFF mode.
+        if (oldMode == MODE_REAL && mode == MODE_OFF) {
+            wipePsDrafts();
+        }
         // Re-evaluate FLAG_SECURE: snapshot capture / screenshots must be blocked while PS is on.
         try {
             org.telegram.ui.LaunchActivity la = org.telegram.ui.LaunchActivity.instance;
