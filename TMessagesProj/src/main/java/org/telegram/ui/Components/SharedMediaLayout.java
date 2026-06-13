@@ -8522,6 +8522,14 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
     public static final int VIEW_TYPE_SEARCH_SAVED_DIALOG = 23;
     public static final int VIEW_TYPE_SEARCH_DOCUMENT = 24;
 
+    /** OFF-mode hidden chat: the photo/video list is filtered to exposed media, but totalCount comes from
+     *  the unfiltered server count, so item counts must be derived from the loaded visible messages — else
+     *  the grid renders a perpetual loading stub for the "missing" (hidden) items. */
+    private boolean isChatMediaSuppressed() {
+        return profileActivity != null
+                && SecondSpaceController.getInstance(profileActivity.getCurrentAccount()).isMediaSuppressed(dialog_id);
+    }
+
     private class SharedPhotoVideoAdapter extends RecyclerListView.FastScrollAdapter {
 
         protected Context mContext;
@@ -8542,6 +8550,14 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
 
         @Override
         public int getItemCount() {
+            if (storyAlbums_getTabTypeByStoriesAdapter(this) == -1 && isChatMediaSuppressed()) {
+                // Render exactly the visible (exposed) media — never a loading stub for hidden items.
+                int visible = sharedMediaData[0].getStartOffset() + sharedMediaData[0].getMessages().size();
+                if (visible == 0 && !sharedMediaData[0].loading) {
+                    return 1; // empty-state placeholder ("No media")
+                }
+                return visible;
+            }
             if (DialogObject.isEncryptedDialog(dialog_id)) {
                 if (sharedMediaData[0].messages.size() == 0 && !sharedMediaData[0].loading) {
                     return 1;
@@ -8732,6 +8748,9 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
 
         @Override
         public int getTotalItemsCount() {
+            if (storyAlbums_getTabTypeByStoriesAdapter(this) == -1 && isChatMediaSuppressed()) {
+                return sharedMediaData[0].getStartOffset() + sharedMediaData[0].getMessages().size();
+            }
             return sharedMediaData[0].totalCount;
         }
 

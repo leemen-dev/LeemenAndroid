@@ -9622,9 +9622,20 @@ public class MessagesStorage extends BaseController {
     }
 
     public void getExposedMessagesById(long dialogId, int[] messageIds, int classGuid, int loadIndex) {
+        getExposedMessagesById(dialogId, messageIds, classGuid, loadIndex, null);
+    }
+
+    /** Loads the given message ids for one dialog from the local DB. When {@code rawCallback} is provided the
+     *  raw DB result is delivered to it on the UI thread (used by the private-space media-by-ids load); otherwise
+     *  the result is routed through {@link MessagesController#processLoadedMessages} (the dialog-preview warmup). */
+    public void getExposedMessagesById(long dialogId, int[] messageIds, int classGuid, int loadIndex, Utilities.Callback<TLRPC.messages_Messages> rawCallback) {
         storageQueue.postRunnable(() -> {
             TLRPC.TL_messages_messages res = new TLRPC.TL_messages_messages();
             if (messageIds.length == 0) {
+                if (rawCallback != null) {
+                    AndroidUtilities.runOnUIThread(() -> rawCallback.run(res));
+                    return;
+                }
                 Utilities.stageQueue.postRunnable(() -> getMessagesController().processLoadedMessages(
                     res, 0, dialogId, 0, 0, 0, 0,
                     true, classGuid, 0, 0, 0, 0,
@@ -9773,6 +9784,10 @@ public class MessagesStorage extends BaseController {
                 }
             }
 
+            if (rawCallback != null) {
+                AndroidUtilities.runOnUIThread(() -> rawCallback.run(res));
+                return;
+            }
             int count = messageIds.length;
             Utilities.stageQueue.postRunnable(() -> getMessagesController().processLoadedMessages(
                 res, res.messages.size(), dialogId, 0, count, 0, 0,

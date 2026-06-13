@@ -4115,6 +4115,16 @@ public class MediaDataController extends BaseController {
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d("load media did " + dialogId + " count = " + count + " max_id " + max_id + " type = " + type + " cache = " + fromCache + " classGuid = " + classGuid);
         }
+        // Private space: a hidden chat in OFF mode exposes ONLY the media the user surfaced — which can sit
+        // anywhere in history, not just the recent window the normal paginated search returns. Load exactly the
+        // exposed/pending media by id and present it as one complete page, so every exposed item appears in the
+        // tab and no pagination walks (and stalls on) the hidden, non-exposed media.
+        if (!DialogObject.isEncryptedDialog(dialogId) && TextUtils.isEmpty(query)
+                && isByIdExposedMediaType(type)
+                && SecondSpaceController.getInstance(currentAccount).isMediaSuppressed(dialogId)) {
+            loadExposedMedia(dialogId, type, classGuid, requestIndex);
+            return;
+        }
         if (fromCache != 0 && TextUtils.isEmpty(query) || DialogObject.isEncryptedDialog(dialogId)) {
             loadMediaDatabase(dialogId, count, max_id, min_id, type, topicId, tag, classGuid, isChannel, fromCache, requestIndex);
         } else {
@@ -4184,6 +4194,68 @@ public class MediaDataController extends BaseController {
             });
             getConnectionsManager().bindRequestToGuid(reqId, classGuid);
         }
+    }
+
+    /** Media tabs whose content we load by exposed-id in private-space OFF mode. Links (URL) and polls are
+     *  excluded — they're not classified by {@link #getMediaType} and aren't part of the "media" the user
+     *  surfaces; they keep the normal (filtered, recent-window) path. */
+    private static boolean isByIdExposedMediaType(int type) {
+        return type == MEDIA_PHOTOVIDEO || type == MEDIA_PHOTOS_ONLY || type == MEDIA_VIDEOS_ONLY
+                || type == MEDIA_FILE || type == MEDIA_AUDIO || type == MEDIA_MUSIC || type == MEDIA_GIF;
+    }
+
+    private static boolean exposedMediaMatchesType(MessageObject mo, int type) {
+        int mt = getMediaType(mo.messageOwner);
+        if (mt == -1) {
+            return false;
+        }
+        if (type == MEDIA_PHOTOS_ONLY) {
+            return mt == MEDIA_PHOTOVIDEO && mo.isPhoto() && !mo.isVideo();
+        }
+        if (type == MEDIA_VIDEOS_ONLY) {
+            return mt == MEDIA_PHOTOVIDEO && mo.isVideo();
+        }
+        return mt == type;
+    }
+
+    /** Private space: build the shared-media page for a hidden chat from exactly its exposed/pending media,
+     *  read by id from the local DB (the exposed bodies are already there — loaded when the user surfaced
+     *  them, or fetched by the startup preview warmup). Broadcast as one complete page (topReached) so every
+     *  exposed media item shows regardless of where it sits in history, with no pagination through hidden media. */
+    private void loadExposedMedia(long dialogId, int type, int classGuid, int requestIndex) {
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        java.util.HashSet<Integer> idSet = new java.util.HashSet<>(ssc.getExposedMessageIds(dialogId));
+        idSet.addAll(ssc.getPendingMessages(dialogId));
+        int[] ids = new int[idSet.size()];
+        int i = 0;
+        for (Integer id : idSet) {
+            ids[i++] = id;
+        }
+        getMessagesStorage().getExposedMessagesById(dialogId, ids, classGuid, 0, (res) -> {
+            getMessagesController().putUsers(res.users, true);
+            getMessagesController().putChats(res.chats, true);
+            LongSparseArray<TLRPC.User> usersDict = new LongSparseArray<>();
+            for (int a = 0; a < res.users.size(); a++) {
+                TLRPC.User u = res.users.get(a);
+                usersDict.put(u.id, u);
+            }
+            ArrayList<MessageObject> media = new ArrayList<>(res.messages.size());
+            for (int a = 0; a < res.messages.size(); a++) {
+                TLRPC.Message message = res.messages.get(a);
+                MessageObject mo = new MessageObject(currentAccount, message, usersDict, true, false);
+                if (MessageObject.getMedia(mo.messageOwner) == null || mo.needDrawBluredPreview()) {
+                    continue;
+                }
+                if (!exposedMediaMatchesType(mo, type)) {
+                    continue;
+                }
+                mo.createStrippedThumb();
+                media.add(mo);
+            }
+            getFileLoader().checkMediaExistance(media);
+            // res.messages is already sorted by id desc (newest first), matching the media grid order.
+            getNotificationCenter().postNotificationName(NotificationCenter.mediaDidLoad, dialogId, media.size(), media, classGuid, type, true, false, requestIndex);
+        });
     }
 
     public void getMediaCounts(long dialogId, long topicId, int classGuid) {
@@ -4471,6 +4543,7 @@ public class MediaDataController extends BaseController {
                     AndroidUtilities.runOnUIThread(() -> {
                         int totalCount = res.count;
                         ArrayList<MessageObject> mediaObjects = objects;
+                        boolean topReachedOut = topReached;
                         // Private space: a hidden chat in OFF mode must expose only its
                         // exposed/pending media. Filter the in-memory list that is broadcast to
                         // every media surface (shared-media grid, photo viewer strip, preloader
@@ -4488,10 +4561,16 @@ public class MediaDataController extends BaseController {
                                 }
                             }
                             totalCount = mediaObjects.size();
+                            // Present the filtered page as complete (top reached). Otherwise the media
+                            // surface keeps paging through the chat's hidden, non-exposed media — which
+                            // never adds visible rows, so max_id can't advance — and renders a perpetual
+                            // loading stub for the "missing" items. The exposed media the user surfaced sit
+                            // in the recent media window, so they're already in this page.
+                            topReachedOut = true;
                         }
                         getMessagesController().putUsers(res.users, fromCache != 0);
                         getMessagesController().putChats(res.chats, fromCache != 0);
-                        getNotificationCenter().postNotificationName(NotificationCenter.mediaDidLoad, dialogId, totalCount, mediaObjects, classGuid, type, topReached, min_id != 0, requestIndex);
+                        getNotificationCenter().postNotificationName(NotificationCenter.mediaDidLoad, dialogId, totalCount, mediaObjects, classGuid, type, topReachedOut, min_id != 0, requestIndex);
                     });
                 };
 
