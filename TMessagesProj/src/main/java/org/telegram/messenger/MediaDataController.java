@@ -7813,7 +7813,11 @@ public class MediaDataController extends BaseController {
         }
 
         if (threadId == 0 || ChatObject.isForum(chat) || ChatObject.isMonoForum(chat)) {
-            if (!DialogObject.isEncryptedDialog(dialogId)) {
+            // Private-space drafts (typed inside the space on a hidden chat) stay on-device only: never push
+            // them to the server, so they don't sync to other devices and can't outlive the PS session. OFF-mode
+            // drafts of the same chats sync normally — only the in-PS authoring is held back.
+            boolean privateSpaceLocalDraft = SecondSpaceController.getInstance(currentAccount).isPrivateSpaceLocalDraft(dialogId);
+            if (!DialogObject.isEncryptedDialog(dialogId) && !privateSpaceLocalDraft) {
                 TLRPC.TL_messages_saveDraft req = new TLRPC.TL_messages_saveDraft();
                 req.peer = getMessagesController().getInputPeer(dialogId);
                 if (req.peer == null) {

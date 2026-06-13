@@ -29799,13 +29799,10 @@ public class ChatActivity extends BaseFragment implements
     }
 
     public void saveDraft() {
-        // Hidden chat opened from the off-mode exposed view: skip persisting whatever's
-        // in the input field — applyDraftMaybe already refused to load the live draft
-        // here, so anything sitting in the field is junk that would overwrite the real
-        // (active-mode) draft on disk.
-        if (SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(dialog_id)) {
-            return;
-        }
+        // Drafts typed in a hidden chat while in OFF mode are deniable (typed in plain sight) and ARE
+        // persisted/shown; a draft authored inside the private space is wiped when leaving the space
+        // (SecondSpaceController.onDraftAuthored / wipePsDrafts), so it can't surface here. applyDraftMaybe
+        // loads the real draft into the field, so what we persist below is never junk.
         CharSequence draftMessage = null;
         MessageObject replyMessage = null;
         boolean searchWebpage = true;
@@ -30082,14 +30079,8 @@ public class ChatActivity extends BaseFragment implements
         if (chatMode == MODE_SUGGESTIONS && (!ChatObject.isMonoForum(currentChat) || threadMessageId == 0 && ChatObject.canManageMonoForum(currentAccount, currentChat))) {
             return;
         }
-        // Hidden chat in current view: don't load the persisted draft into the input
-        // field — it would surface text typed in active mode (or fake mode) when the
-        // chat is opened from the off-mode exposed-messages view. The on-disk draft is
-        // left intact so it reappears when the chat is opened from its own space.
-        if (SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(dialog_id)) {
-            return;
-        }
-
+        // OFF-mode drafts of a hidden chat are loaded normally: they're the user's own deniable text, and any
+        // private-space-authored draft was already wiped on leaving the space, so nothing secret can surface here.
         TLRPC.DraftMessage draftMessage = null;
         Long topicId = null;
         if (isForumInViewAsMessagesMode()) {

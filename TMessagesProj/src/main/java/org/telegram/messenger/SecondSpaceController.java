@@ -105,9 +105,6 @@ public class SecondSpaceController extends BaseController implements Notificatio
      *  list. OFF-mode drafts are never listed here and survive. Persisted so a kill mid-PS is recovered on
      *  the next (always-OFF) launch. */
     private final Set<Long> psDraftDialogs = new HashSet<>();
-    /** True for the first launch after this feature shipped: pre-existing drafts have unknown origin (the old
-     *  code masked private-space drafts rather than wiping them), so wipe every hidden-chat draft once. */
-    private boolean draftWipeMigrationPending = false;
     /** In-memory bodies of the latest exposed/pending messages, keyed dialogId → (msgId → object). Telegram's
      *  {@code dialogMessagesByIds} holds ONLY each dialog's CURRENT top message and evicts older ones, so once a
      *  hidden chat receives a newer (hidden) message the exposed message vanishes from that cache and the OFF-mode
@@ -174,8 +171,6 @@ public class SecondSpaceController extends BaseController implements Notificatio
         loadLastDecided(prefs.getString(PREF_LAST_DECIDED, ""));
         loadPendingMessages(prefs.getString(PREF_PENDING_MESSAGES, ""));
         loadDialogIds(psDraftDialogs, prefs.getString(PREF_PS_DRAFTS, ""));
-        // First run with the draft feature: no key yet → wipe all hidden-chat drafts once (unknown origin).
-        draftWipeMigrationPending = !prefs.contains(PREF_PS_DRAFTS);
         loadSelfPinned(prefs.getString(PREF_SELF_PINNED, ""));
         String searchCsv = prefs.getString(PREF_PRIVATE_SEARCHES, "");
         if (!TextUtils.isEmpty(searchCsv)) {
@@ -225,16 +220,9 @@ public class SecondSpaceController extends BaseController implements Notificatio
             // Server-side warmup results: reloadMessages (used by warmSafePreviews on a fresh reinstall, where the
             // local DB is still empty) fetches exposed/pending bodies over the network and broadcasts them here.
             getNotificationCenter().addObserver(this, NotificationCenter.replaceMessagesObjects);
-            // Draft deniability on launch (always OFF mode): clear any private-space draft that could otherwise
-            // surface in the OFF-mode list. (a) one-time upgrade wipe of all hidden-chat drafts whose origin
-            // predates this feature; (b) recovery of drafts left marked after a kill mid-private-space. Drafts
-            // are loaded eagerly in MediaDataController's constructor, so getMediaDataController() sees them here.
-            if (draftWipeMigrationPending) {
-                for (Long did : new java.util.ArrayList<>(dialogIds)) {
-                    if (did != null) getMediaDataController().saveDraft(did, 0, "", null, null, false, 0);
-                }
-                persistLongCsv(psDraftDialogs, PREF_PS_DRAFTS); // writes the key → migration not pending next launch
-            }
+            // Draft deniability on launch (always OFF mode): recover any private-space draft left marked after a
+            // kill mid-private-space (no clean PS exit to wipe it). Only wipes drafts genuinely authored in the
+            // private space — OFF-mode drafts are never in this set, so they always survive a restart.
             wipePsDrafts();
             // STARTUP warmup: the persisted exposed/pending sets are already loaded (above), so warm their preview
             // bodies NOW — straight from the local DB — instead of waiting for this session's network sync to run
@@ -782,9 +770,17 @@ public class SecondSpaceController extends BaseController implements Notificatio
         }
     }
 
-    /** Wipe every draft authored inside the private space (local + server) so it can't surface in the
-     *  OFF-mode list. Pushing an empty draft via {@link MediaDataController#saveDraft} also clears the
-     *  server copy, so a later re-sync can't resurrect it. Safe to call when the set is empty. */
+    /** True while a draft save for {@code dialogId} is happening inside the private space (MODE_REAL) on a
+     *  hidden chat. Such drafts are kept ON-DEVICE ONLY — never pushed to the Telegram server — so they don't
+     *  sync to other devices and can't outlive the private-space session. OFF-mode drafts sync normally. */
+    public boolean isPrivateSpaceLocalDraft(long dialogId) {
+        return activeMode == MODE_REAL && dialogIds.contains(dialogId);
+    }
+
+    /** Wipe (locally) every draft authored inside the private space so it can't surface in the OFF-mode list.
+     *  Private-space drafts are never pushed to the server (see {@link #isPrivateSpaceLocalDraft}), so a LOCAL
+     *  clear is enough — and it must NOT push an empty draft, which would clobber a legitimate OFF-mode draft
+     *  the server still holds for the same chat. Safe to call when the set is empty. */
     private void wipePsDrafts() {
         if (psDraftDialogs.isEmpty()) {
             return;
@@ -794,7 +790,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
         persistLongCsv(psDraftDialogs, PREF_PS_DRAFTS);
         for (Long did : toWipe) {
             if (did == null) continue;
-            getMediaDataController().saveDraft(did, 0, "", null, null, false, 0);
+            getMediaDataController().cleanDraft(did, 0, false); // local-only; never on the server
         }
     }
 
