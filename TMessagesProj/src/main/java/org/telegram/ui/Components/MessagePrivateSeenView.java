@@ -156,6 +156,12 @@ public class MessagePrivateSeenView extends FrameLayout {
                     isPremiumLocked = true;
                     valueTextView.setText(LocaleController.getString(R.string.PmRead));
                     premiumTextView.setText(LocaleController.getString(R.string.PmReadShowWhen));
+                } else if ("MESSAGE_NOT_READ_YET".equals(err.text) || "MESSAGE_TOO_OLD".equals(err.text)) {
+                    // Benign states — the recipient simply hasn't read the message yet, or it's too old to
+                    // carry a read date. These are not failures, so show "read time unknown" rather than
+                    // popping an error bulletin with the raw RPC text.
+                    valueTextView.setText(LocaleController.getString(R.string.PmReadUnknown));
+                    premiumTextView.setVisibility(View.GONE);
                 } else {
                     valueTextView.setText(LocaleController.getString("UnknownError"));
                     premiumTextView.setVisibility(View.GONE);
