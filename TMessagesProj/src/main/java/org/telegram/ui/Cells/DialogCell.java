@@ -3220,6 +3220,21 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                                     ssc.ensureInGlobalCache(message);
                                 }
                                 groupMessages = null;
+                            } else if (groupMessages != null && groupMessages.size() > 1) {
+                                // The exposed top message belongs to an album: keep only the exposed/pending
+                                // siblings in the thumbnail preview. Otherwise a multi-media message surfaces its
+                                // non-exposed items as thumbnails here, even though the chat shows only the
+                                // exposed one. Filter into a new list so the shared dialogMessage cache is untouched.
+                                ArrayList<MessageObject> safeGroup = new ArrayList<>(groupMessages.size());
+                                for (int gi = 0; gi < groupMessages.size(); gi++) {
+                                    MessageObject gm = groupMessages.get(gi);
+                                    if (gm != null
+                                            && (ssc.isMessageExposed(dialog.id, gm.getId())
+                                                || ssc.isMessagePending(dialog.id, gm.getId()))) {
+                                        safeGroup.add(gm);
+                                    }
+                                }
+                                groupMessages = safeGroup.isEmpty() ? null : safeGroup;
                             }
                         }
                         lastUnreadState = message != null && message.isUnread();
