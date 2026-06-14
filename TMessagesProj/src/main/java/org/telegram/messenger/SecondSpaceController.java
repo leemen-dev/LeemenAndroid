@@ -729,6 +729,21 @@ public class SecondSpaceController extends BaseController implements Notificatio
         return dialogIds.contains(dialogId);
     }
 
+    /**
+     * True when a read action for {@code dialogId} must be suppressed: a private-space chat viewed
+     * from the off-mode (deniable) view. Peeking at an exposed message in off mode must not consume
+     * the chat's unread state — the unread badge has to survive into the private space — and must not
+     * send a read receipt that would leak "I read this" to the sender. In the privileged private-space
+     * view (MODE_REAL) this returns false, so reads there behave normally.
+     *
+     * Deliberately narrower than {@link #isHiddenFromCurrentView}: it does NOT fire on the
+     * initial-sync fail-closed window, so reads of ordinary (non-private-space) chats during startup
+     * are never swallowed.
+     */
+    public boolean isReadSuppressed(long dialogId) {
+        return activeMode == MODE_OFF && dialogIds.contains(dialogId);
+    }
+
     /** True iff {@code dialogId} is hidden from whichever view the user currently sees.
      *  MODE_REAL sees everything; MODE_OFF hides private-space chats. */
     public boolean isHiddenFromCurrentView(long dialogId) {
@@ -1083,23 +1098,6 @@ public class SecondSpaceController extends BaseController implements Notificatio
     /** Chats in the currently-active space (for settings UI). */
     public Set<Long> getCurrentSpaceDialogIds() {
         return Collections.unmodifiableSet(dialogIds);
-    }
-
-    /** Sum of {@code unread_count} for chats in {@code dialogs} that are hidden from the
-     *  current view AND have no exposed messages. Use to subtract from any tab / folder
-     *  badge so off-mode counters don't leak hidden activity. Returns 0
-     *  in MODE_REAL (privileged view, nothing to hide). */
-    public int hiddenUnreadCountIn(java.util.List<TLRPC.Dialog> dialogs) {
-        if (activeMode == MODE_REAL || dialogs == null || dialogs.isEmpty()) return 0;
-        if (this.dialogIds.isEmpty()) return 0;
-        int sub = 0;
-        for (int i = 0, n = dialogs.size(); i < n; i++) {
-            TLRPC.Dialog d = dialogs.get(i);
-            if (d != null && isHiddenFromCurrentView(d.id)) {
-                sub += d.unread_count;
-            }
-        }
-        return sub;
     }
 
     // --- Mode ---

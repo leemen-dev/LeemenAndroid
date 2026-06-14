@@ -14240,6 +14240,15 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void markDialogAsRead(long dialogId, int maxPositiveId, int maxNegativeId, int maxDate, boolean popup, long threadId, int countDiff, boolean readNow, int scheduledCount) {
+        // Private-space deniability: viewing a hidden chat from the off-mode view must not consume its
+        // unread state (the badge has to survive into the private space) nor send a read receipt that
+        // would leak "I read this". This is the single chokepoint for the local view-read action, so it
+        // covers every ChatActivity entry point (open, first message load, onPause). In the privileged
+        // private-space view (MODE_REAL) isReadSuppressed is false, so reads there behave normally; and
+        // server-driven read updates (read from another device) flow through a different path, unaffected.
+        if (SecondSpaceController.getInstance(currentAccount).isReadSuppressed(dialogId)) {
+            return;
+        }
         boolean createReadTask;
 
         if (threadId != 0) {

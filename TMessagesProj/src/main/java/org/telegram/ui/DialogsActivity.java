@@ -3642,35 +3642,32 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     }
                     SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
                     if (tabId == filterTabsView.getDefaultTabId()) {
-                        int count = getMessagesStorage().getMainUnreadCount();
-                        // Subtract unread from hidden chats (off / fake-active) so the default
-                        // tab badge doesn't leak hidden activity.
+                        // When a private space is engaged in a hidden view (off / fake-active), the
+                        // storage counter (getMainUnreadCount) counts hidden chats, lives on the
+                        // storage thread, and is measured in unread *dialogs*. The old "storage count
+                        // minus per-chat message counts" math mixed units (dialogs vs messages),
+                        // ignored folder/mute scope, and read a different source than the base count,
+                        // so it could desync — the badge leaked hidden unread after returning from a
+                        // chat. Recount unread dialogs straight from the visible main-folder list:
+                        // a single in-memory source that always matches the rows the user sees.
                         if (!ssc.isRealActive() && !ssc.getDialogIds().isEmpty()) {
-                            int sub = 0;
-                            for (Long did : ssc.getDialogIds()) {
-                                TLRPC.Dialog d = getMessagesController().dialogs_dict.get(did);
-                                if (d != null && ssc.isHiddenFromCurrentView(did)) {
-                                    sub += d.unread_count;
-                                }
-                            }
-                            count = Math.max(0, count - sub);
+                            return visibleUnreadDialogCount(getMessagesController().getDialogs(folderId), !getNotificationsController().showBadgeMuted);
                         }
-                        return count;
+                        return getMessagesStorage().getMainUnreadCount();
                     }
                     ArrayList<MessagesController.DialogFilter> dialogFilters = getMessagesController().getDialogFilters();
                     if (tabId < 0 || tabId >= dialogFilters.size()) {
                         return 0;
                     }
                     MessagesController.DialogFilter filter = dialogFilters.get(tabId);
-                    int filterUnread = filter.unreadCount;
-                    // filter.dialogs is the filter's pre-built dialog list (includes hidden
-                    // chats). Subtract unread of those hidden in current view to keep the
-                    // tab badge consistent with the on-screen list.
-                    int sub = ssc.hiddenUnreadCountIn(filter.dialogs);
-                    if (sub > 0) {
-                        filterUnread = Math.max(0, filterUnread - sub);
+                    // Same reasoning as the default tab: in a hidden view, recount unread dialogs
+                    // from the filter's own (in-memory) dialog list so the badge matches the rows
+                    // and can't desync from / mismatch units with filter.unreadCount.
+                    if (!ssc.isRealActive() && !ssc.getDialogIds().isEmpty()) {
+                        boolean excludeMuted = (filter.flags & MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_MUTED) != 0;
+                        return visibleUnreadDialogCount(filter.dialogs, excludeMuted);
                     }
-                    return filterUnread;
+                    return filter.unreadCount;
                 }
 
                 @Override
@@ -9655,6 +9652,39 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             viewPages[0].layoutManager.scrollToPositionWithOffset(position, offset);
             resetScroll();
         }
+    }
+
+    /**
+     * Number of unread dialogs in {@code list} that are visible in the current private-space view.
+     * Counts the same way Telegram's tab/folder badge does — one per unread dialog (unread messages,
+     * an unread mark, or unread mentions), optionally skipping muted ones — but excludes chats hidden
+     * from the current view. Computing the badge from this single in-memory source (instead of
+     * subtracting per-chat message counts from the storage counter) keeps it in the right units and
+     * guarantees it matches the rows on screen, so off-mode badges can never leak hidden activity.
+     */
+    private int visibleUnreadDialogCount(ArrayList<TLRPC.Dialog> list, boolean excludeMuted) {
+        if (list == null || list.isEmpty()) {
+            return 0;
+        }
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        int count = 0;
+        for (int i = 0, n = list.size(); i < n; i++) {
+            TLRPC.Dialog d = list.get(i);
+            if (d == null || d instanceof TLRPC.TL_dialogFolder) {
+                continue;
+            }
+            if (ssc.isHiddenFromCurrentView(d.id)) {
+                continue;
+            }
+            if (d.unread_count <= 0 && !d.unread_mark && d.unread_mentions_count <= 0) {
+                continue;
+            }
+            if (excludeMuted && getMessagesController().isDialogMuted(d.id, 0)) {
+                continue;
+            }
+            count++;
+        }
+        return count;
     }
 
     private void updateCounters(boolean hide) {
