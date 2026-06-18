@@ -6911,7 +6911,10 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         }
         boolean hasRecommendations = false;
         boolean hasSavedDialogs = false;
-        boolean hasSavedMessages = savedMessagesContainer != null && sharedMediaPreloader != null && sharedMediaPreloader.hasSavedMessages;
+        boolean hasSavedMessages = savedMessagesContainer != null && sharedMediaPreloader != null && sharedMediaPreloader.hasSavedMessages
+                // Don't surface a hidden chat's profile Saved tab (or its mere existence) in OFF mode. dialog_id
+                // here is the profile's source peer; isMediaSuppressed is false for non-hidden chats / MODE_REAL.
+                && !(profileActivity != null && SecondSpaceController.getInstance(profileActivity.getCurrentAccount()).isMediaSuppressed(dialog_id));
         final TLRPC.User user = dialog_id <= 0 || profileActivity == null ? null : profileActivity.getMessagesController().getUser(dialog_id);
         boolean hasEditBotPreviews = user != null && user.bot && user.bot_has_main_app && user.bot_can_edit;
         boolean hasBotPreviews = user != null && user.bot && !user.bot_can_edit && (userInfo != null && userInfo.bot_info != null && userInfo.bot_info.has_preview_medias) && !hasEditBotPreviews;
@@ -9992,6 +9995,19 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         }
     }
 
+    /** The SOURCE peer a saved message was saved FROM (a hidden chat lives here, never in the selfId
+     *  container). Null-guarded: MessageObject.getSavedDialogId() can NPE on a missing from_id, and an
+     *  unresolved source returns 0 — which {@link SecondSpaceController#isSavedSourceSuppressed} treats as
+     *  "not hidden" (shown), so we never crash and never over-hide. */
+    private static long savedSourcePeerOf(MessageObject msg) {
+        if (msg == null || msg.messageOwner == null) return 0;
+        try {
+            return msg.getSavedDialogId();
+        } catch (Throwable ignore) {
+            return 0;
+        }
+    }
+
     private class SavedMessagesSearchAdapter extends RecyclerListView.SelectionAdapter {
         private final Context mContext;
         private final int currentAccount;
@@ -10131,9 +10147,14 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         private void updateMessages(boolean fromCache) {
             messages.clear();
             HashSet<Integer> msgIds = new HashSet<>();
+            // Saved-search results are TL_messages_search hits on peer == selfId, so they mix saved copies from
+            // ALL source peers. Drop those whose SOURCE peer is a hidden chat in OFF mode (no-op otherwise).
+            final SecondSpaceController ssSearchCtrl = profileActivity != null
+                    ? SecondSpaceController.getInstance(profileActivity.getCurrentAccount()) : null;
             for (int i = 0; i < loadedMessages.size(); ++i) {
                 MessageObject msg = loadedMessages.get(i);
                 if (msg != null && !msgIds.contains(msg.getId())) {
+                    if (ssSearchCtrl != null && ssSearchCtrl.isSavedSourceSuppressed(savedSourcePeerOf(msg))) continue;
                     msgIds.add(msg.getId());
                     messages.add(msg);
                 }
@@ -10141,6 +10162,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             for (int i = 0; i < cachedMessages.size(); ++i) {
                 MessageObject msg = cachedMessages.get(i);
                 if (msg != null && !msgIds.contains(msg.getId())) {
+                    if (ssSearchCtrl != null && ssSearchCtrl.isSavedSourceSuppressed(savedSourcePeerOf(msg))) continue;
                     msgIds.add(msg.getId());
                     messages.add(msg);
                 }

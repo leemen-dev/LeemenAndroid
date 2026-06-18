@@ -20150,6 +20150,40 @@ public class ChatActivity extends BaseFragment implements
         return SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(dialog_id);
     }
 
+    /** OFF-mode guard for the Saved-Messages view. A Saved view is the user's OWN self chat
+     *  (dialog_id == clientUserId, chatMode default or MODE_SAVED) and collects saved copies from MANY source
+     *  peers, so {@link #isSecondSpaceContentSuppressed()} (keyed on dialog_id == selfId, which is never hidden)
+     *  never engages there. True only in OFF mode for such a view; the per-message filter then keys on the
+     *  SOURCE peer. No-op in MODE_REAL and for any non-saved chat (regular chats are never touched). */
+    private boolean isSavedContentSuppressed() {
+        if (getDialogId() != getUserConfig().getClientUserId()) return false;
+        if (chatMode != 0 && chatMode != MODE_SAVED) return false;
+        return !SecondSpaceController.getInstance(currentAccount).isActive();
+    }
+
+    /** Drop saved copies whose SOURCE peer (the chat they were saved FROM) is a hidden chat in OFF mode.
+     *  Keyed on {@link MessageObject#getSavedDialogId()}; the user's own notes and an unresolved source are
+     *  never dropped. Deliberately NOT reusing filterToExposedSecondSpace — its pending-tagging / reply-
+     *  stripping is keyed on dialog_id and would be wrong for a mixed selfId list. */
+    private ArrayList<MessageObject> filterSavedToVisibleSecondSpace(ArrayList<MessageObject> messages) {
+        if (messages == null || messages.isEmpty()) return messages;
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        ArrayList<MessageObject> out = new ArrayList<>(messages.size());
+        for (int i = 0; i < messages.size(); i++) {
+            MessageObject mo = messages.get(i);
+            if (mo == null) continue;
+            long source = 0;
+            try {
+                source = mo.getSavedDialogId();
+            } catch (Throwable ignore) {
+            }
+            if (!ssc.isSavedSourceSuppressed(source)) {
+                out.add(mo);
+            }
+        }
+        return out;
+    }
+
     private ArrayList<Integer> getEffectivePinnedIds() {
         if (!isSecondSpaceContentSuppressed()) {
             return pinnedMessageIds;
@@ -20582,6 +20616,17 @@ public class ChatActivity extends BaseFragment implements
                 args[13] = 0;
                 startLoadFromMessageId = 0;
                 startLoadFromMessageIdSaved = 0;
+            } else if (isSavedContentSuppressed()) {
+                // OFF-mode Saved-Messages view (own selfId chat): the hidden-chat filter keys on dialog_id
+                // (== selfId, never hidden) and never engages. Drop saved copies whose SOURCE peer is a hidden
+                // chat, so a hidden chat's saved content never surfaces in OFF mode.
+                @SuppressWarnings("unchecked")
+                ArrayList<MessageObject> savedOriginal = (ArrayList<MessageObject>) args[2];
+                ArrayList<MessageObject> savedFiltered = filterSavedToVisibleSecondSpace(savedOriginal);
+                if (savedFiltered.size() != savedOriginal.size()) {
+                    args[2] = savedFiltered;
+                    args[1] = savedFiltered.size();
+                }
             } else {
                 // ACTIVE mode entry into a hidden chat: if off-mode work is pending, prompt.
                 AndroidUtilities.runOnUIThread(this::maybeShowPrivateSpaceDecisionDialog);
@@ -25308,6 +25353,13 @@ public class ChatActivity extends BaseFragment implements
                 }
             }
             arr = filtered;
+        } else if (isSavedContentSuppressed()) {
+            // Live arrival into an open Saved-Messages view (OFF mode): drop saved copies whose source peer
+            // is a hidden chat, so a newly-synced hidden-source saved message can't appear after open.
+            arr = filterSavedToVisibleSecondSpace(arr);
+            if (arr.isEmpty()) {
+                return;
+            }
         }
         FileLog.d("processNewMessages " + arr.size() + " messages");
         long currentUserId = getUserConfig().getClientUserId();

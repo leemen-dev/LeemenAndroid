@@ -1159,6 +1159,14 @@ public class SecondSpaceController extends BaseController implements Notificatio
         }
         NotificationCenter nc = getNotificationCenter();
         nc.postNotificationName(NotificationCenter.secondSpaceModeChanged);
+        // Saved Messages surfaces filter by each saved copy's SOURCE peer (see isSavedSourceSuppressed), but
+        // SavedMessagesController.allDialogs is a mode-dependent cache built at load time. Rebuild it on the
+        // mode flip so hidden saved sub-dialogs are re-hidden (OFF) / restored (REAL) without an app restart;
+        // this re-broadcasts savedMessagesDialogsUpdate so the saved-dialogs list + Saved tabs refresh.
+        try {
+            getMessagesController().getSavedMessagesController().updateAllDialogs(true);
+        } catch (Throwable ignored) {
+        }
         nc.postNotificationName(NotificationCenter.dialogsNeedReload);
         // When this account is the selected one, the set of hidden other-accounts depends
         // on which mode we're in. Compute the delta and adjust tray notifications + badge.
@@ -1545,6 +1553,21 @@ public class SecondSpaceController extends BaseController implements Notificatio
      *  named for intent. When true, only exposed/pending media of {@code dialogId} may show. */
     public boolean isMediaSuppressed(long dialogId) {
         return isHiddenFromCurrentView(dialogId);
+    }
+
+    /** Suppression predicate for Saved-Messages surfaces, keyed on a saved message's SOURCE peer (the chat the
+     *  copy was saved FROM — {@link MessageObject#getSavedDialogId()} / {@code SavedDialog.dialogId}), NOT the
+     *  Saved-Messages container (which is always selfId and never hidden). True only when that source peer is a
+     *  hidden chat in OFF mode. The user's own notes (selfId / {@link UserObject#ANONYMOUS}) and the unknown
+     *  fallback (0) are NEVER suppressed — including during the OFF fail-closed initial-sync window — so normal
+     *  Saved Messages content (your own notes, saves from non-hidden chats) is unaffected. No-op in MODE_REAL. */
+    public boolean isSavedSourceSuppressed(long savedSourcePeer) {
+        if (savedSourcePeer == 0
+                || savedSourcePeer == getUserConfig().getClientUserId()
+                || savedSourcePeer == UserObject.ANONYMOUS) {
+            return false;
+        }
+        return isHiddenFromCurrentView(savedSourcePeer);
     }
 
     /** Per-message visibility predicate. MODE_REAL / non-hidden chats are privileged (always

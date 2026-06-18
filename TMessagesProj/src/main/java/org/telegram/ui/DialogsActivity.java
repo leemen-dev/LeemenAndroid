@@ -490,8 +490,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private DownloadProgressIcon downloadProgressIcon;
     private boolean downloadsItemVisible;
     public ActionBarMenuItem searchItem;
-    private ActionBarMenuItem privateSpaceExitItem;
-    private static final int PRIVATE_SPACE_EXIT_ID = 1001;
     private ActionBarMenuItem optionsItem;
     private ActionBarMenuItem speedItem;
     public static boolean switchingTheme;
@@ -3225,12 +3223,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
         searchItem.setVisibility(View.GONE);
 
-        if (!onlySelect && folderId == 0) {
-            privateSpaceExitItem = menu.addItem(PRIVATE_SPACE_EXIT_ID, R.drawable.msg_close);
-            privateSpaceExitItem.setContentDescription(LocaleController.getString(R.string.PrivateSpaceExit));
-            updatePrivateSpaceExitVisibility();
-        }
-
         if (!onlySelect && searchString == null && folderId == 0) {
             doneItem = new ActionBarMenuItem(context, null, getThemedColor(Theme.key_actionBarDefaultSelector), getThemedColor(Theme.key_actionBarDefaultIcon), true);
             doneItem.setText(LocaleController.getString(R.string.Done).toUpperCase());
@@ -3864,10 +3856,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             public void onItemClick(int id) {
                 if ((id == SearchViewPager.forwardItemId || id == SearchViewPager.gotoItemId || id == SearchViewPager.deleteItemId || id == SearchViewPager.speedItemId) && searchViewPager != null) {
                     searchViewPager.onActionBarItemClick(id);
-                    return;
-                }
-                if (id == PRIVATE_SPACE_EXIT_ID) {
-                    SecondSpaceController.getInstance(currentAccount).setActive(false);
                     return;
                 }
                 if (id == -1) {
@@ -10468,14 +10456,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         updateFloatingButtonOffset();
     }
 
-    private void updatePrivateSpaceExitVisibility() {
-        if (privateSpaceExitItem == null) {
-            return;
-        }
-        boolean active = SecondSpaceController.getInstance(currentAccount).isActive();
-        privateSpaceExitItem.setVisibility(active ? View.VISIBLE : View.GONE);
-    }
-
     private void updatePrivateSpaceEmptyView() {
         if (topPanelLayout == null || fragmentView == null || getContext() == null) {
             return;
@@ -10687,7 +10667,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
         if (id == NotificationCenter.secondSpaceModeChanged) {
-            updatePrivateSpaceExitVisibility();
             updatePrivateSpaceEmptyView();
             if (actionBar != null && actionBar.isActionModeShowed()) {
                 updateCounters(false);

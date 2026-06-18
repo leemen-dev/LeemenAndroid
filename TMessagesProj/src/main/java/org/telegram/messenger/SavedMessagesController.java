@@ -56,19 +56,19 @@ public class SavedMessagesController {
     private ArrayList<SavedDialog> loadedDialogs = new ArrayList<>();
 
     public ArrayList<SavedDialog> allDialogs = new ArrayList<>();
-    private void updateAllDialogs(boolean notify) {
+    void updateAllDialogs(boolean notify) {
         allDialogs.clear();
         HashSet<Long> ids = new HashSet<>();
         for (int i = 0; i < cachedDialogs.size(); ++i) {
             SavedDialog d = cachedDialogs.get(i);
-            if (d.pinned && !ids.contains(d.dialogId) && !d.isHidden()) {
+            if (d.pinned && !ids.contains(d.dialogId) && !d.isHidden() && !SecondSpaceController.getInstance(currentAccount).isSavedSourceSuppressed(d.dialogId)) {
                 allDialogs.add(d);
                 ids.add(d.dialogId);
             }
         }
         for (int i = 0; i < loadedDialogs.size(); ++i) {
             SavedDialog d = loadedDialogs.get(i);
-            if (d.pinned && !ids.contains(d.dialogId) && !d.isHidden()) {
+            if (d.pinned && !ids.contains(d.dialogId) && !d.isHidden() && !SecondSpaceController.getInstance(currentAccount).isSavedSourceSuppressed(d.dialogId)) {
                 allDialogs.add(d);
                 ids.add(d.dialogId);
             }
@@ -76,7 +76,7 @@ public class SavedMessagesController {
         ArrayList<SavedDialog> dialogs = new ArrayList<>();
         for (int i = 0; i < loadedDialogs.size(); ++i) {
             SavedDialog d = loadedDialogs.get(i);
-            if (!ids.contains(d.dialogId) && !d.isHidden()) {
+            if (!ids.contains(d.dialogId) && !d.isHidden() && !SecondSpaceController.getInstance(currentAccount).isSavedSourceSuppressed(d.dialogId)) {
                 dialogs.add(d);
                 ids.add(d.dialogId);
             }
@@ -84,7 +84,7 @@ public class SavedMessagesController {
         if (!dialogsEndReached) {
             for (int i = 0; i < cachedDialogs.size(); ++i) {
                 SavedDialog d = cachedDialogs.get(i);
-                if (!ids.contains(d.dialogId) && !d.isHidden()) {
+                if (!ids.contains(d.dialogId) && !d.isHidden() && !SecondSpaceController.getInstance(currentAccount).isSavedSourceSuppressed(d.dialogId)) {
                     dialogs.add(d);
                     ids.add(d.dialogId);
                 }
