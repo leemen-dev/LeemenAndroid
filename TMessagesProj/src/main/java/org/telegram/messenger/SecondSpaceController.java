@@ -421,17 +421,35 @@ public class SecondSpaceController extends BaseController implements Notificatio
      *  {@code dialogsNeedReload}, so the dialog cell repaints without the now-deleted
      *  message in any tracking surface. */
     private void purgeDeletedFromTracking(long dialogId, ArrayList<Integer> mids) {
+        boolean ownsAnyDeleted = false;
         for (int i = 0, n = mids.size(); i < n; i++) {
             int mid = mids.get(i);
+            boolean wasTracked = false;
             if (isMessageExposed(dialogId, mid)) {
                 unexposeMessage(dialogId, mid);
+                wasTracked = true;
             }
             if (isMessagePending(dialogId, mid)) {
                 unmarkMessagePending(dialogId, mid);
+                wasTracked = true;
             }
-            // Remove from Telegram's global cache so the deleted message can't
-            // linger as a dialog preview (e.g. in archive after entering PS).
-            getMessagesController().dialogMessagesByIds.remove(mid);
+            // Remove from Telegram's global cache so the deleted message can't linger as a dialog
+            // preview (e.g. in archive after entering PS). ONLY for a mid that was actually tracked
+            // (exposed/pending) for THIS hidden dialog. messagesDeleted fans this method out across
+            // every tracked dialog, so an unconditional remove here would strip an UNRELATED (non-
+            // hidden) chat's just-deleted message out of dialogMessagesByIds before Telegram's own
+            // handler reads it to set deleted=true — defeating its delete→preview recompute and
+            // leaving the deleted message stuck as that chat's preview until the next message.
+            if (wasTracked) {
+                ownsAnyDeleted = true;
+                getMessagesController().dialogMessagesByIds.remove(mid);
+            }
+        }
+        // Fix up the dialog's top-message reference only for a dialog the private space actually
+        // owns (a hidden chat, or one that held a tracked message just deleted). For a non-hidden
+        // dialog this is a hard no-op, so Telegram's native deletion flow is left fully intact.
+        if (!ownsAnyDeleted && !isInSecondSpace(dialogId)) {
+            return;
         }
         // If the deleted message was the dialog's top message, clear stale reference
         // so the cell picks up the correct (previous) message on next layout pass.
