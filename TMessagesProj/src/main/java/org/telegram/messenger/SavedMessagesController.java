@@ -105,6 +105,13 @@ public class SavedMessagesController {
     }
 
     public int getAllCount() {
+        // Private Space OFF mode: allDialogs is the source-peer-filtered authoritative list (hidden saved
+        // sources removed by updateAllDialogs, rebuilt on mode flip + after every load). The server/cache
+        // totals below are NOT PS-filtered and would leak a hidden saved source's existence via the
+        // saved-dialogs count / tab existence (hasDialogs) during the cache-only / not-yet-end-reached windows.
+        if (!SecondSpaceController.getInstance(currentAccount).isActive()) {
+            return allDialogs.size();
+        }
         if (dialogsEndReached) {
             return allDialogs.size();
         }
