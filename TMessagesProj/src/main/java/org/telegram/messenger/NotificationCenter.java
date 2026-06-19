@@ -383,6 +383,9 @@ public class NotificationCenter {
      *  only by an open ChatActivity so it can re-filter its OFF-mode message list — distinct from the broad
      *  {@link #secondSpaceModeChanged} (which many surfaces rebuild on) to avoid per-sync UI churn. */
     public static final int secondSpaceSyncApplied = totalEvents++;
+    /** A Leemen backend bind (/auth/telegram) just completed for an account (args[0] = account int). Lets
+     *  LaunchActivity run the Terms/Privacy acceptance gate once a session token exists. */
+    public static final int leemenBindCompleted = totalEvents++;
 
     public static boolean alreadyLogged;
 

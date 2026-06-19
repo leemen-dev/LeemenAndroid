@@ -2457,6 +2457,12 @@
     <string name="PrivateSpacePaywallButton">Subscribe</string>
     <string name="PrivateSpacePaywallLater">Not now</string>
     <string name="PrivateSpacePaywallActivated">Subscription activated. Enjoy unlimited hidden chats!</string>
+    <string name="LeemenTermsTitle">Terms &amp; Privacy Policy</string>
+    <string name="LeemenTermsBody">Welcome to Leemen. To continue, please review and accept our Terms of Service and Privacy Policy. They explain how Leemen works and how your data is protected.</string>
+    <string name="LeemenTermsKzDisclosure">Leemen stores and processes your data on secure servers located in the European Union. By continuing, you acknowledge that your personal data is transferred from Kazakhstan to the EU, as described in the Privacy Policy.</string>
+    <string name="LeemenTermsLinkTerms">Read the Terms of Service</string>
+    <string name="LeemenTermsLinkPrivacy">Read the Privacy Policy</string>
+    <string name="LeemenTermsDeclineConfirm">You can\'t use Leemen without accepting the Terms of Service and Privacy Policy. Log out?</string>
     <string name="LeemenPremium">Leemen Premium</string>
     <string name="LeemenPremiumScreenSubtitle">Unlimited chats in your Private Space</string>
     <string name="LeemenPremiumFeatureUnlimited">Hide as many chats as you want, not just one.</string>

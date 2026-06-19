@@ -39,6 +39,25 @@ public final class LeemenAccount {
         return prefs().getString("privacy_" + account, null);
     }
 
+    // --- Terms/Privacy acceptance (local fast-path mirror of the server consent ledger; see LeemenConsent) ---
+    /** Locally-cached accepted Terms version, or null if never accepted on this install. */
+    public static String getAcceptedTermsVersion(int account) {
+        return prefs().getString("terms_ver_" + account, null);
+    }
+
+    public static void setAcceptedTermsVersion(int account, String version) {
+        prefs().edit().putString("terms_ver_" + account, version).apply();
+    }
+
+    /** True if a consent grant has not yet been confirmed to the backend (re-flushed at startup). */
+    public static boolean isConsentDirty(int account) {
+        return prefs().getBoolean("consent_dirty_" + account, false);
+    }
+
+    public static void setConsentDirty(int account, boolean dirty) {
+        prefs().edit().putBoolean("consent_dirty_" + account, dirty).apply();
+    }
+
     public static boolean hasBinding(int account) {
         return !TextUtils.isEmpty(getToken(account)) && !TextUtils.isEmpty(getSyncAccountId(account));
     }
@@ -130,6 +149,8 @@ public final class LeemenAccount {
                 .remove("privacy_" + account)
                 .remove("kmaster_" + account)
                 .remove("disabled_" + account)
+                .remove("terms_ver_" + account)
+                .remove("consent_dirty_" + account)
                 .apply();
     }
 }

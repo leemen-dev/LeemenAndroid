@@ -9,6 +9,7 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
@@ -150,6 +151,10 @@ public final class LeemenIdentity {
                             ? resp.get("privacy_mode").getAsString() : null;
                     LeemenAccount.save(account, token, syncId, privacy);
                     LeemenKey.ensureKey(account); // chain Phase 2: acquire K_master right after bind
+                    // A session token now exists → let the Terms/Privacy acceptance gate run (LaunchActivity).
+                    try {
+                        NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.leemenBindCompleted, account);
+                    } catch (Throwable ignore) {}
                     if (BuildVars.LOGS_ENABLED) {
                         // NB: never log sync_account_id — it's the Realtime channel secret (LeemenConfig).
                         FileLog.d("Leemen: bound account " + account

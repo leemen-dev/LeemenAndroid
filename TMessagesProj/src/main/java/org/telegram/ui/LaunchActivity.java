@@ -198,6 +198,7 @@ import org.telegram.ui.Components.SharingLocationsAlert;
 import org.telegram.ui.Components.SizeNotifierFrameLayout;
 import org.telegram.ui.Components.StickerSetBulletinLayout;
 import org.telegram.ui.Components.StickersAlert;
+import org.telegram.ui.Components.LeemenTermsView;
 import org.telegram.ui.Components.TermsOfServiceView;
 import org.telegram.ui.Components.TextStyleSpan;
 import org.telegram.ui.Components.ThemeEditorView;
@@ -302,6 +303,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     private PasscodeViewDialog passcodeDialog;
     private List<PasscodeView> overlayPasscodeViews = new ArrayList<>();
     private TermsOfServiceView termsOfServiceView;
+    private LeemenTermsView leemenTermsView;
     private BlockingUpdateView blockingUpdateView;
     public final ArrayList<Dialog> visibleDialogs = new ArrayList<>();
     private Dialog proxyErrorDialog;
@@ -591,6 +593,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.needSetDayNightTheme);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.needCheckSystemBarColors);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.closeOtherAppActivities);
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.leemenBindCompleted);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.didSetPasscode);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.didSetNewWallpapper);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.screenStateChanged);
@@ -729,6 +732,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 org.telegram.messenger.leemen.LeemenHeartbeat.maybeSendAll();
                 org.telegram.messenger.leemen.LeemenAnalytics.onAppStart();
                 org.telegram.messenger.leemen.LeemenAttribution.captureIfNeeded();
+                // Terms/Privacy acceptance gate for already-bound accounts (fresh binds fire leemenBindCompleted).
+                maybeShowLeemenTerms(currentAccount);
+                org.telegram.messenger.leemen.LeemenConsent.flushDirty(currentAccount);
             } catch (Throwable ignore) {}
         }, 1200);
 
@@ -1496,6 +1502,49 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         }
         termsOfServiceView.show(account, tos);
         termsOfServiceView.animate().alpha(1f).setDuration(150).setInterpolator(AndroidUtilities.decelerateInterpolator).setListener(null).start();
+    }
+
+    /** Leemen: evaluate whether the Terms/Privacy acceptance gate must run for this account, then show it.
+     *  No-op if the account isn't bound yet (a later leemenBindCompleted retriggers) or it's already accepted. */
+    private void maybeShowLeemenTerms(int account) {
+        if (drawerLayoutContainer == null || isFinishing()) return;
+        if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return;
+        if (!UserConfig.getInstance(account).isClientActivated()) return;
+        if (!org.telegram.messenger.leemen.LeemenAccount.hasBinding(account)) return; // no session token yet
+        if (leemenTermsView != null && leemenTermsView.getVisibility() == View.VISIBLE) return;
+        org.telegram.messenger.leemen.LeemenConsent.evaluate(account, (needsPrompt, kz) -> {
+            if (!needsPrompt || drawerLayoutContainer == null || isFinishing()) return;
+            showLeemenTerms(account, kz);
+        });
+    }
+
+    private void showLeemenTerms(int account, boolean kz) {
+        if (leemenTermsView == null) {
+            leemenTermsView = new LeemenTermsView(this);
+            leemenTermsView.setAlpha(0f);
+            drawerLayoutContainer.addView(leemenTermsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+            leemenTermsView.setDelegate(new LeemenTermsView.Delegate() {
+                @Override
+                public void onAccept(int acc, boolean kzShown) {
+                    org.telegram.messenger.leemen.LeemenConsent.grant(acc, kzShown);
+                    leemenTermsView.animate()
+                            .alpha(0f)
+                            .setDuration(150)
+                            .setInterpolator(AndroidUtilities.accelerateInterpolator)
+                            .withEndAction(() -> leemenTermsView.setVisibility(View.GONE))
+                            .start();
+                }
+
+                @Override
+                public void onDecline(int acc) {
+                    leemenTermsView.setVisibility(View.GONE);
+                    MessagesController.getInstance(acc).performLogout(1);
+                }
+            });
+        }
+        leemenTermsView.show(account, kz);
+        leemenTermsView.setVisibility(View.VISIBLE);
+        leemenTermsView.animate().alpha(1f).setDuration(150).setInterpolator(AndroidUtilities.decelerateInterpolator).setListener(null).start();
     }
 
     public void showPasscodeActivity(boolean fingerprint, boolean animated, int x, int y, Runnable onShow, Runnable onStart) {
@@ -6531,6 +6580,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.requestPermissions);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.billingConfirmPurchaseError);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.tlSchemeParseException);
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.leemenBindCompleted);
 
         if (onPowerSaverCallback != null) {
             LiteMode.removeOnPowerSaverAppliedListener(onPowerSaverCallback);
@@ -7205,6 +7255,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     public void didReceivedNotification(int id, final int account, Object... args) {
         if (id == NotificationCenter.appDidLogout) {
             switchToAvailableAccountOrLogout();
+        } else if (id == NotificationCenter.leemenBindCompleted) {
+            if (args != null && args.length > 0 && args[0] instanceof Integer) {
+                maybeShowLeemenTerms((Integer) args[0]);
+            }
         } else if (id == NotificationCenter.openBoostForUsersDialog) {
             long dialogId = (long) args[0];
             ChatMessageCell chatMessageCell = null;

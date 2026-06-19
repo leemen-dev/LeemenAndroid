@@ -34,6 +34,7 @@ public final class LeemenConfig {
     public static final String EP_EVENTS          = "/events";
     public static final String EP_ATTRIBUTION     = "/attribution";
     public static final String EP_HEARTBEAT       = "/heartbeat";
+    public static final String EP_CONSENT         = "/consent"; // consent ledger: {type,granted,version,locale}
 
     // --- Google Play Billing (Leemen Premium subscription) ---
     // TODO(release): these MUST match the subscription product + base plan IDs created in Play Console.
@@ -64,4 +65,20 @@ public final class LeemenConfig {
     public static String syncChannel(String syncAccountId) {
         return "sync:" + syncAccountId;
     }
+
+    // --- Hosted legal documents (live; linked by app UI locale) ---
+    private static final String LEGAL_BASE = "https://leemen.app";
+
+    /** True iff the app UI language is Russian (selects the /ru/ document + ledger locale). */
+    public static boolean isRu() {
+        try {
+            String lang = org.telegram.messenger.LocaleController.getInstance().getCurrentLocaleInfo().getLangCode();
+            return lang != null && lang.startsWith("ru");
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    public static String termsUrl()   { return LEGAL_BASE + (isRu() ? "/ru/terms"   : "/terms"); }
+    public static String privacyUrl() { return LEGAL_BASE + (isRu() ? "/ru/privacy" : "/privacy"); }
 }

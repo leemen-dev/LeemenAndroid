@@ -292,6 +292,12 @@
     <string name="PrivateSpacePaywallButton">Оформить подписку</string>
     <string name="PrivateSpacePaywallLater">Не сейчас</string>
     <string name="PrivateSpacePaywallActivated">Подписка активирована. Прячьте сколько угодно чатов!</string>
+    <string name="LeemenTermsTitle">Условия и политика конфиденциальности</string>
+    <string name="LeemenTermsBody">Добро пожаловать в Leemen. Чтобы продолжить, ознакомьтесь с Условиями использования и Политикой конфиденциальности и примите их — там описано, как работает Leemen и как защищены ваши данные.</string>
+    <string name="LeemenTermsKzDisclosure">Leemen хранит и обрабатывает ваши данные на защищённых серверах в Европейском союзе. Продолжая, вы подтверждаете передачу своих персональных данных из Казахстана в ЕС — как описано в Политике конфиденциальности.</string>
+    <string name="LeemenTermsLinkTerms">Читать Условия использования</string>
+    <string name="LeemenTermsLinkPrivacy">Читать Политику конфиденциальности</string>
+    <string name="LeemenTermsDeclineConfirm">Без принятия Условий использования и Политики конфиденциальности пользоваться Leemen нельзя. Выйти из аккаунта?</string>
     <string name="LeemenPremium">Leemen Premium</string>
     <string name="LeemenPremiumScreenSubtitle">Безлимит чатов в скрытом пространстве</string>
     <string name="LeemenPremiumFeatureUnlimited">Прячьте сколько угодно чатов, а не только один.</string>
