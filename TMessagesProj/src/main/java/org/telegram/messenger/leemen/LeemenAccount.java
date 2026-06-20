@@ -99,13 +99,63 @@ public final class LeemenAccount {
                 // could push the OLD hidden set into the fresh account.
                 LeemenSync.clearAccount(account);
                 org.telegram.messenger.SecondSpaceController.getInstance(account).wipeAllLocalData();
-                clear(account);            // token / sync_account_id / K_master
+                clear(account);            // token / sync_account_id / wrapped K_master (prefs)
+                // The AndroidKeyStore wrap-key alias is install-global (shared across accounts). Delete the
+                // raw TEE key only when no other account still has a wrapped K_master, else theirs breaks.
+                boolean anyKMasterLeft = false;
+                for (int a = 0; a < org.telegram.messenger.UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                    if (hasKMaster(a)) { anyKMasterLeft = true; break; }
+                }
+                if (!anyKMasterLeft) {
+                    LeemenKeyStore.deleteWrapKey();
+                }
                 setDisabled(account, true); // don't silently re-create on next launch
             } catch (Throwable e) {
                 org.telegram.messenger.FileLog.e(e);
             }
             if (onDone != null) onDone.run();
         });
+    }
+
+    /**
+     * Full in-app account deletion (Variant B). Order is load-bearing: server erasure runs while the Leemen
+     * token + Telegram session are still alive, then we log out every OTHER Leemen Telegram client, then this
+     * device's Telegram (→ clean first-run). Does NOT delete the Telegram account. onComplete runs on the UI
+     * thread just before this device logs out.
+     */
+    public static void deleteAndLogoutEverywhere(int account, Runnable onComplete) {
+        deleteAccountAndData(account, () -> terminateOtherAppSessions(account, () -> {
+            if (onComplete != null) onComplete.run();
+            org.telegram.messenger.MessagesController.getInstance(account).performLogout(1);
+        }));
+    }
+
+    /** Terminate every OTHER active Telegram session created by THIS app (api_id == APP_ID) — i.e. the user's
+     *  other Leemen installs — leaving official Telegram clients (different api_id) and the Telegram account
+     *  intact. The current session is excluded by its `current` flag (its api_id is also APP_ID) and is logged
+     *  out separately by performLogout. Best-effort + async; onComplete runs on the UI thread regardless. */
+    private static void terminateOtherAppSessions(int account, Runnable onComplete) {
+        org.telegram.tgnet.tl.TL_account.getAuthorizations req = new org.telegram.tgnet.tl.TL_account.getAuthorizations();
+        org.telegram.tgnet.ConnectionsManager.getInstance(account).sendRequest(req, (response, error) ->
+                org.telegram.messenger.AndroidUtilities.runOnUIThread(() -> {
+                    try {
+                        if (response instanceof org.telegram.tgnet.tl.TL_account.authorizations) {
+                            java.util.ArrayList<org.telegram.tgnet.TLRPC.TL_authorization> list =
+                                    ((org.telegram.tgnet.tl.TL_account.authorizations) response).authorizations;
+                            for (int i = 0; i < list.size(); i++) {
+                                org.telegram.tgnet.TLRPC.TL_authorization auth = list.get(i);
+                                if ((auth.flags & 1) != 0) continue;                                  // current session
+                                if (auth.api_id != org.telegram.messenger.BuildVars.APP_ID) continue;  // only Leemen clients
+                                org.telegram.tgnet.tl.TL_account.resetAuthorization reset = new org.telegram.tgnet.tl.TL_account.resetAuthorization();
+                                reset.hash = auth.hash;
+                                org.telegram.tgnet.ConnectionsManager.getInstance(account).sendRequest(reset, (r2, e2) -> {});
+                            }
+                        }
+                    } catch (Throwable e) {
+                        org.telegram.messenger.FileLog.e(e);
+                    }
+                    if (onComplete != null) onComplete.run();
+                }));
     }
 
     /** Persist the result of a successful /v1/auth/telegram bind. */

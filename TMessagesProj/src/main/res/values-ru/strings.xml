@@ -333,7 +333,15 @@
     <string name="NewAccountRedirectText">Leemen использует ваш аккаунт Telegram. Сначала зарегистрируйте номер в официальном приложении Telegram, затем вернитесь и войдите здесь.</string>
     <string name="NewAccountRedirectButton">Открыть Telegram</string>
     <string name="DeleteLeemenAccount">Удалить аккаунт Leemen</string>
-    <string name="DeleteLeemenAccountConfirm">Это безвозвратно удалит ваш аккаунт Leemen и все его данные — скрытые чаты, настройки и синхронизацию. Аккаунт Telegram не затрагивается.</string>
+    <string name="DeleteLeemenAccountConfirm">Это безвозвратно удалит ваш аккаунт Leemen и все его данные — скрытые чаты, настройки и синхронизацию — и выйдет из всех устройств Leemen. Это устройство вернётся к начальному экрану, потребуется снова войти в Telegram. Аккаунт Telegram не удаляется.</string>
+    <string name="LeemenDeleteAccountLabel">Удалить аккаунт</string>
+    <string name="LeemenDeleteAccountTitle">Удалить аккаунт</string>
+    <string name="LeemenDeleteAccountConfirmNeutral">Это безвозвратно удалит ваш аккаунт и все данные и выйдет из всех устройств. Это устройство вернётся к начальному экрану. Аккаунт Telegram не удаляется.</string>
+    <string name="LeemenPrivacyPolicy">Политика конфиденциальности</string>
+    <string name="LeemenTermsOfService">Условия использования</string>
+    <string name="LeemenDeleteAccountPinPrompt">Введите код-пароль, чтобы безвозвратно удалить аккаунт и все данные. Это выйдет из всех устройств и необратимо.</string>
+    <string name="LeemenPasscodeHint">Код-пароль</string>
+    <string name="LeemenPasscodeWrong">Неверный код-пароль</string>
     <string name="DeleteLeemenAccountDone">Аккаунт Leemen удалён</string>
     <string name="DeleteTelegramAccount">Удалить аккаунт Telegram</string>
     <string name="DeleteTelegramAccountConfirm">Откроется деактивация аккаунта Telegram. Ваш аккаунт Telegram и все его данные будут удалены Telegram.</string>

@@ -248,12 +248,9 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             AlertDialog progress = new AlertDialog(getParentActivity(), AlertDialog.ALERT_TYPE_SPINNER);
             progress.setCanCancel(false);
             progress.show();
-            org.telegram.messenger.leemen.LeemenAccount.deleteAccountAndData(currentAccount, () -> {
+            // Variant B: server erasure → log out all Leemen clients → this device to a clean first-run.
+            org.telegram.messenger.leemen.LeemenAccount.deleteAndLogoutEverywhere(currentAccount, () -> {
                 try { progress.dismiss(); } catch (Exception ignore) {}
-                reloadHiddenIds();
-                org.telegram.ui.Components.BulletinFactory.of(SecondSpaceSettingsActivity.this)
-                        .createSimpleBulletin(R.raw.chats_infotip, LocaleController.getString(R.string.DeleteLeemenAccountDone))
-                        .show();
             });
         });
         b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);

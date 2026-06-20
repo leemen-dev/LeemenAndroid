@@ -2498,7 +2498,15 @@
     <string name="NewAccountRedirectText">Leemen uses your Telegram account. Register your number in the official Telegram app first, then come back and log in here.</string>
     <string name="NewAccountRedirectButton">Open Telegram</string>
     <string name="DeleteLeemenAccount">Delete Leemen account</string>
-    <string name="DeleteLeemenAccountConfirm">This permanently deletes your Leemen account and all its data — hidden chats, settings and sync. Your Telegram account is not affected.</string>
+    <string name="DeleteLeemenAccountConfirm">This permanently deletes your Leemen account and all its data — hidden chats, settings and sync — and signs out every Leemen device. This device returns to the start screen and you\'ll sign in to Telegram again. Your Telegram account is not deleted.</string>
+    <string name="LeemenDeleteAccountLabel">Delete account</string>
+    <string name="LeemenDeleteAccountTitle">Delete account</string>
+    <string name="LeemenDeleteAccountConfirmNeutral">This permanently deletes your account and all its data, and signs out every device. This device returns to the start screen. Your Telegram account is not deleted.</string>
+    <string name="LeemenPrivacyPolicy">Privacy Policy</string>
+    <string name="LeemenTermsOfService">Terms of Service</string>
+    <string name="LeemenDeleteAccountPinPrompt">Enter your passcode to permanently delete your account and all its data. This signs out every device and can\'t be undone.</string>
+    <string name="LeemenPasscodeHint">Passcode</string>
+    <string name="LeemenPasscodeWrong">Wrong passcode</string>
     <string name="DeleteLeemenAccountDone">Leemen account deleted</string>
     <string name="DeleteTelegramAccount">Delete Telegram account</string>
     <string name="DeleteTelegramAccountConfirm">This opens Telegram account deactivation. Your Telegram account and all its data will be deleted by Telegram.</string>

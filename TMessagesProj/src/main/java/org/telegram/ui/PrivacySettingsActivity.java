@@ -13,6 +13,7 @@ import static org.telegram.messenger.LocaleController.formatPluralString;
 import static org.telegram.messenger.LocaleController.getString;
 
 import android.content.Context;
+import android.text.InputType;
 import android.content.DialogInterface;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
@@ -68,6 +69,7 @@ import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.ui.Components.AnimatedEmojiDrawable;
 import org.telegram.ui.Components.Bulletin;
 import org.telegram.ui.Components.BulletinFactory;
+import org.telegram.ui.Components.EditTextBoldCursor;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.Premium.PremiumGradient;
 import org.telegram.ui.Components.RecyclerListView;
@@ -164,6 +166,12 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
     private int dataSectionRow;
     private int analyticsConsentRow;
     private int analyticsConsentDetailRow;
+    // Leemen: store-required (Play/Apple) in-app deletion entry, visible in OFF mode. Full in-app deletion,
+    // gated by the PS PIN when one exists (a phone-holder without the PIN can't wipe). Never exposes the hidden
+    // space — the flow only ever ends on a clean login screen.
+    private int deleteLeemenAccountRow;
+    private int privacyPolicyRow;
+    private int termsRow;
     private int rowCount;
 
     private final ArrayList<BotBiometry.Bot> biometryBots = new ArrayList<>();
@@ -576,6 +584,28 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                 if (view instanceof TextCheckCell) {
                     ((TextCheckCell) view).setChecked(granted);
                 }
+            } else if (position == deleteLeemenAccountRow) {
+                // Store-required deletion entry, visible in OFF mode. Full in-app deletion — but if a private-
+                // space PIN is set it must be entered first, so someone holding the phone (but not knowing the
+                // PIN) can't wipe. The flow only ever ends on a clean login screen, so it can never EXPOSE the
+                // hidden space — only the owner (with the PIN) can actually trigger the destruction.
+                if (getParentActivity() == null) {
+                    return;
+                }
+                SecondSpaceController psc = SecondSpaceController.getInstance(currentAccount);
+                if (psc.hasPassword()) {
+                    promptPinThenDeleteLeemenAccount(psc);
+                } else {
+                    confirmThenDeleteLeemenAccount();
+                }
+            } else if (position == privacyPolicyRow) {
+                if (getParentActivity() != null) {
+                    org.telegram.messenger.browser.Browser.openUrl(getParentActivity(), org.telegram.messenger.leemen.LeemenConfig.privacyUrl());
+                }
+            } else if (position == termsRow) {
+                if (getParentActivity() != null) {
+                    org.telegram.messenger.browser.Browser.openUrl(getParentActivity(), org.telegram.messenger.leemen.LeemenConfig.termsUrl());
+                }
             } else if (position == secretMapRow) {
                 AlertsCreator.showSecretLocationAlert(getParentActivity(), currentAccount, () -> {
                     listAdapter.notifyDataSetChanged();
@@ -710,6 +740,75 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         }
     }
 
+    // --- Leemen account deletion (store-visible OFF-mode entry; full in-app, PIN-gated when a PS PIN exists) ---
+
+    private void runLeemenAccountDeletion() {
+        if (getParentActivity() == null) {
+            return;
+        }
+        AlertDialog progress = new AlertDialog(getParentActivity(), AlertDialog.ALERT_TYPE_SPINNER);
+        progress.setCanCancel(false);
+        progress.show();
+        // Variant B: server erasure → log out all Leemen clients → this device to a clean first-run.
+        org.telegram.messenger.leemen.LeemenAccount.deleteAndLogoutEverywhere(currentAccount, () -> {
+            try { progress.dismiss(); } catch (Exception ignore) {}
+        });
+    }
+
+    private void confirmThenDeleteLeemenAccount() {
+        if (getParentActivity() == null) {
+            return;
+        }
+        AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
+        b.setTitle(getString(R.string.LeemenDeleteAccountTitle));
+        b.setMessage(getString(R.string.LeemenDeleteAccountConfirmNeutral));
+        b.setPositiveButton(getString(R.string.Delete), (d, w) -> runLeemenAccountDeletion());
+        b.setNegativeButton(getString(R.string.Cancel), null);
+        AlertDialog dialog = b.create();
+        showDialog(dialog);
+        TextView button = (TextView) dialog.getButton(DialogInterface.BUTTON_POSITIVE);
+        if (button != null) {
+            button.setTextColor(Theme.getColor(Theme.key_text_RedBold));
+        }
+    }
+
+    /** Neutral passcode prompt (no mention of the private space — deniability) gating the destructive delete. */
+    private void promptPinThenDeleteLeemenAccount(SecondSpaceController psc) {
+        if (getParentActivity() == null) {
+            return;
+        }
+        Context context = getParentActivity();
+        final EditTextBoldCursor input = new EditTextBoldCursor(context);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        input.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 18);
+        input.setTextColor(Theme.getColor(Theme.key_dialogTextBlack));
+        input.setCursorColor(Theme.getColor(Theme.key_dialogTextBlack));
+        input.setHint(getString(R.string.LeemenPasscodeHint));
+        input.setHintTextColor(Theme.getColor(Theme.key_dialogTextHint));
+        FrameLayout container = new FrameLayout(context);
+        container.setPadding(dp(24), dp(4), dp(24), dp(12));
+        container.addView(input, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+        AlertDialog.Builder b = new AlertDialog.Builder(context);
+        b.setTitle(getString(R.string.LeemenDeleteAccountTitle));
+        b.setMessage(getString(R.string.LeemenDeleteAccountPinPrompt));
+        b.setView(container);
+        b.setPositiveButton(getString(R.string.Delete), (d, w) -> {
+            CharSequence entered = input.getText();
+            if (psc.verifyPassword(entered != null ? entered.toString() : "")) {
+                runLeemenAccountDeletion();
+            } else if (getParentActivity() != null) {
+                Toast.makeText(getParentActivity(), getString(R.string.LeemenPasscodeWrong), Toast.LENGTH_SHORT).show();
+            }
+        });
+        b.setNegativeButton(getString(R.string.Cancel), null);
+        AlertDialog dialog = b.create();
+        showDialog(dialog);
+        TextView button = (TextView) dialog.getButton(DialogInterface.BUTTON_POSITIVE);
+        if (button != null) {
+            button.setTextColor(Theme.getColor(Theme.key_text_RedBold));
+        }
+    }
+
     private void updateRows() {
         updateRows(true);
     }
@@ -809,6 +908,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         }
         advancedSectionRow = rowCount++;
         deleteAccountRow = rowCount++;
+        deleteLeemenAccountRow = rowCount++;
         deleteAccountDetailRow = rowCount++;
         botsSectionRow = rowCount++;
         if (getUserConfig().hasSecureData) {
@@ -842,6 +942,8 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         secretDetailRow = rowCount++;
         dataSectionRow = rowCount++;
         analyticsConsentRow = rowCount++;
+        privacyPolicyRow = rowCount++;
+        termsRow = rowCount++;
         analyticsConsentDetailRow = rowCount++;
         if (listAdapter != null && notify) {
             listAdapter.notifyDataSetChanged();
@@ -1086,7 +1188,9 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                     position == emailLoginRow || position == paymentsClearRow || position == secretMapRow ||
                     position == contactsSyncRow || position == passportRow || position == contactsDeleteRow ||
                     position == contactsSuggestRow || position == autoDeleteMesages || position == botsBiometryRow ||
-                    position == privateSpaceEnterRow;
+                    position == privateSpaceEnterRow ||
+                    position == deleteLeemenAccountRow || position == privacyPolicyRow || position == termsRow ||
+                    position == analyticsConsentRow;
         }
 
         @Override
@@ -1132,6 +1236,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                     holder.itemView.setTag(position);
                     TextSettingsCell textCell = (TextSettingsCell) holder.itemView;
                     textCell.setBetterLayout(true);
+                    textCell.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText)); // reset (recycled red row)
                     if (position == webSessionsRow) {
                         textCell.setText(getString("WebSessionsTitle", R.string.WebSessionsTitle), false);
                     } else if (position == phoneNumberRow) {
@@ -1250,8 +1355,15 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                                 value = formatPluralString("Days", ttl);
                             }
                         }
-                        textCell.setTextAndValue(getString("DeleteAccountIfAwayFor3", R.string.DeleteAccountIfAwayFor3), value, deleteAccountUpdate, false);
+                        textCell.setTextAndValue(getString("DeleteAccountIfAwayFor3", R.string.DeleteAccountIfAwayFor3), value, deleteAccountUpdate, true);
                         deleteAccountUpdate = false;
+                    } else if (position == deleteLeemenAccountRow) {
+                        textCell.setText(getString(R.string.LeemenDeleteAccountLabel), false);
+                        textCell.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
+                    } else if (position == privacyPolicyRow) {
+                        textCell.setText(getString(R.string.LeemenPrivacyPolicy), true);
+                    } else if (position == termsRow) {
+                        textCell.setText(getString(R.string.LeemenTermsOfService), false);
                     } else if (position == paymentsClearRow) {
                         textCell.setText(getString("PrivacyPaymentsClear", R.string.PrivacyPaymentsClear), true);
                     } else if (position == botsBiometryRow) {
@@ -1448,7 +1560,8 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         public int getItemViewType(int position) {
             if (position == passportRow || position == lastSeenRow || position == phoneNumberRow ||
                     position == deleteAccountRow || position == webSessionsRow || position == groupsRow || position == paymentsClearRow ||
-                    position == secretMapRow || position == contactsDeleteRow || position == botsBiometryRow) {
+                    position == secretMapRow || position == contactsDeleteRow || position == botsBiometryRow ||
+                    position == deleteLeemenAccountRow || position == privacyPolicyRow || position == termsRow) {
                 return 0;
             } else if (position == privacyShadowRow || position == deleteAccountDetailRow || position == groupsDetailRow || position == sessionsDetailRow || position == secretDetailRow || position == botsDetailRow || position == contactsDetailRow || position == newChatsSectionRow || position == analyticsConsentDetailRow) {
                 return 1;

@@ -81,4 +81,6 @@ public final class LeemenConfig {
 
     public static String termsUrl()   { return LEGAL_BASE + (isRu() ? "/ru/terms"   : "/terms"); }
     public static String privacyUrl() { return LEGAL_BASE + (isRu() ? "/ru/privacy" : "/privacy"); }
+    /** Authenticated self-service account deletion page (Play Data Safety web resource + store in-app link). */
+    public static String deleteAccountUrl() { return LEGAL_BASE + (isRu() ? "/ru/delete-account" : "/delete-account"); }
 }

@@ -85,6 +85,25 @@ public final class LeemenKeyStore {
         return null;
     }
 
+    /**
+     * Remove the install-global AES wrap key from the AndroidKeyStore (account-delete / GDPR erasure).
+     * The alias is SHARED across all local accounts, so the caller MUST only invoke this when no account
+     * still holds a wrapped K_master — otherwise the others become undecryptable. After this returns, any
+     * leftover wrapped blob is unrecoverable (by design). No-op on the API < 23 plaintext fallback path.
+     */
+    public static void deleteWrapKey() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
+        try {
+            KeyStore ks = KeyStore.getInstance(ANDROID_KEYSTORE);
+            ks.load(null);
+            if (ks.containsAlias(WRAP_KEY_ALIAS)) {
+                ks.deleteEntry(WRAP_KEY_ALIAS);
+            }
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
+    }
+
     private static SecretKey getOrCreateWrapKey() throws Exception {
         KeyStore ks = KeyStore.getInstance(ANDROID_KEYSTORE);
         ks.load(null);
