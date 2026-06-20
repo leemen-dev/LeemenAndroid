@@ -198,7 +198,6 @@ import org.telegram.ui.Components.SharingLocationsAlert;
 import org.telegram.ui.Components.SizeNotifierFrameLayout;
 import org.telegram.ui.Components.StickerSetBulletinLayout;
 import org.telegram.ui.Components.StickersAlert;
-import org.telegram.ui.Components.LeemenTermsView;
 import org.telegram.ui.Components.TermsOfServiceView;
 import org.telegram.ui.Components.TextStyleSpan;
 import org.telegram.ui.Components.ThemeEditorView;
@@ -303,7 +302,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     private PasscodeViewDialog passcodeDialog;
     private List<PasscodeView> overlayPasscodeViews = new ArrayList<>();
     private TermsOfServiceView termsOfServiceView;
-    private LeemenTermsView leemenTermsView;
     private BlockingUpdateView blockingUpdateView;
     public final ArrayList<Dialog> visibleDialogs = new ArrayList<>();
     private Dialog proxyErrorDialog;
@@ -1505,54 +1503,42 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         termsOfServiceView.animate().alpha(1f).setDuration(150).setInterpolator(AndroidUtilities.decelerateInterpolator).setListener(null).start();
     }
 
-    /** Leemen: evaluate whether the Terms/Privacy acceptance gate must run for this account, then show it.
-     *  No-op if the account isn't bound yet (a later leemenBindCompleted retriggers) or it's already accepted. */
+    /** Leemen: light Terms/Privacy model (contract basis) — acceptance happens BY CONTINUING through the login
+     *  screen's "By continuing you accept Terms & Privacy" line (PhoneView). This just records it (no blocking
+     *  wall) and, for a Kazakhstan-signup account, shows a one-time non-blocking KZ→EU cross-border disclosure. */
     private void maybeShowLeemenTerms(int account) {
         if (drawerLayoutContainer == null || isFinishing()) return;
         if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return;
         if (!UserConfig.getInstance(account).isClientActivated()) return;
         if (!org.telegram.messenger.leemen.LeemenAccount.hasBinding(account)) return; // no session token yet
-        if (leemenTermsView != null && leemenTermsView.getVisibility() == View.VISIBLE) return;
         org.telegram.messenger.leemen.LeemenConsent.evaluate(account, (needsPrompt, kz) -> {
             if (drawerLayoutContainer == null || isFinishing()) return;
             if (needsPrompt) {
-                showLeemenTerms(account, kz);
-            } else {
-                maybeShowAnalyticsConsentPrompt(); // terms already accepted → offer the soft analytics opt-in once
+                org.telegram.messenger.leemen.LeemenConsent.grant(account, kz); // accepted-by-continuing
+                if (kz) {
+                    showLeemenKzNotice(this::maybeShowAnalyticsConsentPrompt);
+                    return;
+                }
             }
+            maybeShowAnalyticsConsentPrompt();
         });
     }
 
-    private void showLeemenTerms(int account, boolean kz) {
-        if (leemenTermsView == null) {
-            leemenTermsView = new LeemenTermsView(this);
-            leemenTermsView.setAlpha(0f);
-            drawerLayoutContainer.addView(leemenTermsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
-            leemenTermsView.setDelegate(new LeemenTermsView.Delegate() {
-                @Override
-                public void onAccept(int acc, boolean kzShown) {
-                    org.telegram.messenger.leemen.LeemenConsent.grant(acc, kzShown);
-                    leemenTermsView.animate()
-                            .alpha(0f)
-                            .setDuration(150)
-                            .setInterpolator(AndroidUtilities.accelerateInterpolator)
-                            .withEndAction(() -> {
-                                leemenTermsView.setVisibility(View.GONE);
-                                maybeShowAnalyticsConsentPrompt(); // after Terms, offer the soft analytics opt-in
-                            })
-                            .start();
-                }
-
-                @Override
-                public void onDecline(int acc) {
-                    leemenTermsView.setVisibility(View.GONE);
-                    MessagesController.getInstance(acc).performLogout(1);
-                }
-            });
+    /** One-time, non-blocking KZ→EU cross-border disclosure (single OK). AlertDialog handles system-bar insets. */
+    private void showLeemenKzNotice(Runnable after) {
+        if (isFinishing()) {
+            if (after != null) after.run();
+            return;
         }
-        leemenTermsView.show(account, kz);
-        leemenTermsView.setVisibility(View.VISIBLE);
-        leemenTermsView.animate().alpha(1f).setDuration(150).setInterpolator(AndroidUtilities.decelerateInterpolator).setListener(null).start();
+        AlertDialog.Builder b = new AlertDialog.Builder(this);
+        b.setTitle(LocaleController.getString(R.string.LeemenKzNoticeTitle));
+        b.setMessage(LocaleController.getString(R.string.LeemenTermsKzDisclosure));
+        b.setPositiveButton(LocaleController.getString(R.string.OK), null);
+        AlertDialog dialog = b.create();
+        if (after != null) {
+            dialog.setOnDismissListener(d -> after.run());
+        }
+        dialog.show();
     }
 
     /** Leemen: one-time non-blocking soft prompt offering the analytics/attribution opt-in (off by default).

@@ -379,6 +379,11 @@
     <string name="LeemenResetDone">Зашифрованные данные сброшены</string>
     <string name="LeemenMaxValueOn">Вкл</string>
     <string name="LeemenMaxValueOff">Выкл</string>
+    <string name="LeemenLoginAcceptPrefix">"Продолжая, вы принимаете "</string>
+    <string name="LeemenLoginTerms">Условия</string>
+    <string name="LeemenLoginAnd">" и "</string>
+    <string name="LeemenLoginPrivacy">Политику конфиденциальности</string>
+    <string name="LeemenKzNoticeTitle">Передача данных</string>
     <string name="DeleteLeemenAccountDone">Аккаунт Leemen удалён</string>
     <string name="DeleteTelegramAccount">Удалить аккаунт Telegram</string>
     <string name="DeleteTelegramAccountConfirm">Откроется деактивация аккаунта Telegram. Ваш аккаунт Telegram и все его данные будут удалены Telegram.</string>

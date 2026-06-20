@@ -2070,6 +2070,36 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             subtitleView.setLineSpacing(dp(2), 1.0f);
             addView(subtitleView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 32, 8, 32, 0));
 
+            if (activityMode != MODE_CHANGE_PHONE_NUMBER) {
+                // Leemen: light "by continuing" Terms/Privacy acceptance line (contract basis; no blocking gate).
+                // In-flow (not bottom-anchored) so it never sits under the system navigation bar (safe-area).
+                TextView leemenTerms = new TextView(context);
+                leemenTerms.setMovementMethod(new AndroidUtilities.LinkMovementMethodMy());
+                leemenTerms.setTextSize(TypedValue.COMPLEX_UNIT_DIP, AndroidUtilities.isSmallScreen() ? 12 : 13);
+                leemenTerms.setGravity(Gravity.CENTER);
+                leemenTerms.setLineSpacing(dp(2), 1.0f);
+                leemenTerms.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText6));
+                leemenTerms.setLinkTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteLinkText));
+                SpannableStringBuilder leemenSb = new SpannableStringBuilder();
+                leemenSb.append(getString(R.string.LeemenLoginAcceptPrefix));
+                int leemenTs = leemenSb.length();
+                leemenSb.append(getString(R.string.LeemenLoginTerms));
+                leemenSb.setSpan(new ClickableSpan() {
+                    @Override public void onClick(View widget) { org.telegram.messenger.browser.Browser.openUrl(context, org.telegram.messenger.leemen.LeemenConfig.termsUrl()); }
+                    @Override public void updateDrawState(android.text.TextPaint ds) { super.updateDrawState(ds); ds.setUnderlineText(false); }
+                }, leemenTs, leemenSb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                leemenSb.append(getString(R.string.LeemenLoginAnd));
+                int leemenPs = leemenSb.length();
+                leemenSb.append(getString(R.string.LeemenLoginPrivacy));
+                leemenSb.setSpan(new ClickableSpan() {
+                    @Override public void onClick(View widget) { org.telegram.messenger.browser.Browser.openUrl(context, org.telegram.messenger.leemen.LeemenConfig.privacyUrl()); }
+                    @Override public void updateDrawState(android.text.TextPaint ds) { super.updateDrawState(ds); ds.setUnderlineText(false); }
+                }, leemenPs, leemenSb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                leemenSb.append(".");
+                leemenTerms.setText(leemenSb);
+                addView(leemenTerms, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 32, 6, 32, 0));
+            }
+
             countryButton = new TextViewSwitcher(context);
             countryButton.setFactory(() -> {
                 TextView tv = new TextView(context);

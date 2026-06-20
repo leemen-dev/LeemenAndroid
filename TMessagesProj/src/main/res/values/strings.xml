@@ -2544,6 +2544,11 @@
     <string name="LeemenResetDone">Encrypted data reset</string>
     <string name="LeemenMaxValueOn">On</string>
     <string name="LeemenMaxValueOff">Off</string>
+    <string name="LeemenLoginAcceptPrefix">"By continuing, you accept the "</string>
+    <string name="LeemenLoginTerms">Terms</string>
+    <string name="LeemenLoginAnd">" and "</string>
+    <string name="LeemenLoginPrivacy">Privacy Policy</string>
+    <string name="LeemenKzNoticeTitle">Data transfer</string>
     <string name="DeleteLeemenAccountDone">Leemen account deleted</string>
     <string name="DeleteTelegramAccount">Delete Telegram account</string>
     <string name="DeleteTelegramAccountConfirm">This opens Telegram account deactivation. Your Telegram account and all its data will be deleted by Telegram.</string>
