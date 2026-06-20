@@ -2465,9 +2465,9 @@
     <string name="LeemenTermsDeclineConfirm">You can\'t use Leemen without accepting the Terms of Service and Privacy Policy. Log out?</string>
     <string name="LeemenDataSection">Data</string>
     <string name="LeemenAnalyticsSetting">Share anonymous usage data</string>
-    <string name="LeemenAnalyticsSettingInfo">Helps us improve Leemen. Never includes your private space or message content. Off by default.</string>
+    <string name="LeemenAnalyticsSettingInfo">Helps us improve Leemen. Never includes your chats or message content. Off by default.</string>
     <string name="LeemenAnalyticsConsentTitle">Help improve Leemen</string>
-    <string name="LeemenAnalyticsConsentMessage">Share anonymous usage data and install source so we can improve Leemen. Your private space and message content are never included. You can change this anytime in Settings → Privacy.</string>
+    <string name="LeemenAnalyticsConsentMessage">Share anonymous usage data and install source so we can improve Leemen. Your chats and message content are never included. You can change this anytime in Settings → Privacy.</string>
     <string name="LeemenAnalyticsConsentEnable">Enable</string>
     <string name="LeemenAnalyticsConsentLater">Not now</string>
     <string name="LeemenPremium">Leemen Premium</string>
