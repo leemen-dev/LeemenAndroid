@@ -1060,7 +1060,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             // Fully exclude hidden chats from the archive preview — neither name nor
             // unread-bold should appear. Chats with exposed messages are intentionally
             // included (the user chose to surface them).
-            if (ssc.isHiddenFromCurrentView(dialog.id) && !ssc.hasExposedMessages(dialog.id) && !ssc.hasPendingOffModeWork(dialog.id)) {
+            if (!ssc.isVisibleInCurrentView(dialog.id)) {
                 continue;
             }
             TLRPC.User currentUser = null;

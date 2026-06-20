@@ -8790,7 +8790,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         ArrayList<TLRPC.Dialog> archiveDialogs = getMessagesController().getDialogs(1);
         for (int i = 0, n = archiveDialogs.size(); i < n; i++) {
             TLRPC.Dialog d = archiveDialogs.get(i);
-            if (d != null && (!ssc.isHiddenFromCurrentView(d.id) || ssc.hasExposedMessages(d.id) || ssc.hasPendingOffModeWork(d.id))) {
+            if (d != null && ssc.isVisibleInCurrentView(d.id)) {
                 return true;
             }
         }
@@ -11350,7 +11350,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 boolean hasVisible = false;
                 for (int j = 0, M = inner.size(); j < M; j++) {
                     TLRPC.Dialog fd = inner.get(j);
-                    if (fd != null && (!ssc.isHiddenFromCurrentView(fd.id) || ssc.hasExposedMessages(fd.id) || ssc.hasPendingOffModeWork(fd.id))) {
+                    if (fd != null && ssc.isVisibleInCurrentView(fd.id)) {
                         hasVisible = true;
                         break;
                     }
@@ -11364,7 +11364,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 }
                 continue;
             }
-            if (!ssc.isHiddenFromCurrentView(d.id) || ssc.hasExposedMessages(d.id) || ssc.hasPendingOffModeWork(d.id)) {
+            if (ssc.isVisibleInCurrentView(d.id)) {
                 filtered.add(d);
             }
         }

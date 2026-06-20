@@ -377,6 +377,14 @@ public class SecondSpaceController extends BaseController implements Notificatio
         for (Long did : dialogIds) {
             if (did != null && getLatestSafeMessageId(did) > 0) return true;
         }
+        // Also arm for exposed/pending chats that aren't (yet) in dialogIds — else the gate wouldn't hold for
+        // them and they'd render empty (BUG 1) / leak first (BUG 2).
+        for (Long did : exposedMessages.keySet()) {
+            if (did != null && getLatestSafeMessageId(did) > 0) return true;
+        }
+        for (Long did : pendingMessages.keySet()) {
+            if (did != null && getLatestSafeMessageId(did) > 0) return true;
+        }
         return false;
     }
 
@@ -785,6 +793,21 @@ public class SecondSpaceController extends BaseController implements Notificatio
         }
     }
 
+    /** Visible in the CURRENT OFF-mode list? Use this for list/preview filtering instead of open-coding
+     *  {@code !isHiddenFromCurrentView || hasExposedMessages || hasPendingOffModeWork} — those OR clauses must
+     *  obey the fail-closed gate too, or the most sensitive row (an exposed chat) would be the ONE left visible
+     *  during the pre-sync/warmup window while innocent chats are correctly hidden (deniability inversion).
+     *  FAIL-CLOSED: while the OFF-mode initial-sync/warmup gate is up, ONLY the service chat shows — exposed and
+     *  pending chats are hidden too. Once it lifts, exposed/pending chats stay reachable exactly as before. */
+    public boolean isVisibleInCurrentView(long dialogId) {
+        if (activeMode == MODE_OFF && org.telegram.messenger.leemen.LeemenSync.isInitialSyncPending(currentAccount)) {
+            return UserObject.isService(dialogId);
+        }
+        return !isHiddenFromCurrentView(dialogId)
+                || hasExposedMessages(dialogId)
+                || hasPendingOffModeWork(dialogId);
+    }
+
     /** Record the authoring context of a freshly-saved dialog-level draft. A draft typed inside the private
      *  space (MODE_REAL) on a hidden chat is marked for wipe-on-exit; any other save (OFF mode, emptied, or a
      *  non-hidden chat) clears the mark so the draft is kept. Called from {@link MediaDataController#saveDraft}
@@ -984,7 +1007,12 @@ public class SecondSpaceController extends BaseController implements Notificatio
      *  gate lifts reactively when the last one settles. Idempotent — already-resolvable ids are skipped. */
     private void warmSafePreviews() {
         if (previewWarmGuid == 0) previewWarmGuid = getConnectionsManager().generateClassGuid();
-        for (Long did : dialogIds) {
+        // Warm dialogIds ∪ exposed ∪ pending — so a warm task is actually scheduled for exposed/pending chats
+        // and the gate (armed by hasAnySafePreviewToWarm) has something to settle on for them.
+        Set<Long> dialogsToWarm = new HashSet<>(dialogIds);
+        dialogsToWarm.addAll(exposedMessages.keySet());
+        dialogsToWarm.addAll(pendingMessages.keySet());
+        for (Long did : dialogsToWarm) {
             if (did == null) continue;
             Set<Integer> ids = collectSafeIds(did);
             if (ids.isEmpty()) continue;
