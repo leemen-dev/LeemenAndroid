@@ -594,6 +594,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.needCheckSystemBarColors);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.closeOtherAppActivities);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.leemenBindCompleted);
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.leemenMaxKeyNeeded);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.didSetPasscode);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.didSetNewWallpapper);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.screenStateChanged);
@@ -6607,6 +6608,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.billingConfirmPurchaseError);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.tlSchemeParseException);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.leemenBindCompleted);
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.leemenMaxKeyNeeded);
 
         if (onPowerSaverCallback != null) {
             LiteMode.removeOnPowerSaverAppliedListener(onPowerSaverCallback);
@@ -7284,6 +7286,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         } else if (id == NotificationCenter.leemenBindCompleted) {
             if (args != null && args.length > 0 && args[0] instanceof Integer) {
                 maybeShowLeemenTerms((Integer) args[0]);
+            }
+        } else if (id == NotificationCenter.leemenMaxKeyNeeded) {
+            if (args != null && args.length > 0 && args[0] instanceof Integer) {
+                LeemenPrivacyModeActivity.promptForUnwrap(this, (Integer) args[0]);
             }
         } else if (id == NotificationCenter.openBoostForUsersDialog) {
             long dialogId = (long) args[0];

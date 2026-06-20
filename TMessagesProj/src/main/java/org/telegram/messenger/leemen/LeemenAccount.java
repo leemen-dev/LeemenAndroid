@@ -39,6 +39,24 @@ public final class LeemenAccount {
         return prefs().getString("privacy_" + account, null);
     }
 
+    public static boolean isMaxPrivacy(int account) {
+        return "max".equals(getPrivacyMode(account));
+    }
+
+    /** Locally update the cached privacy mode after a successful upgrade/downgrade. */
+    public static void setPrivacyMode(int account, String mode) {
+        prefs().edit().putString("privacy_" + account, mode).apply();
+    }
+
+    /** CAS counter for the max-mode wraps (returned by upgrade/wrap-pw/account-key); 0 until known. */
+    public static int getWrapVersion(int account) {
+        return prefs().getInt("wrapver_" + account, 0);
+    }
+
+    public static void setWrapVersion(int account, int version) {
+        prefs().edit().putInt("wrapver_" + account, version).apply();
+    }
+
     // --- Terms/Privacy acceptance (local fast-path mirror of the server consent ledger; see LeemenConsent) ---
     /** Locally-cached accepted Terms version, or null if never accepted on this install. */
     public static String getAcceptedTermsVersion(int account) {
@@ -69,6 +87,11 @@ public final class LeemenAccount {
 
     public static void setWrappedKMaster(int account, String wrapped) {
         prefs().edit().putString("kmaster_" + account, wrapped).apply();
+    }
+
+    /** Drop only the wrapped K_master (e.g. max-mode reset re-keys from bootstrap); leaves token/binding. */
+    public static void dropKMaster(int account) {
+        prefs().edit().remove("kmaster_" + account).apply();
     }
 
     public static boolean hasKMaster(int account) {
@@ -201,6 +224,7 @@ public final class LeemenAccount {
                 .remove("disabled_" + account)
                 .remove("terms_ver_" + account)
                 .remove("consent_dirty_" + account)
+                .remove("wrapver_" + account)
                 .apply();
     }
 }

@@ -29,6 +29,8 @@ public final class LeemenKey {
     private LeemenKey() {}
 
     private static final Set<Integer> inFlight = new HashSet<>();
+    /** Accounts for which the max-mode unwrap prompt was already requested this process (avoid dialog spam). */
+    private static final Set<Integer> maxPromptShown = java.util.Collections.synchronizedSet(new HashSet<>());
 
     /** Raw 32-byte K_master for an account, or null if not available yet. Caller should zero it after use. */
     public static byte[] getKMaster(int account) {
@@ -40,6 +42,8 @@ public final class LeemenKey {
     public static void ensureKey(int account) {
         if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return;
         if (LeemenAccount.hasKMaster(account)) return;
+        // max mode needs the user's secret — prompt once per process; don't re-GET /account/key on every resume.
+        if (LeemenAccount.isMaxPrivacy(account) && maxPromptShown.contains(account)) return;
         final String token = LeemenAccount.getToken(account);
         if (token == null) return; // must bind first (Phase 1)
         synchronized (inFlight) {
@@ -54,7 +58,14 @@ public final class LeemenKey {
                 }
                 String mode = optStr(resp, "mode", "default");
                 if ("max".equals(mode)) {
-                    if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: account/key mode=max — client unwrap not yet implemented");
+                    // max mode: K_master is only recoverable with the user's secret (passphrase / BIP-39 phrase).
+                    // ensureKey runs headless, so signal the UI to prompt — ONCE per process (avoid dialog spam).
+                    LeemenAccount.setPrivacyMode(account, "max");
+                    if (maxPromptShown.add(account)) {
+                        if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: account/key mode=max — prompting for unwrap secret");
+                        org.telegram.messenger.NotificationCenter.getGlobalInstance()
+                                .postNotificationName(org.telegram.messenger.NotificationCenter.leemenMaxKeyNeeded, account);
+                    }
                 } else if (resp.has("k_master") && !resp.get("k_master").isJsonNull()) {
                     byte[] k = Base64.decode(resp.get("k_master").getAsString(), Base64.NO_WRAP);
                     if (k.length == 32) {
@@ -98,12 +109,12 @@ public final class LeemenKey {
         });
     }
 
-    private static void storeKMaster(int account, byte[] k, boolean created) {
+    private static boolean storeKMaster(int account, byte[] k, boolean created) {
         try {
             String wrapped = LeemenKeyStore.protect(k);
             if (wrapped == null) {
                 if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: failed to wrap K_master for account " + account);
-                return;
+                return false;
             }
             LeemenAccount.setWrappedKMaster(account, wrapped);
             if (BuildVars.LOGS_ENABLED) {
@@ -112,9 +123,20 @@ public final class LeemenKey {
             LeemenSync.onRemoteChanged(account); // key ready → kick off the first sync
             LeemenDevice.ensureRegistered(account);
             LeemenRealtime.connect(account);
+            return true;
         } finally {
             Arrays.fill(k, (byte) 0);
         }
+    }
+
+    /** Store an externally-unwrapped K_master (max-mode unwrap path) — Keystore-wrap + kick the bootstrap
+     *  chain (sync/device/realtime). Zeroes {@code k}. Safe no-op if k is not a 32-byte key. */
+    public static boolean acceptKMaster(int account, byte[] k) {
+        if (k == null || k.length != 32) {
+            if (k != null) Arrays.fill(k, (byte) 0);
+            return false;
+        }
+        return storeKMaster(account, k, false);
     }
 
     private static String optStr(JsonObject o, String key, String def) {

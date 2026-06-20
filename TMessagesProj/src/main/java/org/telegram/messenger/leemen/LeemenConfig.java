@@ -25,6 +25,11 @@ public final class LeemenConfig {
     public static final String EP_ME              = "/me";
     public static final String EP_ACCOUNT_KEY     = "/account/key";
     public static final String EP_WRAP_DEFAULT    = "/account/wrap-default";
+    // max-privacy (Phase 2): client wraps K_master with a dedicated passphrase + BIP-39 recovery phrase
+    public static final String EP_UPGRADE_PRIVACY   = "/account/upgrade-privacy";   // default → max
+    public static final String EP_DOWNGRADE_PRIVACY = "/account/downgrade-privacy"; // max → default {k_master}
+    public static final String EP_WRAP_PW           = "/account/wrap-pw";           // change code (CAS wrap_version)
+    public static final String EP_RESET_PRIVATE_SPACE = "/security/reset-private-space"; // both secrets lost {confirm:"RESET"}
     public static final String EP_ACCOUNT_DELETE  = "/account/delete"; // GDPR erasure; body {confirm:"DELETE"}
     public static final String EP_FILTER          = "/filter";
     public static final String EP_CONTENT         = "/content";

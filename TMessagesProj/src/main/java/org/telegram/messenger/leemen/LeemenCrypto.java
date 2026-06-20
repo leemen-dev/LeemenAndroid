@@ -111,6 +111,48 @@ public final class LeemenCrypto {
         }
     }
 
+    // --- max-privacy: derive a KEK from a passphrase / recovery phrase, then wrap/unwrap K_master under it ---
+    // Argon2id KEK params are FIXED (changing them breaks all existing wraps): opslimit 4, memlimit 64 MiB
+    // (the salt is stored server-side; opslimit/memlimit are not, so they must never change once shipped).
+    // Both FIXED literals — must never change (the salt is server-side but these params are not; changing
+    // either makes every existing wrap unrecoverable). 64 MiB = libsodium crypto_pwhash_MEMLIMIT_INTERACTIVE.
+    private static final long KEK_OPSLIMIT = 4L;
+    private static final com.sun.jna.NativeLong KEK_MEMLIMIT = new com.sun.jna.NativeLong(67108864L); // 64 MiB
+
+    /** Argon2id(password, salt) → 32-byte KEK with the fixed max-privacy params. null on failure. */
+    public static byte[] argon2idKek(byte[] password, byte[] salt) {
+        if (password == null || salt == null || salt.length != SALT_BYTES) return null;
+        try {
+            byte[] out = new byte[KEY_BYTES];
+            boolean ok = ls().cryptoPwHash(out, out.length, password, password.length, salt,
+                    KEK_OPSLIMIT, KEK_MEMLIMIT, PwHash.Alg.PWHASH_ALG_ARGON2ID13);
+            return ok ? out : null;
+        } catch (Throwable e) {
+            FileLog.e(e);
+            return null;
+        }
+    }
+
+    /** Wrap a 32-byte key under a KEK → self-contained nonce‖ciphertext‖tag, or null on failure. */
+    public static byte[] wrapKey(byte[] plainKey, byte[] kek) {
+        if (plainKey == null || kek == null || kek.length != KEY_BYTES) return null;
+        byte[] nonce = randomNonce();
+        byte[] ct = encrypt(plainKey, nonce, kek);
+        if (ct == null) return null;
+        byte[] out = new byte[NONCE_BYTES + ct.length];
+        System.arraycopy(nonce, 0, out, 0, NONCE_BYTES);
+        System.arraycopy(ct, 0, out, NONCE_BYTES, ct.length);
+        return out;
+    }
+
+    /** Reverse of {@link #wrapKey}; returns null on a wrong KEK (auth failure) or corruption. */
+    public static byte[] unwrapKey(byte[] wrapped, byte[] kek) {
+        if (wrapped == null || kek == null || kek.length != KEY_BYTES || wrapped.length <= NONCE_BYTES) return null;
+        byte[] nonce = Arrays.copyOfRange(wrapped, 0, NONCE_BYTES);
+        byte[] ct = Arrays.copyOfRange(wrapped, NONCE_BYTES, wrapped.length);
+        return decrypt(ct, nonce, kek);
+    }
+
     public static final int SIGN_PUBLICKEYBYTES = Sign.PUBLICKEYBYTES; // 32
     public static final int SIGN_SECRETKEYBYTES = Sign.SECRETKEYBYTES; // 64
 

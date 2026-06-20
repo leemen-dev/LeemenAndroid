@@ -164,6 +164,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
     private int secretWebpageRow;
     private int secretDetailRow;
     private int dataSectionRow;
+    private int privacyModeRow;
     private int analyticsConsentRow;
     private int analyticsConsentDetailRow;
     // Leemen: store-required (Play/Apple) in-app deletion entry, visible in OFF mode. Full in-app deletion,
@@ -584,6 +585,8 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                 if (view instanceof TextCheckCell) {
                     ((TextCheckCell) view).setChecked(granted);
                 }
+            } else if (position == privacyModeRow) {
+                presentFragment(new LeemenPrivacyModeActivity());
             } else if (position == deleteLeemenAccountRow) {
                 // Store-required deletion entry, visible in OFF mode. Full in-app deletion — but if a private-
                 // space PIN is set it must be entered first, so someone holding the phone (but not knowing the
@@ -941,6 +944,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         secretWebpageRow = rowCount++;
         secretDetailRow = rowCount++;
         dataSectionRow = rowCount++;
+        privacyModeRow = rowCount++;
         analyticsConsentRow = rowCount++;
         privacyPolicyRow = rowCount++;
         termsRow = rowCount++;
@@ -1190,6 +1194,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                     position == contactsSuggestRow || position == autoDeleteMesages || position == botsBiometryRow ||
                     position == privateSpaceEnterRow ||
                     position == deleteLeemenAccountRow || position == privacyPolicyRow || position == termsRow ||
+                    position == privacyModeRow ||
                     position == analyticsConsentRow;
         }
 
@@ -1357,6 +1362,9 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                         }
                         textCell.setTextAndValue(getString("DeleteAccountIfAwayFor3", R.string.DeleteAccountIfAwayFor3), value, deleteAccountUpdate, true);
                         deleteAccountUpdate = false;
+                    } else if (position == privacyModeRow) {
+                        textCell.setTextAndValue(getString(R.string.LeemenPrivacyModeTitle),
+                                getString(org.telegram.messenger.leemen.LeemenAccount.isMaxPrivacy(currentAccount) ? R.string.LeemenMaxValueOn : R.string.LeemenMaxValueOff), true);
                     } else if (position == deleteLeemenAccountRow) {
                         textCell.setText(getString(R.string.LeemenDeleteAccountLabel), false);
                         textCell.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
@@ -1561,7 +1569,8 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
             if (position == passportRow || position == lastSeenRow || position == phoneNumberRow ||
                     position == deleteAccountRow || position == webSessionsRow || position == groupsRow || position == paymentsClearRow ||
                     position == secretMapRow || position == contactsDeleteRow || position == botsBiometryRow ||
-                    position == deleteLeemenAccountRow || position == privacyPolicyRow || position == termsRow) {
+                    position == deleteLeemenAccountRow || position == privacyPolicyRow || position == termsRow ||
+                    position == privacyModeRow) {
                 return 0;
             } else if (position == privacyShadowRow || position == deleteAccountDetailRow || position == groupsDetailRow || position == sessionsDetailRow || position == secretDetailRow || position == botsDetailRow || position == contactsDetailRow || position == newChatsSectionRow || position == analyticsConsentDetailRow) {
                 return 1;
