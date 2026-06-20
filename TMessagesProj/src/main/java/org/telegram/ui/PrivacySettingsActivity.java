@@ -161,6 +161,9 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
     @Keep
     private int secretWebpageRow;
     private int secretDetailRow;
+    private int dataSectionRow;
+    private int analyticsConsentRow;
+    private int analyticsConsentDetailRow;
     private int rowCount;
 
     private final ArrayList<BotBiometry.Bot> biometryBots = new ArrayList<>();
@@ -567,6 +570,12 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                 if (view instanceof TextCheckCell) {
                     ((TextCheckCell) view).setChecked(newSync);
                 }
+            } else if (position == analyticsConsentRow) {
+                boolean granted = !org.telegram.messenger.leemen.LeemenAnalytics.hasConsent();
+                org.telegram.messenger.leemen.LeemenAnalytics.setConsent(granted);
+                if (view instanceof TextCheckCell) {
+                    ((TextCheckCell) view).setChecked(granted);
+                }
             } else if (position == secretMapRow) {
                 AlertsCreator.showSecretLocationAlert(getParentActivity(), currentAccount, () -> {
                     listAdapter.notifyDataSetChanged();
@@ -831,6 +840,9 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         secretMapRow = rowCount++;
         secretWebpageRow = rowCount++;
         secretDetailRow = rowCount++;
+        dataSectionRow = rowCount++;
+        analyticsConsentRow = rowCount++;
+        analyticsConsentDetailRow = rowCount++;
         if (listAdapter != null && notify) {
             listAdapter.notifyDataSetChanged();
         }
@@ -1291,6 +1303,8 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                         privacyCell.setText(getString("SuggestContactsInfo", R.string.SuggestContactsInfo));
                     } else if (position == newChatsSectionRow) {
                         privacyCell.setText(getString("ArchiveAndMuteInfo", R.string.ArchiveAndMuteInfo));
+                    } else if (position == analyticsConsentDetailRow) {
+                        privacyCell.setText(getString(R.string.LeemenAnalyticsSettingInfo));
                     }
                     break;
                 case 2:
@@ -1309,6 +1323,8 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                         headerCell.setText(getString("Contacts", R.string.Contacts));
                     } else if (position == newChatsHeaderRow) {
                         headerCell.setText(getString("NewChatsFromNonContacts", R.string.NewChatsFromNonContacts));
+                    } else if (position == dataSectionRow) {
+                        headerCell.setText(getString(R.string.LeemenDataSection));
                     }
                     break;
                 case 3:
@@ -1321,6 +1337,8 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                         textCheckCell.setTextAndCheck(getString("SuggestContacts", R.string.SuggestContacts), newSuggest, false);
                     } else if (position == newChatsRow) {
                         textCheckCell.setTextAndCheck(getString("ArchiveAndMute", R.string.ArchiveAndMute), archiveChats, false);
+                    } else if (position == analyticsConsentRow) {
+                        textCheckCell.setTextAndCheck(getString(R.string.LeemenAnalyticsSetting), org.telegram.messenger.leemen.LeemenAnalytics.hasConsent(), false);
                     }
                     break;
                 case 5:
@@ -1432,11 +1450,11 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                     position == deleteAccountRow || position == webSessionsRow || position == groupsRow || position == paymentsClearRow ||
                     position == secretMapRow || position == contactsDeleteRow || position == botsBiometryRow) {
                 return 0;
-            } else if (position == privacyShadowRow || position == deleteAccountDetailRow || position == groupsDetailRow || position == sessionsDetailRow || position == secretDetailRow || position == botsDetailRow || position == contactsDetailRow || position == newChatsSectionRow) {
+            } else if (position == privacyShadowRow || position == deleteAccountDetailRow || position == groupsDetailRow || position == sessionsDetailRow || position == secretDetailRow || position == botsDetailRow || position == contactsDetailRow || position == newChatsSectionRow || position == analyticsConsentDetailRow) {
                 return 1;
-            } else if (position == securitySectionRow || position == advancedSectionRow || position == privacySectionRow || position == secretSectionRow || position == botsSectionRow || position == contactsSectionRow || position == newChatsHeaderRow) {
+            } else if (position == securitySectionRow || position == advancedSectionRow || position == privacySectionRow || position == secretSectionRow || position == botsSectionRow || position == contactsSectionRow || position == newChatsHeaderRow || position == dataSectionRow) {
                 return 2;
-            } else if (position == secretWebpageRow || position == contactsSyncRow || position == contactsSuggestRow || position == newChatsRow) {
+            } else if (position == secretWebpageRow || position == contactsSyncRow || position == contactsSuggestRow || position == newChatsRow || position == analyticsConsentRow) {
                 return 3;
             } else if (position == botsAndWebsitesShadowRow) {
                 return 4;

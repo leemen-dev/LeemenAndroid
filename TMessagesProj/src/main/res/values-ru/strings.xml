@@ -298,6 +298,13 @@
     <string name="LeemenTermsLinkTerms">Читать Условия использования</string>
     <string name="LeemenTermsLinkPrivacy">Читать Политику конфиденциальности</string>
     <string name="LeemenTermsDeclineConfirm">Без принятия Условий использования и Политики конфиденциальности пользоваться Leemen нельзя. Выйти из аккаунта?</string>
+    <string name="LeemenDataSection">Данные</string>
+    <string name="LeemenAnalyticsSetting">Делиться анонимной статистикой</string>
+    <string name="LeemenAnalyticsSettingInfo">Помогает улучшать Leemen. Никогда не включает скрытое пространство и содержимое сообщений. По умолчанию выключено.</string>
+    <string name="LeemenAnalyticsConsentTitle">Помогите улучшить Leemen</string>
+    <string name="LeemenAnalyticsConsentMessage">Делитесь анонимной статистикой использования и источником установки, чтобы мы могли улучшать Leemen. Скрытое пространство и содержимое сообщений никогда не передаются. Изменить можно в любой момент: Настройки → Конфиденциальность.</string>
+    <string name="LeemenAnalyticsConsentEnable">Включить</string>
+    <string name="LeemenAnalyticsConsentLater">Не сейчас</string>
     <string name="LeemenPremium">Leemen Premium</string>
     <string name="LeemenPremiumScreenSubtitle">Безлимит чатов в скрытом пространстве</string>
     <string name="LeemenPremiumFeatureUnlimited">Прячьте сколько угодно чатов, а не только один.</string>

@@ -66,7 +66,7 @@ public final class LeemenAnalytics {
 
     public static void track(String name, Map<String, String> props) {
         try {
-            if (isOptedOut()) return;
+            if (!hasConsent()) return;
             Set<String> allowedProps = ALLOW.get(name);
             if (allowedProps == null) {
                 if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: analytics drop unknown event '" + name + "'");
@@ -97,7 +97,7 @@ public final class LeemenAnalytics {
     /** Fire app_first_open exactly once per install. */
     public static void onAppStart() {
         try {
-            if (isOptedOut()) return;
+            if (!hasConsent()) return;
             SharedPreferences pr = prefs();
             if (!pr.getBoolean("first_open_sent", false)) {
                 track("app_first_open");
@@ -110,13 +110,50 @@ public final class LeemenAnalytics {
         }
     }
 
-    public static boolean isOptedOut() {
-        return prefs().getBoolean("opt_out", false);
+    /** Opt-IN consent for product analytics + install attribution. OFF by default — no telemetry of any kind
+     *  is sent until the user explicitly enables it (GDPR §1). Gates every event, app_first_open and the
+     *  Play install referrer. */
+    public static boolean hasConsent() {
+        return prefs().getBoolean("consent", false);
     }
 
-    public static void setOptedOut(boolean optedOut) {
-        prefs().edit().putBoolean("opt_out", optedOut).apply();
-        if (optedOut) synchronized (queue) { queue.clear(); }
+    /** Flip the analytics/attribution opt-in. One switch covers both (same telemetry privacy bucket); the
+     *  grant/revoke is mirrored to the backend consent ledger, and on grant we fire the deferred first-open
+     *  event + capture the install referrer that were withheld while consent was off. */
+    public static void setConsent(boolean granted) {
+        prefs().edit().putBoolean("consent", granted).apply();
+        if (!granted) {
+            synchronized (queue) { queue.clear(); }
+        }
+        int account = ledgerAccount();
+        if (account >= 0) {
+            LeemenConsent.recordConsent(account, LeemenConsent.TYPE_ANALYTICS, granted);
+            LeemenConsent.recordConsent(account, LeemenConsent.TYPE_ATTRIBUTION, granted);
+        }
+        if (granted) {
+            onAppStart();
+            LeemenAttribution.captureIfNeeded();
+        }
+    }
+
+    /** True once the one-time onboarding analytics prompt has been shown (so it never nags again). */
+    public static boolean isConsentPromptShown() {
+        return prefs().getBoolean("consent_prompt_shown", false);
+    }
+
+    public static void markConsentPromptShown() {
+        prefs().edit().putBoolean("consent_prompt_shown", true).apply();
+    }
+
+    private static int ledgerAccount() {
+        try {
+            int sel = UserConfig.selectedAccount;
+            if (sel >= 0 && sel < UserConfig.MAX_ACCOUNT_COUNT && LeemenAccount.hasBinding(sel)) return sel;
+            for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                if (LeemenAccount.hasBinding(a)) return a;
+            }
+        } catch (Throwable ignore) {}
+        return -1;
     }
 
     /** Stable per-install id (UUIDv4). Created once; never reset on logout — only on uninstall/wipe. */
@@ -141,7 +178,7 @@ public final class LeemenAnalytics {
     }
 
     private static void flush() {
-        if (isOptedOut()) return;
+        if (!hasConsent()) return;
         final List<JsonObject> batch = new ArrayList<>();
         synchronized (queue) {
             if (queue.isEmpty()) return;
@@ -167,7 +204,7 @@ public final class LeemenAnalytics {
                 synchronized (queue) {
                     if (!queue.isEmpty()) scheduleFlush(); // more pending
                 }
-            } else if (!isOptedOut()) {
+            } else if (hasConsent()) {
                 // transient failure: requeue (bounded); retried on the next event / app start
                 synchronized (queue) {
                     queue.addAll(0, batch);

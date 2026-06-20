@@ -1513,8 +1513,12 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         if (!org.telegram.messenger.leemen.LeemenAccount.hasBinding(account)) return; // no session token yet
         if (leemenTermsView != null && leemenTermsView.getVisibility() == View.VISIBLE) return;
         org.telegram.messenger.leemen.LeemenConsent.evaluate(account, (needsPrompt, kz) -> {
-            if (!needsPrompt || drawerLayoutContainer == null || isFinishing()) return;
-            showLeemenTerms(account, kz);
+            if (drawerLayoutContainer == null || isFinishing()) return;
+            if (needsPrompt) {
+                showLeemenTerms(account, kz);
+            } else {
+                maybeShowAnalyticsConsentPrompt(); // terms already accepted → offer the soft analytics opt-in once
+            }
         });
     }
 
@@ -1531,7 +1535,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                             .alpha(0f)
                             .setDuration(150)
                             .setInterpolator(AndroidUtilities.accelerateInterpolator)
-                            .withEndAction(() -> leemenTermsView.setVisibility(View.GONE))
+                            .withEndAction(() -> {
+                                leemenTermsView.setVisibility(View.GONE);
+                                maybeShowAnalyticsConsentPrompt(); // after Terms, offer the soft analytics opt-in
+                            })
                             .start();
                 }
 
@@ -1545,6 +1552,25 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         leemenTermsView.show(account, kz);
         leemenTermsView.setVisibility(View.VISIBLE);
         leemenTermsView.animate().alpha(1f).setDuration(150).setInterpolator(AndroidUtilities.decelerateInterpolator).setListener(null).start();
+    }
+
+    /** Leemen: one-time non-blocking soft prompt offering the analytics/attribution opt-in (off by default).
+     *  Shown once after onboarding/terms; the durable control lives in Settings → Privacy. */
+    private void maybeShowAnalyticsConsentPrompt() {
+        if (isFinishing()) return;
+        if (org.telegram.messenger.leemen.LeemenAnalytics.isConsentPromptShown()) return;
+        if (org.telegram.messenger.leemen.LeemenAnalytics.hasConsent()) {
+            org.telegram.messenger.leemen.LeemenAnalytics.markConsentPromptShown();
+            return;
+        }
+        org.telegram.messenger.leemen.LeemenAnalytics.markConsentPromptShown();
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(LocaleController.getString(R.string.LeemenAnalyticsConsentTitle));
+        builder.setMessage(LocaleController.getString(R.string.LeemenAnalyticsConsentMessage));
+        builder.setPositiveButton(LocaleController.getString(R.string.LeemenAnalyticsConsentEnable),
+                (d, w) -> org.telegram.messenger.leemen.LeemenAnalytics.setConsent(true));
+        builder.setNegativeButton(LocaleController.getString(R.string.LeemenAnalyticsConsentLater), null);
+        try { builder.show(); } catch (Throwable ignore) {}
     }
 
     public void showPasscodeActivity(boolean fingerprint, boolean animated, int x, int y, Runnable onShow, Runnable onStart) {

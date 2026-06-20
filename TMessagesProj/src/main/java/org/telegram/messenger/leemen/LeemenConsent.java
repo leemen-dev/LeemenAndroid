@@ -34,6 +34,8 @@ public final class LeemenConsent {
 
     public static final String TYPE_TERMS = "terms";
     public static final String TYPE_KZ_CROSS_BORDER = "kz_cross_border";
+    public static final String TYPE_ANALYTICS = "analytics";
+    public static final String TYPE_ATTRIBUTION = "attribution";
 
     public interface Eval {
         /** @param needsPrompt show the Terms gate; @param kzDisclosure include the KZ→EU paragraph. */
@@ -100,10 +102,17 @@ public final class LeemenConsent {
      *  the KZ paragraph was shown). Best-effort POST; a failure sets a dirty flag re-flushed at next startup. */
     public static void grant(int account, boolean kzShown) {
         LeemenAccount.setAcceptedTermsVersion(account, CURRENT_TERMS_VERSION);
-        postConsent(account, TYPE_TERMS);
+        postConsent(account, TYPE_TERMS, true);
         if (kzShown) {
-            postConsent(account, TYPE_KZ_CROSS_BORDER);
+            postConsent(account, TYPE_KZ_CROSS_BORDER, true);
         }
+    }
+
+    /** Record a consent grant/revoke of any type (analytics/attribution) in the backend ledger. Best-effort:
+     *  the local gate is the source of truth; this is the compliance audit record. Versioned by the current
+     *  policy version (consent is given under the policy text in effect). */
+    public static void recordConsent(int account, String type, boolean granted) {
+        postConsent(account, type, granted);
     }
 
     /** Re-send the terms consent if a prior grant failed to reach the backend (called at startup). */
@@ -111,18 +120,18 @@ public final class LeemenConsent {
         if (!LeemenAccount.isConsentDirty(account)) return;
         if (!LeemenAccount.hasBinding(account)) return;
         if (!CURRENT_TERMS_VERSION.equals(LeemenAccount.getAcceptedTermsVersion(account))) return;
-        postConsent(account, TYPE_TERMS);
+        postConsent(account, TYPE_TERMS, true);
     }
 
-    private static void postConsent(final int account, final String type) {
+    private static void postConsent(final int account, final String type, final boolean granted) {
         final String token = LeemenAccount.getToken(account);
         if (token == null) {
-            LeemenAccount.setConsentDirty(account, true);
+            if (TYPE_TERMS.equals(type)) LeemenAccount.setConsentDirty(account, true);
             return;
         }
         JsonObject body = new JsonObject();
         body.addProperty("type", type);
-        body.addProperty("granted", true);
+        body.addProperty("granted", granted);
         body.addProperty("version", CURRENT_TERMS_VERSION);
         body.addProperty("locale", currentLocale());
         // NB: no accepted_at — the server timestamps the legal record; the client clock is not trusted.
@@ -132,7 +141,7 @@ public final class LeemenConsent {
                 LeemenAccount.setConsentDirty(account, !ok);
             }
             if (BuildVars.LOGS_ENABLED) {
-                FileLog.d("Leemen: POST /consent type=" + type + " code=" + code + " ok=" + ok + (ec != null ? " err=" + ec : ""));
+                FileLog.d("Leemen: POST /consent type=" + type + " granted=" + granted + " code=" + code + " ok=" + ok + (ec != null ? " err=" + ec : ""));
             }
         });
     }
