@@ -167,10 +167,10 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
     private int privacyModeRow;
     private int analyticsConsentRow;
     private int analyticsConsentDetailRow;
-    // Leemen: store-required (Play/Apple) in-app deletion entry, visible in OFF mode. Full in-app deletion,
-    // gated by the PS PIN when one exists (a phone-holder without the PIN can't wipe). Never exposes the hidden
-    // space — the flow only ever ends on a clean login screen.
-    private int deleteLeemenAccountRow;
+    // Leemen: account deletion is search-only (no visible row) for deniability — reachable only via the
+    // Settings search, gated by the PS PIN. This flag is set when this screen is opened from that search
+    // entry and is consumed exactly once in onResume() to launch the PIN-gated deletion.
+    private boolean openLeemenDeleteFromSearch;
     private int privacyPolicyRow;
     private int termsRow;
     private int rowCount;
@@ -587,20 +587,6 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                 }
             } else if (position == privacyModeRow) {
                 presentFragment(new LeemenPrivacyModeActivity());
-            } else if (position == deleteLeemenAccountRow) {
-                // Store-required deletion entry, visible in OFF mode. Full in-app deletion — but if a private-
-                // space PIN is set it must be entered first, so someone holding the phone (but not knowing the
-                // PIN) can't wipe. The flow only ever ends on a clean login screen, so it can never EXPOSE the
-                // hidden space — only the owner (with the PIN) can actually trigger the destruction.
-                if (getParentActivity() == null) {
-                    return;
-                }
-                SecondSpaceController psc = SecondSpaceController.getInstance(currentAccount);
-                if (psc.hasPassword()) {
-                    promptPinThenDeleteLeemenAccount(psc);
-                } else {
-                    confirmThenDeleteLeemenAccount();
-                }
             } else if (position == privacyPolicyRow) {
                 if (getParentActivity() != null) {
                     org.telegram.messenger.browser.Browser.openUrl(getParentActivity(), org.telegram.messenger.leemen.LeemenConfig.privacyUrl());
@@ -911,7 +897,6 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         }
         advancedSectionRow = rowCount++;
         deleteAccountRow = rowCount++;
-        deleteLeemenAccountRow = rowCount++;
         deleteAccountDetailRow = rowCount++;
         botsSectionRow = rowCount++;
         if (getUserConfig().hasSecureData) {
@@ -1155,11 +1140,34 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         return "unknown";
     }
 
+    /** Opens the PIN-gated Leemen account deletion when this screen is launched from the Settings search.
+     *  Deniability: there is no visible delete row; deletion is reachable only via search. */
+    public PrivacySettingsActivity setOpenLeemenDeleteFromSearch() {
+        openLeemenDeleteFromSearch = true;
+        return this;
+    }
+
     @Override
     public void onResume() {
         super.onResume();
         if (listAdapter != null) {
             listAdapter.notifyDataSetChanged();
+        }
+        if (openLeemenDeleteFromSearch) {
+            openLeemenDeleteFromSearch = false;
+            // Launched from the search-only deletion entry. Defer slightly so the fragment is attached and
+            // the dialog shows reliably. PIN-gated when a PS PIN exists (else a plain destructive confirm).
+            AndroidUtilities.runOnUIThread(() -> {
+                if (getParentActivity() == null) {
+                    return;
+                }
+                SecondSpaceController psc = SecondSpaceController.getInstance(currentAccount);
+                if (psc.hasPassword()) {
+                    promptPinThenDeleteLeemenAccount(psc);
+                } else {
+                    confirmThenDeleteLeemenAccount();
+                }
+            }, 150);
         }
     }
 
@@ -1193,7 +1201,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                     position == contactsSyncRow || position == passportRow || position == contactsDeleteRow ||
                     position == contactsSuggestRow || position == autoDeleteMesages || position == botsBiometryRow ||
                     position == privateSpaceEnterRow ||
-                    position == deleteLeemenAccountRow || position == privacyPolicyRow || position == termsRow ||
+                    position == privacyPolicyRow || position == termsRow ||
                     position == privacyModeRow ||
                     position == analyticsConsentRow;
         }
@@ -1365,9 +1373,6 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                     } else if (position == privacyModeRow) {
                         textCell.setTextAndValue(getString(R.string.LeemenPrivacyModeTitle),
                                 getString(org.telegram.messenger.leemen.LeemenAccount.isMaxPrivacy(currentAccount) ? R.string.LeemenMaxValueOn : R.string.LeemenMaxValueOff), true);
-                    } else if (position == deleteLeemenAccountRow) {
-                        textCell.setText(getString(R.string.LeemenDeleteAccountLabel), false);
-                        textCell.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
                     } else if (position == privacyPolicyRow) {
                         textCell.setText(getString(R.string.LeemenPrivacyPolicy), true);
                     } else if (position == termsRow) {
@@ -1569,7 +1574,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
             if (position == passportRow || position == lastSeenRow || position == phoneNumberRow ||
                     position == deleteAccountRow || position == webSessionsRow || position == groupsRow || position == paymentsClearRow ||
                     position == secretMapRow || position == contactsDeleteRow || position == botsBiometryRow ||
-                    position == deleteLeemenAccountRow || position == privacyPolicyRow || position == termsRow ||
+                    position == privacyPolicyRow || position == termsRow ||
                     position == privacyModeRow) {
                 return 0;
             } else if (position == privacyShadowRow || position == deleteAccountDetailRow || position == groupsDetailRow || position == sessionsDetailRow || position == secretDetailRow || position == botsDetailRow || position == contactsDetailRow || position == newChatsSectionRow || position == analyticsConsentDetailRow) {

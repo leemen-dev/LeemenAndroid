@@ -90,9 +90,6 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     private int switchPasswordShadowRow;
     private int switchPasswordRow;
     private int switchPasswordInfoRow;
-    private int deleteShadowRow;
-    private int deleteLeemenRow;
-    private int deleteTelegramRow;
     /** Accounts currently in the hide-list (shown as removable rows). */
     private final ArrayList<Integer> hiddenAccountsList = new ArrayList<>();
     /** Whether any OTHER activated account exists at all (gates the whole section). */
@@ -178,10 +175,6 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                 openAccountPicker();
             } else if (position == switchPasswordRow) {
                 onSwitchPasswordRowClick();
-            } else if (position == deleteLeemenRow) {
-                confirmDeleteLeemenAccount();
-            } else if (position == deleteTelegramRow) {
-                confirmDeleteTelegramAccount();
             } else if (position >= hiddenAccountsStartRow && position < hiddenAccountsEndRow) {
                 confirmRemoveAccount(hiddenAccountsList.get(position - hiddenAccountsStartRow));
             } else if (position >= chatsStartRow && position < chatsEndRow) {
@@ -342,47 +335,6 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         });
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         AlertDialog alert = builder.create();
-        alert.show();
-        alert.redPositive();
-    }
-
-    private void confirmDeleteLeemenAccount() {
-        if (getParentActivity() == null) {
-            return;
-        }
-        AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
-        b.setTitle(LocaleController.getString(R.string.DeleteLeemenAccount));
-        b.setMessage(LocaleController.getString(R.string.DeleteLeemenAccountConfirm));
-        b.setPositiveButton(LocaleController.getString(R.string.Delete), (d, w) -> {
-            AlertDialog progress = new AlertDialog(getParentActivity(), AlertDialog.ALERT_TYPE_SPINNER);
-            progress.setCanCancel(false);
-            progress.show();
-            // Variant B: server erasure → log out all Leemen clients → this device to a clean first-run.
-            org.telegram.messenger.leemen.LeemenAccount.deleteAndLogoutEverywhere(currentAccount, () -> {
-                try { progress.dismiss(); } catch (Exception ignore) {}
-            });
-        });
-        b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
-        AlertDialog alert = b.create();
-        alert.show();
-        alert.redPositive();
-    }
-
-    private void confirmDeleteTelegramAccount() {
-        if (getParentActivity() == null) {
-            return;
-        }
-        AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
-        b.setTitle(LocaleController.getString(R.string.DeleteTelegramAccount));
-        b.setMessage(LocaleController.getString(R.string.DeleteTelegramAccountConfirm));
-        b.setPositiveButton(LocaleController.getString(R.string.Continue), (d, w) -> {
-            try {
-                getParentActivity().startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse("https://my.telegram.org/auth?to=deactivate")));
-            } catch (Throwable ignore) {}
-        });
-        b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
-        AlertDialog alert = b.create();
         alert.show();
         alert.redPositive();
     }
@@ -687,9 +639,6 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             switchPasswordRow = -1;
             switchPasswordInfoRow = -1;
         }
-        deleteShadowRow = rowCount++;
-        deleteLeemenRow = rowCount++;
-        deleteTelegramRow = rowCount++;
     }
 
     private class ListAdapter extends RecyclerListView.SelectionAdapter {
@@ -892,12 +841,6 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                                 LocaleController.getString(R.string.HiddenAccountsSwitchPasswordTitle),
                                 LocaleController.getString(on ? R.string.PrivateSpacePinOn : R.string.PrivateSpacePinOff),
                                 false);
-                    } else if (position == deleteLeemenRow) {
-                        cell.setText(LocaleController.getString(R.string.DeleteLeemenAccount), true);
-                        cell.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
-                    } else if (position == deleteTelegramRow) {
-                        cell.setText(LocaleController.getString(R.string.DeleteTelegramAccount), false);
-                        cell.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
                     }
                     break;
                 }
@@ -935,9 +878,6 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             if (position == switchPasswordShadowRow) return VIEW_SHADOW;
             if (position == switchPasswordRow) return VIEW_VALUE;
             if (position == switchPasswordInfoRow) return VIEW_INFO;
-            if (position == deleteShadowRow) return VIEW_SHADOW;
-            if (position == deleteLeemenRow) return VIEW_VALUE;
-            if (position == deleteTelegramRow) return VIEW_VALUE;
             return VIEW_SHADOW;
         }
 
