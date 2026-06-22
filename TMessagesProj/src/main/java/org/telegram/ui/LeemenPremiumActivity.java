@@ -41,8 +41,7 @@ import java.util.HashMap;
 
 /**
  * Leemen Premium subscription screen — Telegram-Premium-style: premium-gradient hero, feature list,
- * plan cards, a gradient Subscribe button, and a "Redeem promo code" row. Sits above the bundled
- * Telegram Premium screen (link at the bottom).
+ * plan cards, a gradient Subscribe button, and a "Redeem promo code" row.
  *
  * Billing is local-only for now: Subscribe grants the entitlement via
  * {@link SecondSpaceController#activateLeemenPremiumLocally(int)}; a redeemed promo grants it via the
@@ -184,11 +183,6 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         TextView promoRow = linkRow(context, LocaleController.getString(R.string.LeemenPromoRow));
         promoRow.setOnClickListener(v -> showPromoDialog());
         content.addView(promoRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 50, 0, 12, 0, 0));
-
-        // --- bundled Telegram Premium link ---
-        TextView tgRow = linkRow(context, LocaleController.getString(R.string.LeemenPremiumTelegramRow));
-        tgRow.setOnClickListener(v -> presentFragment(new PremiumPreviewFragment("settings")));
-        content.addView(tgRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 50, 0, 12, 24, 0));
 
         root.addView(scrollView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP, 0, 0, 0, 72));
 
