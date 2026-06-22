@@ -1694,7 +1694,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         // Leemen: analytics signup funnel + gate the chat list until the first PS sync resolves, then bind.
         if (afterSignup) org.telegram.messenger.leemen.LeemenAnalytics.track("signup_completed");
         org.telegram.messenger.leemen.LeemenSync.markSyncPending(currentAccount);
-        org.telegram.messenger.leemen.LeemenIdentity.bindIfNeeded(currentAccount);
+        // Retry, not one-shot: if the bind/sync chain fails transiently right after login (e.g. server still
+        // settling a just-deleted identity), keep trying so the list isn't stuck fail-closed until a restart.
+        org.telegram.messenger.leemen.LeemenIdentity.bindWithRetry(currentAccount);
 
         needFinishActivity(afterSignup, res.setup_password_required, res.otherwise_relogin_days);
     }

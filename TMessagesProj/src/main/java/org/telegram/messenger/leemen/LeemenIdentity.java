@@ -36,6 +36,49 @@ public final class LeemenIdentity {
 
     private static final Set<Integer> inFlight = new HashSet<>();
 
+    // Post-login self-healing retry: the bind+key+sync chain can fail transiently right after a login (server
+    // still settling a just-deleted identity, username resolver not warm yet, key fetch hiccup). Without a
+    // retry the OFF-mode list stays fail-closed ("loading") until the next app launch re-runs bindAllActivated
+    // — which is exactly the "delete → relogin → only system chat until restart" symptom. Retry with backoff
+    // until the initial sync completes. The gate stays fail-closed throughout: nothing is revealed, we are only
+    // driving the legitimate bind to completion so no restart is needed.
+    private static final long[] RETRY_BACKOFF_MS = {2000, 4000, 8000, 16000, 30000};
+    private static final Runnable[] retryRunnable = new Runnable[UserConfig.MAX_ACCOUNT_COUNT];
+
+    /** Bind now and, if the initial sync doesn't complete, keep retrying with backoff (call at onAuthSuccess). */
+    public static void bindWithRetry(int account) {
+        if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return;
+        cancelRetry(account);
+        bindIfNeeded(account);
+        scheduleRetry(account, 0);
+    }
+
+    private static void scheduleRetry(final int account, final int attempt) {
+        if (attempt >= RETRY_BACKOFF_MS.length) return; // give up; next app launch/foreground retries via bindAllActivated
+        final Runnable r = () -> {
+            retryRunnable[account] = null;
+            if (!UserConfig.getInstance(account).isClientActivated()
+                    || LeemenAccount.isDisabled(account)
+                    || LeemenSync.hasInitialSyncCompleted(account)) {
+                return; // logged out / deleted / sync already landed — nothing more to do
+            }
+            if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: bind retry #" + (attempt + 1) + " account " + account);
+            bindIfNeeded(account);   // idempotent: binds, or (if bound) re-fetches the key
+            LeemenSync.syncAll();    // and (if bound+keyed) drives the sync that opens the gate
+            scheduleRetry(account, attempt + 1);
+        };
+        retryRunnable[account] = r;
+        AndroidUtilities.runOnUIThread(r, RETRY_BACKOFF_MS[attempt]);
+    }
+
+    private static void cancelRetry(int account) {
+        if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return;
+        if (retryRunnable[account] != null) {
+            AndroidUtilities.cancelRunOnUIThread(retryRunnable[account]);
+            retryRunnable[account] = null;
+        }
+    }
+
     /** App-start safety net: bind every activated account that isn't bound yet. */
     public static void bindAllActivated() {
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {

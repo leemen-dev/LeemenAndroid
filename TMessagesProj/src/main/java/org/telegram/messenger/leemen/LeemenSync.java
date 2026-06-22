@@ -86,6 +86,12 @@ public final class LeemenSync {
         return everSynced[account];
     }
 
+    /** True once this account has completed a conclusive initial sync on this install (the OFF-mode fail-closed
+     *  gate has opened). Used by the post-login bind retry to know when the chain is done. */
+    public static boolean hasInitialSyncCompleted(int account) {
+        return hasEverSynced(account);
+    }
+
     private static void markEverSynced(int account) {
         if (!inRange(account)) return;
         loginPending[account] = false; // the first conclusive sync supersedes the login-window force
