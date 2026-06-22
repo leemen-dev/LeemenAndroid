@@ -2446,6 +2446,13 @@
     <string name="PrivateSpaceEmptyOpenSettings">Open settings</string>
     <string name="PrivateSpaceOnboardingHideHint">Long-press any chat and choose “Hide chat” to make it disappear from your normal chat list.</string>
     <string name="PrivateSpaceOnboardingHidden">Chat hidden. It stays invisible outside Private Space.</string>
+    <string name="LeemenOnboardingSettingsHint">Set up your private space in Settings — add chats to hide, a PIN, and how you get in.</string>
+    <string name="LeemenTourHideChats">Add the chats you want to hide here. They disappear from your normal list.</string>
+    <string name="LeemenTourPin">Set a PIN so only you can open this space.</string>
+    <string name="LeemenTourEntry">Choose how you open the space — a secret tap sequence or PIN in search.</string>
+    <string name="LeemenTourHideButton">Hide the entry button for full deniability — open the space with your chosen method.</string>
+    <string name="LeemenTourNext">Next</string>
+    <string name="LeemenTourDone">Done</string>
     <string name="PrivateSpacePaywallTitle">Unlimited hidden chats</string>
     <string name="PrivateSpacePaywallSubtitle">You hid your first chat for free. Subscribe to hide as many chats as you want.</string>
     <string name="PrivateSpacePaywallFeature1Title">Hide as many as you want</string>

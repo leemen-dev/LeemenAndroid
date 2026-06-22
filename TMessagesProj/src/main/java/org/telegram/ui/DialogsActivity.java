@@ -8661,13 +8661,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     psToggleItem.setTextAndIcon(LocaleController.getString(R.string.PrivateSpaceHide), R.drawable.msg_stories_stealth);
                 }
                 psToggleItem.setMinimumWidth(160);
-                // First-run onboarding: draw the eye to the "Hide chat" action.
-                if (privateSpaceOnboardingActive && !isHidden) {
-                    int accent = getThemedColor(Theme.key_featuredStickers_addButton);
-                    psToggleItem.setTextColor(accent);
-                    psToggleItem.setIconColor(accent);
-                    psToggleItem.setSelectorColor(Theme.multAlpha(accent, .12f));
-                }
                 psToggleItem.setOnClickListener(e -> {
                     if (isHidden) {
                         ssc.removeFromSecondSpace(dialogId);
@@ -10476,7 +10469,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     LocaleController.getString(R.string.PrivateSpaceEmptyOpenSettings),
                     true,
                     false);
-            privateSpaceEmptyHintCell.setOnClickListener(v -> presentFragment(new SecondSpaceSettingsActivity()));
+            privateSpaceEmptyHintCell.setOnClickListener(v -> {
+                stopPrivateSpaceOnboarding();
+                // Convenience shortcut; the guided tour auto-starts on any entry while onboarding is unfinished.
+                presentFragment(new SecondSpaceSettingsActivity());
+            });
             topPanelLayout.addView(privateSpaceEmptyHintCell);
         }
         if (privateSpaceEmptyHintCell != null) {
@@ -10589,15 +10586,20 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (privateSpaceOnboardingActive || getParentActivity() == null || fragmentView == null) {
             return;
         }
-        if (viewPages == null || viewPages.length == 0 || viewPages[0] == null || viewPages[0].listView == null) {
+        // Lead the user along the real path: point at the Settings bottom tab. The settings
+        // walkthrough (incl. hiding chats) happens inside the settings tour, not here.
+        if (mainTabsActivityController != null && mainTabsActivityController.showPrivateSpaceSettingsHint()) {
+            privateSpaceOnboardingActive = true;
+            org.telegram.messenger.leemen.LeemenAnalytics.track("onboarding_step_view", java.util.Collections.singletonMap("step", "settings_intro"));
             return;
         }
-        View anchor = findFirstDialogCell(viewPages[0].listView);
-        if (anchor == null) {
-            return; // no chat to point at (e.g. empty account) — skip gracefully
+        // Fallback (Settings tab not on screen, e.g. Calls tab shown): point at the in-list hint cell.
+        View anchor = privateSpaceEmptyHintCell;
+        if (anchor == null || anchor.getVisibility() != View.VISIBLE || anchor.getHeight() <= 0) {
+            return; // the settings hint cell isn't laid out yet — skip gracefully
         }
         privateSpaceOnboardingActive = true;
-        org.telegram.messenger.leemen.LeemenAnalytics.track("onboarding_step_view", java.util.Collections.singletonMap("step", "first_hide"));
+        org.telegram.messenger.leemen.LeemenAnalytics.track("onboarding_step_view", java.util.Collections.singletonMap("step", "settings_intro"));
 
         final int[] cellLoc = new int[2];
         final int[] rootLoc = new int[2];
@@ -10609,7 +10611,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         org.telegram.ui.Stories.recorder.HintView2 hint =
                 new org.telegram.ui.Stories.recorder.HintView2(getParentActivity(), org.telegram.ui.Stories.recorder.HintView2.DIRECTION_TOP);
         hint.setMultilineText(true);
-        hint.setText(LocaleController.getString(R.string.PrivateSpaceOnboardingHideHint));
+        hint.setText(LocaleController.getString(R.string.LeemenOnboardingSettingsHint));
         hint.setTextAlign(android.text.Layout.Alignment.ALIGN_CENTER);
         hint.setMaxWidth(240);
         hint.setRounding(12);
@@ -10623,9 +10625,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     private void stopPrivateSpaceOnboarding() {
         if (privateSpaceOnboardingActive && !SecondSpaceController.getInstance(currentAccount).isOnboardingDone()) {
-            org.telegram.messenger.leemen.LeemenAnalytics.track("onboarding_abandoned", java.util.Collections.singletonMap("last_step", "first_hide"));
+            org.telegram.messenger.leemen.LeemenAnalytics.track("onboarding_abandoned", java.util.Collections.singletonMap("last_step", "settings_intro"));
         }
         privateSpaceOnboardingActive = false;
+        if (mainTabsActivityController != null) {
+            mainTabsActivityController.hidePrivateSpaceSettingsHint();
+        }
         final org.telegram.ui.Stories.recorder.HintView2 hint = privateSpaceOnboardingHint;
         privateSpaceOnboardingHint = null;
         if (hint != null) {
@@ -10636,19 +10641,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 }
             }, 400);
         }
-    }
-
-    private View findFirstDialogCell(ViewGroup listView) {
-        if (listView == null) {
-            return null;
-        }
-        for (int i = 0; i < listView.getChildCount(); i++) {
-            View child = listView.getChildAt(i);
-            if (child instanceof DialogCell && child.getVisibility() == View.VISIBLE && child.getHeight() > 0) {
-                return child;
-            }
-        }
-        return null;
     }
 
     private void showPrivateSpacePaywall() {

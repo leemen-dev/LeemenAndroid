@@ -1391,10 +1391,15 @@ public class SecondSpaceController extends BaseController implements Notificatio
     }
 
     public void markOnboardingDone() {
+        markOnboardingDone("first_hide");
+    }
+
+    /** @param lastStep how onboarding completed (e.g. "settings_tour" or "first_hide"), for analytics. */
+    public void markOnboardingDone(String lastStep) {
         boolean was = isOnboardingDone();
         getMessagesController().getMainSettings().edit().putBoolean(PREF_ONBOARDING_DONE, true).apply();
         if (!was) {
-            org.telegram.messenger.leemen.LeemenAnalytics.track("onboarding_completed", java.util.Collections.singletonMap("last_step", "first_hide"));
+            org.telegram.messenger.leemen.LeemenAnalytics.track("onboarding_completed", java.util.Collections.singletonMap("last_step", lastStep));
         }
     }
 

@@ -281,6 +281,13 @@
     <string name="PrivateSpaceUnhide">Показать чат</string>
     <string name="PrivateSpaceOnboardingHideHint">Зажмите любой чат и выберите «Скрыть чат», чтобы он пропал из обычного списка.</string>
     <string name="PrivateSpaceOnboardingHidden">Чат скрыт. Вне скрытого пространства его не видно.</string>
+    <string name="LeemenOnboardingSettingsHint">Настройте своё пространство в Настройках — добавьте чаты для скрытия, PIN и способ входа.</string>
+    <string name="LeemenTourHideChats">Добавляйте сюда чаты, которые хотите скрыть. Они исчезнут из обычного списка.</string>
+    <string name="LeemenTourPin">Задайте PIN, чтобы пространство могли открыть только вы.</string>
+    <string name="LeemenTourEntry">Выберите способ входа — секретная последовательность нажатий или PIN в поиске.</string>
+    <string name="LeemenTourHideButton">Скройте кнопку входа для полной незаметности — открывайте пространство выбранным способом.</string>
+    <string name="LeemenTourNext">Далее</string>
+    <string name="LeemenTourDone">Готово</string>
     <string name="PrivateSpacePaywallTitle">Безлимит скрытых чатов</string>
     <string name="PrivateSpacePaywallSubtitle">Первый чат вы скрыли бесплатно. Оформите подписку, чтобы прятать сколько угодно чатов.</string>
     <string name="PrivateSpacePaywallFeature1Title">Прячьте сколько угодно</string>

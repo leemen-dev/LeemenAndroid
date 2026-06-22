@@ -611,6 +611,42 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         }
     }
 
+    @Override
+    public void onBecomeFullyVisible() {
+        super.onBecomeFullyVisible();
+        // Onboarding: when this page becomes visible inside the private space, lead the eye to the
+        // "Private Space Settings" row so the user learns where it lives. No-op once onboarding is done.
+        if (listView != null) {
+            listView.post(this::maybeHighlightPrivateSpaceRow);
+        }
+    }
+
+    private void maybeHighlightPrivateSpaceRow() {
+        if (listView == null || listView.adapter == null) {
+            return;
+        }
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        if (!ssc.isActive() || ssc.isOnboardingDone()) {
+            return;
+        }
+        int position = -1;
+        for (int i = 0; i < listView.adapter.getItemCount(); i++) {
+            UItem item = listView.adapter.getItem(i);
+            if (item != null && item.id == 100) {
+                position = i;
+                break;
+            }
+        }
+        if (position < 0) {
+            return;
+        }
+        final int target = position;
+        listView.highlightRow(() -> {
+            listView.layoutManager.scrollToPositionWithOffset(target, AndroidUtilities.dp(80));
+            return target;
+        });
+    }
+
     private ArrayList<Integer> accountNumbers = new ArrayList<>();
     private void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
         if (searchItem.isSearchFieldVisible2()) {

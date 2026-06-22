@@ -240,6 +240,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         if (accountSwitchHint != null) {
             accountSwitchHint.hide();
         }
+        hidePrivateSpaceSettingsHint();
     }
 
     @Override
@@ -629,6 +630,9 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     public GlassTabView[] tabs;
 
     public void selectTab(int position, boolean animated) {
+        if (position == POSITION_CALLS_OR_SETTINGS) {
+            hidePrivateSpaceSettingsHint();
+        }
         for (int a = 0; a < tabs.length; a++) {
             GlassTabView tab = tabs[a];
             tab.setSelected(indexToPosition(a) == position, animated);
@@ -968,6 +972,16 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         public void setTabsVisible(boolean visible) {
             animatorTabsVisible.setValue(visible, true);
         }
+
+        @Override
+        public boolean showPrivateSpaceSettingsHint() {
+            return MainTabsActivity.this.showPrivateSpaceSettingsHint();
+        }
+
+        @Override
+        public void hidePrivateSpaceSettingsHint() {
+            MainTabsActivity.this.hidePrivateSpaceSettingsHint();
+        }
     }
 
 
@@ -1044,6 +1058,47 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         }
 
         accountSwitchHintShown = true;
+    }
+
+
+    private HintView2 privateSpaceSettingsHint;
+
+    /** Onboarding: point a sticky hint at the Settings bottom tab so the user learns where PS settings live.
+     *  Returns false (shows nothing) when the Settings tab isn't on screen (Calls tab occupies its slot). */
+    public boolean showPrivateSpaceSettingsHint() {
+        if (getContext() == null || tabs == null || tabsView == null || contentView == null) {
+            return false;
+        }
+        if (getUserConfig().showCallsTab) {
+            return false;
+        }
+        final View v = tabs[INDEX_SETTINGS];
+        if (v == null || v.getVisibility() != View.VISIBLE) {
+            return false;
+        }
+        hidePrivateSpaceSettingsHint();
+        final float translate = (contentView.getWidth() - ((tabsView.getX() + v.getX()) + v.getWidth()) + v.getWidth() / 2f) / AndroidUtilities.density;
+        final HintView2 hint = new HintView2(getContext(), HintView2.DIRECTION_BOTTOM);
+        hint.setTranslationY(-navigationBarHeight + dp(4));
+        hint.setPadding(dp(7.33f), 0, dp(7.33f), 0);
+        hint.setMultilineText(true);
+        hint.setMaxWidthPx(dp(260));
+        hint.setText(getString(R.string.LeemenOnboardingSettingsHint));
+        hint.setJoint(1, -translate + 7.33f);
+        contentView.addView(hint, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 150, Gravity.BOTTOM | Gravity.FILL_HORIZONTAL, 0, 0, 0, DialogsActivity.MAIN_TABS_HEIGHT_WITH_MARGINS));
+        hint.setOnHiddenListener(() -> AndroidUtilities.removeFromParent(hint));
+        hint.setDuration(-1); // sticky: dismissed when the user taps Settings or onboarding stops
+        hint.show();
+        privateSpaceSettingsHint = hint;
+        return true;
+    }
+
+    public void hidePrivateSpaceSettingsHint() {
+        final HintView2 hint = privateSpaceSettingsHint;
+        privateSpaceSettingsHint = null;
+        if (hint != null) {
+            hint.hide();
+        }
     }
 
 

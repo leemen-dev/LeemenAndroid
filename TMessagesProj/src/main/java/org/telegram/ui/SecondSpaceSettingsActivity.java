@@ -2,15 +2,20 @@ package org.telegram.ui;
 
 import android.content.Context;
 import android.os.Bundle;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.PhoneFormat.PhoneFormat;
+import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.LocaleController;
@@ -20,6 +25,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
+import org.telegram.messenger.leemen.LeemenAnalytics;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -35,6 +41,7 @@ import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.RecyclerListView;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Set;
 
 public class SecondSpaceSettingsActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
@@ -90,6 +97,13 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     private final ArrayList<Integer> hiddenAccountsList = new ArrayList<>();
     /** Whether any OTHER activated account exists at all (gates the whole section). */
     private boolean hasOtherAccounts;
+
+    /** First-run guided tour: walks the user through the key settings rows with a "Next" button. */
+    private boolean onboardingTour;
+    private int tourStep;
+    private View tourCard;
+    private TextView tourText;
+    private TextView tourNext;
 
     @Override
     public boolean onFragmentCreate() {
@@ -189,7 +203,102 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         frameLayout.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
         reloadHiddenIds();
+        // Auto-start the guided tour on ANY entry into these settings while onboarding is unfinished,
+        // not only when launched via the dedicated shortcut.
+        if (onboardingTour || !SecondSpaceController.getInstance(currentAccount).isOnboardingDone()) {
+            onboardingTour = true;
+            listView.post(this::startOnboardingTour);
+        }
         return fragmentView;
+    }
+
+    /** Enables the first-run guided tour when this screen is opened from onboarding. */
+    public SecondSpaceSettingsActivity setOnboardingTour(boolean v) {
+        this.onboardingTour = v;
+        return this;
+    }
+
+    private void startOnboardingTour() {
+        if (!onboardingTour || getParentActivity() == null || !(fragmentView instanceof FrameLayout)) {
+            return;
+        }
+        LeemenAnalytics.track("onboarding_step_view", Collections.singletonMap("step", "settings_tour"));
+        Context context = getParentActivity();
+
+        LinearLayout card = new LinearLayout(context);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+        card.setElevation(AndroidUtilities.dp(8));
+        // Bottom padding includes the system nav-bar inset so the card clears the gesture/nav area.
+        card.setPadding(AndroidUtilities.dp(20), AndroidUtilities.dp(14), AndroidUtilities.dp(12),
+                AndroidUtilities.dp(14) + AndroidUtilities.navigationBarHeight);
+
+        TextView text = new TextView(context);
+        text.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+        text.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+        text.setLineSpacing(AndroidUtilities.dp(2), 1.0f);
+        card.addView(text, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
+
+        TextView next = new TextView(context);
+        next.setTextColor(Theme.getColor(Theme.key_featuredStickers_addButton));
+        next.setTypeface(AndroidUtilities.bold());
+        next.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+        next.setGravity(Gravity.CENTER);
+        next.setBackground(Theme.getSelectorDrawable(false));
+        next.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(8), AndroidUtilities.dp(16), AndroidUtilities.dp(8));
+        next.setOnClickListener(v -> {
+            tourStep++;
+            showTourStep();
+        });
+        card.addView(next, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
+
+        ((FrameLayout) fragmentView).addView(card,
+                LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM));
+        tourCard = card;
+        tourText = text;
+        tourNext = next;
+        tourStep = 0;
+        showTourStep();
+    }
+
+    private void showTourStep() {
+        if (tourCard == null) {
+            return;
+        }
+        final int row;
+        final int textRes;
+        switch (tourStep) {
+            case 0: row = addChatRow; textRes = R.string.LeemenTourHideChats; break;
+            case 1: row = passwordRow; textRes = R.string.LeemenTourPin; break;
+            case 2: row = sequenceRow; textRes = R.string.LeemenTourEntry; break;
+            case 3: row = switchRow; textRes = R.string.LeemenTourHideButton; break;
+            default: finishTour(); return;
+        }
+        tourText.setText(LocaleController.getString(textRes));
+        tourNext.setText(LocaleController.getString(tourStep >= 3 ? R.string.LeemenTourDone : R.string.LeemenTourNext));
+        final int target = row;
+        // Spotlight the row; the highlight callback scrolls it into view. Large removeAfter so it
+        // persists until the next step re-highlights (moving the selector) or the tour finishes.
+        listView.highlightRow(() -> {
+            ((LinearLayoutManager) listView.getLayoutManager()).scrollToPositionWithOffset(target, AndroidUtilities.dp(80));
+            return target;
+        }, 30000);
+    }
+
+    private void finishTour() {
+        onboardingTour = false;
+        if (tourCard != null && tourCard.getParent() instanceof ViewGroup) {
+            ((ViewGroup) tourCard.getParent()).removeView(tourCard);
+        }
+        tourCard = null;
+        tourText = null;
+        tourNext = null;
+        if (listView != null) {
+            listView.removeHighlightRow();
+        }
+        // Marks onboarding done (also fires onboarding_completed analytics).
+        SecondSpaceController.getInstance(currentAccount).markOnboardingDone("settings_tour");
     }
 
     private void openChatPicker() {
