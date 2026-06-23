@@ -552,6 +552,36 @@ public final class LeemenSync {
             st.content.private_space_settings.allow_screenshots = new LeemenBlob.BoolVal(allowSs, lam(st, lam), dev);
         }
 
+        // PS PIN (§7.2): Argon2id hash+salt register. Mirror pin_timeout — write a fresh register iff the
+        // controller's PIN differs from the blob. State "" (never enrolled) leaves the blob untouched so a
+        // PIN-less device can never clobber a PIN synced from elsewhere; "none" (explicit removal) tombstones it.
+        String pinState = c.getPsPinState();
+        LeemenBlob.PsPin curPin = st.content.ps_pin;
+        if (LeemenBlob.SET.equals(pinState)) {
+            String ph = c.getPsPinHashB64();
+            String psalt = c.getPsPinSaltB64();
+            boolean differs = curPin == null || !LeemenBlob.SET.equals(curPin.s)
+                    || !ph.equals(curPin.hash) || !psalt.equals(curPin.salt);
+            if (differs) {
+                LeemenBlob.PsPin p = new LeemenBlob.PsPin();
+                p.s = LeemenBlob.SET;
+                p.hash = ph;
+                p.salt = psalt;
+                p.kdf = "argon2id";
+                p.c = lam(st, lam);
+                p.d = dev;
+                st.content.ps_pin = p;
+            }
+        } else if (LeemenBlob.NONE.equals(pinState)) {
+            if (curPin != null && LeemenBlob.SET.equals(curPin.s)) {
+                LeemenBlob.PsPin p = new LeemenBlob.PsPin();
+                p.s = LeemenBlob.NONE;
+                p.c = lam(st, lam);
+                p.d = dev;
+                st.content.ps_pin = p;
+            }
+        }
+
         // Tier-P (platform-specific) — synced ONLY between same-platform devices. We own only the "android"
         // sub-object; mergePlatform preserves other platforms' sections. Write a fresh register (lamport "c")
         // iff the local tab gesture differs from what the blob already holds for android.
@@ -612,6 +642,17 @@ public final class LeemenSync {
                 ? (int) st.content.private_space_settings.pin_timeout_minutes.v : null;
         Boolean allowSs = st.content.private_space_settings.allow_screenshots != null
                 ? st.content.private_space_settings.allow_screenshots.v : null;
+
+        // PS PIN (§7.2): apply the synced register to the controller (set → store the Argon2id hash+salt;
+        // none → clear). Absent ps_pin leaves the local PIN untouched. Self-guarded against back-push.
+        if (st.content.ps_pin != null) {
+            LeemenBlob.PsPin p = st.content.ps_pin;
+            if (LeemenBlob.SET.equals(p.s)) {
+                c.applySyncedPin(LeemenBlob.SET, p.hash, p.salt);
+            } else if (LeemenBlob.NONE.equals(p.s)) {
+                c.applySyncedPin(LeemenBlob.NONE, null, null);
+            }
+        }
 
         // Tier-P: our own platform's synced tab gesture (same-platform only) is applied inside applySyncedState
         // under its single applyingRemoteSync guard (no spurious back-push).

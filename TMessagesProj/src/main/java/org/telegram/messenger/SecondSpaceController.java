@@ -28,7 +28,14 @@ public class SecondSpaceController extends BaseController implements Notificatio
      *  drafts are never listed here and are kept. Persisted so a kill mid-PS is recovered on next launch. */
     private static final String PREF_PS_DRAFTS = "second_space_ps_drafts";
     private static final String PREF_PRIVATE_SEARCHES = "second_space_private_searches";
-    private static final String PREF_PASSWORD_HASH = "second_space_password_hash";
+    private static final String PREF_PASSWORD_HASH = "second_space_password_hash"; // legacy (pre-§7.2); ignored
+    // Private-space entry PIN, account-level + synced (§7.2): Argon2id(hash, salt) stored base64.
+    private static final String PREF_PS_PIN_STATE = "second_space_ps_pin_state";
+    private static final String PREF_PS_PIN_HASH = "second_space_ps_pin_hash";
+    private static final String PREF_PS_PIN_SALT = "second_space_ps_pin_salt";
+    /** {@link #psPinState} values; the strings match {@code LeemenBlob.SET}/{@code NONE} on purpose. */
+    private static final String PIN_SET = "set";
+    private static final String PIN_NONE = "none";
     private static final String PREF_TAB_SEQUENCE = "second_space_tab_sequence";
     private static final String PREF_PIN_IN_SEARCH = "second_space_pin_in_search";
     private static final String PREF_SHORTCUT_TESTED = "second_space_shortcut_tested";
@@ -126,7 +133,11 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private volatile boolean warmupGateActive = false; // read cross-thread from LeemenSync.isInitialSyncPending
     private boolean initialWarmupDone = false;
     private final Set<Long> privateSearchDialogs = new HashSet<>();
-    private String passwordHash;
+    /** Private-space entry PIN — ACCOUNT-level, synced via the content blob's ps_pin register (§7.2).
+     *  Stored as Argon2id(pin, salt) (base64). state ∈ {"set","none",""}; "" = never enrolled (not synced). */
+    private String psPinState = "";
+    private String psPinHash = "";
+    private String psPinSalt = "";
     private final java.util.List<TabStep> tabSequence = new java.util.ArrayList<>();
     private boolean pinInSearchEnabled;
     private boolean shortcutTested;
@@ -137,7 +148,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private int activeMode = MODE_OFF;
     /** Single switch password owned by THIS account when it acts as the main account:
      *  gates switching into any account this account hides ({@link #hiddenAccounts}).
-     *  Empty = no password. Independent of the Private Space {@link #passwordHash}. */
+     *  Empty = no password. Independent of the Private Space PIN ({@link #psPinState}). */
     private String switchPasswordHash;
     /** Hidden-other-accounts list — accounts whose tray notifications / switcher
      *  presence are suppressed while private space is not active (i.e. in OFF mode). */
@@ -181,7 +192,19 @@ public class SecondSpaceController extends BaseController implements Notificatio
                 }
             }
         }
-        passwordHash = prefs.getString(PREF_PASSWORD_HASH, "");
+        psPinState = prefs.getString(PREF_PS_PIN_STATE, "");
+        psPinHash = prefs.getString(PREF_PS_PIN_HASH, "");
+        psPinSalt = prefs.getString(PREF_PS_PIN_SALT, "");
+        // Recovery: a 'set' PIN whose stored material is corrupt/undecodable can never verify — a hard
+        // lockout, since both entry AND removal require a successful verify. Drop it to "never enrolled"
+        // (NOT "none", which the next reconcile would turn into a tombstone that wipes the PIN on every
+        // device). State "" doesn't sync, so the good PIN re-projects from the blob on the next sync.
+        if (PIN_SET.equals(psPinState) && !isWellFormedPinMaterial(psPinHash, psPinSalt)) {
+            psPinState = "";
+            psPinHash = "";
+            psPinSalt = "";
+            prefs.edit().putString(PREF_PS_PIN_STATE, "").remove(PREF_PS_PIN_HASH).remove(PREF_PS_PIN_SALT).apply();
+        }
         loadTabSequence(prefs.getString(PREF_TAB_SEQUENCE, ""));
         pinInSearchEnabled = prefs.getBoolean(PREF_PIN_IN_SEARCH, false);
         shortcutTested = prefs.getBoolean(PREF_SHORTCUT_TESTED, false);
@@ -659,13 +682,21 @@ public class SecondSpaceController extends BaseController implements Notificatio
     // --- Password (PIN) ---
 
     public boolean hasPassword() {
-        return !TextUtils.isEmpty(passwordHash);
+        return PIN_SET.equals(psPinState);
     }
 
     public boolean verifyPassword(String pin) {
+        if (!PIN_SET.equals(psPinState)) return true; // no PIN set → nothing to verify against
         if (pin == null) return false;
-        if (TextUtils.isEmpty(passwordHash)) return true;
-        return hashPassword(pin).equals(passwordHash);
+        byte[] salt = b64decode(psPinSalt);
+        byte[] expected = b64decode(psPinHash);
+        if (salt == null || expected == null) return false;
+        byte[] pinBytes = pin.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] got = org.telegram.messenger.leemen.LeemenCrypto.argon2id(pinBytes, salt);
+        java.util.Arrays.fill(pinBytes, (byte) 0);
+        boolean ok = got != null && java.security.MessageDigest.isEqual(got, expected);
+        if (got != null) java.util.Arrays.fill(got, (byte) 0);
+        return ok;
     }
 
     public void setPassword(String pin) {
@@ -673,17 +704,102 @@ public class SecondSpaceController extends BaseController implements Notificatio
     }
 
     public boolean hasRealPassword() {
-        return !TextUtils.isEmpty(passwordHash);
+        return PIN_SET.equals(psPinState);
     }
 
     public void setRealPassword(String pin) {
-        String newHash = TextUtils.isEmpty(pin) ? "" : hashPassword(pin);
-        boolean changed = !newHash.equals(passwordHash);
-        passwordHash = newHash;
-        getMessagesController().getMainSettings().edit().putString(PREF_PASSWORD_HASH, passwordHash).apply();
+        boolean had = PIN_SET.equals(psPinState);
+        if (TextUtils.isEmpty(pin)) {
+            psPinState = PIN_NONE;
+            psPinHash = "";
+            psPinSalt = "";
+            persistPsPin();
+            clearPinVerified();
+            if (had) clearShortcutTested();
+            notifyLeemenSync();
+            return;
+        }
+        byte[] pinBytes = pin.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] salt = org.telegram.messenger.leemen.LeemenCrypto.randomSalt();
+        byte[] hash = org.telegram.messenger.leemen.LeemenCrypto.argon2id(pinBytes, salt);
+        java.util.Arrays.fill(pinBytes, (byte) 0);
+        if (hash == null) {
+            return; // crypto unavailable — keep the existing PIN rather than silently dropping it
+        }
+        String newHash = b64(hash);
+        String newSalt = b64(salt);
+        java.util.Arrays.fill(hash, (byte) 0);
+        java.util.Arrays.fill(salt, (byte) 0);
+        boolean changed = !had || !newHash.equals(psPinHash);
+        psPinState = PIN_SET;
+        psPinHash = newHash;
+        psPinSalt = newSalt;
+        persistPsPin();
         clearPinVerified();
-        if (changed) {
-            clearShortcutTested();
+        if (changed) clearShortcutTested();
+        notifyLeemenSync();
+    }
+
+    /** Apply a PS-PIN register projected from a synced blob (§7.2). Guarded so it doesn't echo back as a
+     *  push. A WELL-FORMED {@code "set"} (32-byte hash, 16-byte salt) stores the synced material; an
+     *  explicit {@code "none"} clears the PIN. A MALFORMED {@code "set"} (torn/partial blob) is IGNORED —
+     *  we must NOT collapse it to "none", or the next reconcile would tombstone the PIN on every device. */
+    public void applySyncedPin(String state, String hashB64, String saltB64) {
+        boolean wellFormedSet = PIN_SET.equals(state) && isWellFormedPinMaterial(hashB64, saltB64);
+        if (!wellFormedSet && !PIN_NONE.equals(state)) {
+            return; // malformed 'set' or unknown state → leave the local PIN untouched
+        }
+        applyingRemoteSync = true;
+        try {
+            if (wellFormedSet) {
+                psPinState = PIN_SET;
+                psPinHash = hashB64;
+                psPinSalt = saltB64;
+            } else {
+                psPinState = PIN_NONE;
+                psPinHash = "";
+                psPinSalt = "";
+            }
+            persistPsPin();
+            clearPinVerified();
+        } finally {
+            applyingRemoteSync = false;
+        }
+    }
+
+    /** True iff the base64 hash/salt decode to the exact Argon2id lengths (32 / 16). Keeps malformed
+     *  material out of the persisted 'set' state, which would otherwise be unverifiable (a hard lockout). */
+    private static boolean isWellFormedPinMaterial(String hashB64, String saltB64) {
+        byte[] h = b64decode(hashB64);
+        byte[] s = b64decode(saltB64);
+        return h != null && h.length == org.telegram.messenger.leemen.LeemenCrypto.PIN_HASH_BYTES
+                && s != null && s.length == org.telegram.messenger.leemen.LeemenCrypto.SALT_BYTES;
+    }
+
+    /** PS-PIN register for sync reconcile. State {@code ""} means never enrolled — callers must NOT push
+     *  it, so a device that never set a PIN can't clobber one synced from elsewhere. */
+    public String getPsPinState() { return psPinState; }
+    public String getPsPinHashB64() { return psPinHash; }
+    public String getPsPinSaltB64() { return psPinSalt; }
+
+    private void persistPsPin() {
+        getMessagesController().getMainSettings().edit()
+                .putString(PREF_PS_PIN_STATE, psPinState)
+                .putString(PREF_PS_PIN_HASH, psPinHash)
+                .putString(PREF_PS_PIN_SALT, psPinSalt)
+                .apply();
+    }
+
+    private static String b64(byte[] b) {
+        return b == null ? "" : android.util.Base64.encodeToString(b, android.util.Base64.NO_WRAP);
+    }
+
+    private static byte[] b64decode(String s) {
+        if (TextUtils.isEmpty(s)) return null;
+        try {
+            return android.util.Base64.decode(s, android.util.Base64.NO_WRAP);
+        } catch (IllegalArgumentException e) {
+            return null;
         }
     }
 
@@ -1121,7 +1237,9 @@ public class SecondSpaceController extends BaseController implements Notificatio
             privateSearchDialogs.clear();
             hiddenAccounts.clear();
             tabSequence.clear();
-            passwordHash = "";
+            psPinState = "";
+            psPinHash = "";
+            psPinSalt = "";
             switchPasswordHash = "";
             pinInSearchEnabled = false;
             shortcutTested = false;
