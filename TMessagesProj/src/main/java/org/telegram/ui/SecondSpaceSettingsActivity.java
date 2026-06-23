@@ -335,7 +335,7 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         });
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         AlertDialog alert = builder.create();
-        alert.show();
+        showDialog(alert);
         alert.redPositive();
     }
 
@@ -359,7 +359,7 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             });
             b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
             AlertDialog alert = b.create();
-            alert.show();
+            showDialog(alert);
             alert.redPositive();
         } else {
             boolean wasVisible = ssc.isEntryButtonVisible();
@@ -409,7 +409,7 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             if (adapter != null) adapter.notifyDataSetChanged();
         });
         b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
-        b.show();
+        showDialog(b.create());
     }
 
     private void onPinInSearchSwitchClick(TextCheckCell cell) {
@@ -444,11 +444,11 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             int msgRes = !ssc.hasConfiguredShortcut()
                     ? R.string.PrivateSpaceShowEntryButtonBlockedNoShortcut
                     : R.string.PrivateSpaceShowEntryButtonBlockedUntested;
-            new AlertDialog.Builder(getParentActivity())
+            showDialog(new AlertDialog.Builder(getParentActivity())
                     .setTitle(LocaleController.getString(R.string.PrivateSpaceTitle))
                     .setMessage(LocaleController.getString(msgRes))
                     .setPositiveButton(LocaleController.getString(R.string.OK), null)
-                    .show();
+                    .create());
         }
     }
 
@@ -500,11 +500,11 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             addable.add(a);
         }
         if (addable.isEmpty()) {
-            new AlertDialog.Builder(getParentActivity())
+            showDialog(new AlertDialog.Builder(getParentActivity())
                     .setTitle(LocaleController.getString(R.string.HiddenAccountsAddAccount))
                     .setMessage(LocaleController.getString(R.string.HiddenAccountsNoneToAdd))
                     .setPositiveButton(LocaleController.getString(R.string.OK), null)
-                    .show();
+                    .create());
             return;
         }
         CharSequence[] names = new CharSequence[addable.size()];
@@ -520,7 +520,7 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             if (adapter != null) adapter.notifyDataSetChanged();
         });
         b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
-        b.show();
+        showDialog(b.create());
     }
 
     private void confirmRemoveAccount(int account) {
@@ -536,7 +536,7 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         });
         b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         AlertDialog alert = b.create();
-        alert.show();
+        showDialog(alert);
         alert.redPositive();
     }
 
@@ -560,7 +560,7 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             });
             b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
             AlertDialog alert = b.create();
-            alert.show();
+            showDialog(alert);
             alert.redPositive();
         } else {
             PrivateSpacePinDialog.showSetSwitchPassword(getParentActivity(), currentAccount, () -> {

@@ -156,7 +156,7 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
         b.setPositiveButton(LocaleController.getString(R.string.Discard), (d, w) -> finishFragment());
         b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         AlertDialog alert = b.create();
-        alert.show();
+        showDialog(alert);
         alert.redPositive();
     }
 
@@ -167,7 +167,7 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
             b.setTitle(LocaleController.getString(R.string.PrivateSpaceSequenceTitle));
             b.setMessage(LocaleController.getString(R.string.PrivateSpaceSequenceTooShort));
             b.setPositiveButton(LocaleController.getString(R.string.OK), null);
-            b.show();
+            showDialog(b.create());
             return;
         }
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
@@ -188,7 +188,7 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
                     finishFragment();
                 }
             });
-            b.show();
+            showDialog(b.create());
             return;
         }
         finishFragment();
@@ -311,7 +311,7 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
         tabPicker.setView(container);
         tabPicker.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         alertRef[0] = tabPicker.create();
-        alertRef[0].show();
+        showDialog(alertRef[0]);
     }
 
     private void showActionPicker(int chosenTab) {
@@ -328,7 +328,7 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
             if (adapter != null) adapter.notifyDataSetChanged();
         });
         actionPicker.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
-        actionPicker.show();
+        showDialog(actionPicker.create());
     }
 
     private void showRemoveStepDialog(int stepIndex) {
@@ -345,7 +345,7 @@ public class PrivateSpaceTabSequenceActivity extends BaseFragment {
         });
         b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         AlertDialog alert = b.create();
-        alert.show();
+        showDialog(alert);
         alert.redPositive();
     }
 

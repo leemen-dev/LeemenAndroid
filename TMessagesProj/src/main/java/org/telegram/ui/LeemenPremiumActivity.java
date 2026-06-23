@@ -380,7 +380,7 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         }
         AlertDialog progress = new AlertDialog(getParentActivity(), AlertDialog.ALERT_TYPE_SPINNER);
         progress.setCanCancel(false);
-        progress.show();
+        showDialog(progress);
         LeemenPromo.redeem(currentAccount, code, (ok, entId, kind, expiresAt, reason) -> {
             try { progress.dismiss(); } catch (Exception ignore) {}
             if (getParentActivity() == null || fragmentView == null) {
@@ -492,6 +492,6 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         b.setMessage(LocaleController.getString(R.string.PrivateSpaceOverLimitMessage));
         b.setPositiveButton(LocaleController.getString(R.string.LeemenPremiumRenew), (d, w) -> fragment.presentFragment(new LeemenPremiumActivity("limit")));
         b.setNegativeButton(LocaleController.getString(R.string.PrivateSpaceOverLimitRemove), (d, w) -> fragment.presentFragment(new SecondSpaceSettingsActivity()));
-        b.show();
+        fragment.showDialog(b.create());
     }
 }

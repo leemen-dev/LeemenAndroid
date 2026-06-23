@@ -136,7 +136,7 @@ public class LeemenPrivacyModeActivity extends BaseFragment {
             });
         });
         b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
-        b.show();
+        showDialog(b.create());
     }
 
     private void askNewPassphrase(int titleRes, OnText onOk) {
@@ -156,7 +156,7 @@ public class LeemenPrivacyModeActivity extends BaseFragment {
         b.setPositiveButton(LocaleController.getString(R.string.OK), null);
         b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         AlertDialog dialog = b.create();
-        dialog.show();
+        showDialog(dialog);
         View pos = dialog.getButton(DialogInterface.BUTTON_POSITIVE);
         if (pos != null) {
             pos.setOnClickListener(v -> {
@@ -199,7 +199,7 @@ public class LeemenPrivacyModeActivity extends BaseFragment {
         b.setPositiveButton(LocaleController.getString(R.string.LeemenRecoverySaved), (d, w) -> { if (onDone != null) onDone.run(); });
         AlertDialog dialog = b.create();
         dialog.setCanceledOnTouchOutside(false);
-        dialog.show();
+        showDialog(dialog);
     }
 
     // --- new-device unwrap prompt (triggered by leemenMaxKeyNeeded) ---
