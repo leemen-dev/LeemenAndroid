@@ -149,6 +149,9 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         addFeature(features, R.drawable.large_hidden,
                 LocaleController.getString(R.string.LeemenPremiumFeatureUnlimited),
                 LocaleController.getString(R.string.LeemenPremiumFeat1Desc));
+        addFeature(features, R.drawable.msg_limit_accounts,
+                LocaleController.getString(R.string.LeemenPremiumFeatAccountTitle),
+                LocaleController.getString(R.string.LeemenPremiumFeatAccountDesc));
         addFeature(features, R.drawable.menu_devices,
                 LocaleController.getString(R.string.LeemenPremiumFeat2Title),
                 LocaleController.getString(R.string.LeemenPremiumFeat2Desc));

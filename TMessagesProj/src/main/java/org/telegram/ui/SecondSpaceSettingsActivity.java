@@ -488,39 +488,90 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                 : org.telegram.messenger.ContactsController.formatName(user.first_name, user.last_name);
     }
 
-    /** Pick an account to add to the hide-list — lists OTHER activated accounts not yet hidden. */
+    /** Entry point for the "add account to Private Space" action. Hiding a whole account is a Leemen
+     *  Premium feature, so free users get the paywall. Premium users either pick an existing logged-in
+     *  account to hide, or log into a brand-new account that becomes a hidden PS account. */
     private void openAccountPicker() {
         if (getParentActivity() == null) return;
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        if (!ssc.hasLeemenPremium()) {
+            // Premium-gated, exactly like hiding more than the free number of chats.
+            LeemenPremiumActivity.showUpgradeDialog(this);
+            return;
+        }
         ArrayList<Integer> addable = new ArrayList<>();
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (a == currentAccount) continue;
             if (!UserConfig.getInstance(a).isClientActivated()) continue;
             if (ssc.isAccountHidden(a)) continue;
+            // Cyclic-add guard: never offer to hide an account that itself hides other accounts (an
+            // owner). Keeps the hide-graph acyclic at any depth and subsumes the reciprocal A↔B case.
+            if (SecondSpaceController.getInstance(a).hasHiddenAccounts()) continue;
             addable.add(a);
         }
+        int freeSlot = freeAccountSlot();
+        // No existing account to hide → go straight to logging into a NEW account that becomes a PS account.
         if (addable.isEmpty()) {
-            showDialog(new AlertDialog.Builder(getParentActivity())
-                    .setTitle(LocaleController.getString(R.string.HiddenAccountsAddAccount))
-                    .setMessage(LocaleController.getString(R.string.HiddenAccountsNoneToAdd))
-                    .setPositiveButton(LocaleController.getString(R.string.OK), null)
-                    .create());
+            if (freeSlot >= 0) {
+                addNewPrivateSpaceAccount(freeSlot);
+            } else {
+                showDialog(new AlertDialog.Builder(getParentActivity())
+                        .setTitle(LocaleController.getString(R.string.HiddenAccountsAddAccount))
+                        .setMessage(LocaleController.getString(R.string.HiddenAccountsNoneToAdd))
+                        .setPositiveButton(LocaleController.getString(R.string.OK), null)
+                        .create());
+            }
             return;
         }
-        CharSequence[] names = new CharSequence[addable.size()];
+        // Existing accounts to hide → offer them, plus a "log into a new account" option when a slot is free.
+        boolean offerNew = freeSlot >= 0;
+        CharSequence[] names = new CharSequence[addable.size() + (offerNew ? 1 : 0)];
         for (int i = 0; i < addable.size(); i++) {
             names[i] = accountName(addable.get(i));
+        }
+        if (offerNew) {
+            names[addable.size()] = LocaleController.getString(R.string.HiddenAccountsAddNew);
         }
         AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
         b.setTitle(LocaleController.getString(R.string.HiddenAccountsAddAccount));
         b.setItems(names, (d, which) -> {
-            SecondSpaceController.getInstance(currentAccount).setAccountHidden(addable.get(which), true);
-            reloadAccounts();
-            updateRows();
-            if (adapter != null) adapter.notifyDataSetChanged();
+            if (which < addable.size()) {
+                SecondSpaceController.getInstance(currentAccount).setAccountHidden(addable.get(which), true);
+                reloadAccounts();
+                updateRows();
+                if (adapter != null) adapter.notifyDataSetChanged();
+            } else {
+                addNewPrivateSpaceAccount(freeSlot);
+            }
         });
         b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         showDialog(b.create());
+    }
+
+    /** A free (non-activated) account slot for logging into a brand-new account, or -1 if none is
+     *  available. Mirrors the account-switcher's allocation: highest free index first, capped at the
+     *  non-premium account count unless the user has Telegram Premium (see MainTabsActivity). */
+    private int freeAccountSlot() {
+        int freeAccounts = 0;
+        int available = -1;
+        for (int a = UserConfig.MAX_ACCOUNT_COUNT - 1; a >= 0; a--) {
+            if (!UserConfig.getInstance(a).isClientActivated()) {
+                freeAccounts++;
+                if (available < 0) available = a;
+            }
+        }
+        if (!UserConfig.hasPremiumOnAccounts()) {
+            freeAccounts -= (UserConfig.MAX_ACCOUNT_COUNT - UserConfig.MAX_ACCOUNT_DEFAULT_COUNT);
+        }
+        return freeAccounts > 0 ? available : -1;
+    }
+
+    /** Log into a brand-new Telegram account on {@code slot} and mark it hidden (a PS account) for THIS
+     *  account once login succeeds. The hide is tied to the LoginActivity instance, so an abandoned
+     *  login leaves nothing behind. */
+    private void addNewPrivateSpaceAccount(int slot) {
+        if (slot < 0) return;
+        presentFragment(new LoginActivity(slot).setPrivateSpaceHideForOwner(currentAccount));
     }
 
     private void confirmRemoveAccount(int account) {
@@ -611,7 +662,12 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             pinInSearchRow = -1;
             pinInSearchInfoRow = -1;
         }
-        if (hasOtherAccounts) {
+        // The hidden-account section is a Leemen Premium feature. Show its "Add account" entry whenever
+        // the user could add a PS account — another logged-in account exists to hide, OR a free slot is
+        // available to log into a brand-new account. Free users still see the row (tap opens the paywall),
+        // so it doubles as an upsell. The switch-password sub-row only appears once another account exists.
+        boolean canOfferAddAccount = hasOtherAccounts || freeAccountSlot() >= 0;
+        if (canOfferAddAccount || !hiddenAccountsList.isEmpty()) {
             hiddenAccountsShadowRow = rowCount++;
             addHiddenAccountRow = rowCount++;
             if (!hiddenAccountsList.isEmpty()) {
@@ -625,9 +681,15 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                 hiddenAccountsEndRow = -1;
             }
             hiddenAccountsInfoRow = rowCount++;
-            switchPasswordShadowRow = rowCount++;
-            switchPasswordRow = rowCount++;
-            switchPasswordInfoRow = rowCount++;
+            if (hasOtherAccounts) {
+                switchPasswordShadowRow = rowCount++;
+                switchPasswordRow = rowCount++;
+                switchPasswordInfoRow = rowCount++;
+            } else {
+                switchPasswordShadowRow = -1;
+                switchPasswordRow = -1;
+                switchPasswordInfoRow = -1;
+            }
         } else {
             hiddenAccountsShadowRow = -1;
             addHiddenAccountRow = -1;

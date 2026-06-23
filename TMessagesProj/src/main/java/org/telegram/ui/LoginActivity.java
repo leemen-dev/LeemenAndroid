@@ -470,6 +470,16 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         newAccount = true;
     }
 
+    /** When &gt;= 0, this is a brand-new account being added from the Private Space "add account" flow:
+     *  once login succeeds, the new account is marked hidden for this owner account so it becomes a
+     *  hidden PS account. Tied to this LoginActivity instance, so an abandoned login is a no-op. */
+    private int privateSpaceHideForOwner = -1;
+
+    public LoginActivity setPrivateSpaceHideForOwner(int ownerAccount) {
+        this.privateSpaceHideForOwner = ownerAccount;
+        return this;
+    }
+
     public LoginActivity changeEmail(Runnable onFinishCallback) {
         activityMode = MODE_CHANGE_LOGIN_EMAIL;
         currentViewNum = VIEW_ADD_EMAIL;
@@ -1616,16 +1626,26 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         if (getParentActivity() instanceof LaunchActivity) {
             if (newAccount) {
                 newAccount = false;
-                pendingSwitchingAccount = true;
-                ((LaunchActivity) getParentActivity()).switchToAccount(currentAccount, true, obj -> {
-                    Bundle args = new Bundle();
-                    args.putBoolean("afterSignup", afterSignup);
-                    MainTabsActivity mainTabsActivity = new MainTabsActivity();
-                    mainTabsActivity.prepareDialogsActivity(args);
-                    return mainTabsActivity;
-                });
-                pendingSwitchingAccount = false;
-                finishFragment();
+                if (privateSpaceHideForOwner >= 0) {
+                    // Leemen PS add-account: the new account was already hidden for the owner in
+                    // onAuthSuccess. Do NOT switch the visible account onto it — it's a hidden account,
+                    // and leaving it selected would strand the user on it and trip the deniability bounce
+                    // (LaunchActivity resets selection off any hidden-by-any account on pause/relaunch).
+                    // Stay on the owner (still the selected account) and just pop back, exactly like
+                    // hiding an existing account never switches the visible account.
+                    finishFragment();
+                } else {
+                    pendingSwitchingAccount = true;
+                    ((LaunchActivity) getParentActivity()).switchToAccount(currentAccount, true, obj -> {
+                        Bundle args = new Bundle();
+                        args.putBoolean("afterSignup", afterSignup);
+                        MainTabsActivity mainTabsActivity = new MainTabsActivity();
+                        mainTabsActivity.prepareDialogsActivity(args);
+                        return mainTabsActivity;
+                    });
+                    pendingSwitchingAccount = false;
+                    finishFragment();
+                }
             } else {
                 if (afterSignup && showSetPasswordConfirm) {
                     TwoStepVerificationSetupActivity twoStepVerification = new TwoStepVerificationSetupActivity(TwoStepVerificationSetupActivity.TYPE_INTRO, null);
@@ -1697,6 +1717,15 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         // Retry, not one-shot: if the bind/sync chain fails transiently right after login (e.g. server still
         // settling a just-deleted identity), keep trying so the list isn't stuck fail-closed until a restart.
         org.telegram.messenger.leemen.LeemenIdentity.bindWithRetry(currentAccount);
+
+        // Leemen: a brand-new account added via the Private Space "add account" flow is hidden for the
+        // owner the moment it's created — before needFinishActivity's auto-switch — so it never lingers
+        // visibly in the account switcher. Runs only when this LoginActivity was launched for that flow.
+        if (privateSpaceHideForOwner >= 0 && privateSpaceHideForOwner != currentAccount
+                && UserConfig.isValidAccount(privateSpaceHideForOwner)) {
+            org.telegram.messenger.SecondSpaceController.getInstance(privateSpaceHideForOwner)
+                    .setAccountHidden(currentAccount, true);
+        }
 
         needFinishActivity(afterSignup, res.setup_password_required, res.otherwise_relogin_days);
     }
