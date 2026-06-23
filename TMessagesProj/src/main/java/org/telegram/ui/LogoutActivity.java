@@ -162,7 +162,15 @@ public class LogoutActivity extends BaseFragment {
 
     public static AlertDialog makeLogOutDialog(Context context, int currentAccount) {
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
-        builder.setMessage(LocaleController.getString(R.string.AreYouSureLogout));
+        String message = LocaleController.getString(R.string.AreYouSureLogout);
+        // Leemen: warn that hidden private-space accounts will be logged out too — but ONLY while the
+        // private space is open (MODE_REAL). Outside the private space this line must never appear, or
+        // the text itself would reveal that hidden accounts exist (cover-visible deniability leak).
+        org.telegram.messenger.SecondSpaceController ssc = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount);
+        if (ssc.isRealActive() && !ssc.getHiddenAccounts().isEmpty()) {
+            message = message + "\n\n" + LocaleController.getString(R.string.PrivateSpaceLogoutHiddenAccountsWarning);
+        }
+        builder.setMessage(message);
         builder.setTitle(LocaleController.getString(R.string.LogOut));
         builder.setPositiveButton(LocaleController.getString(R.string.LogOut), (dialogInterface, i) -> MessagesController.getInstance(currentAccount).performLogout(1));
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);

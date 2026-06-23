@@ -330,6 +330,8 @@
     <string name="LeemenPremiumFeat2Desc">Скрытое пространство, зашифровано, на всех устройствах.</string>
     <string name="LeemenPremiumFeat3Title">Приоритет и новые функции</string>
     <string name="LeemenPremiumFeat3Desc">Ранний доступ к будущим приватным функциям.</string>
+    <string name="LeemenPremiumFeatAccountTitle">Скрыть целый аккаунт</string>
+    <string name="LeemenPremiumFeatAccountDesc">Скрывайте аккаунт целиком, а не только чаты — он исчезает из переключателя аккаунтов, пока вы не откроете «Приватное пространство».</string>
     <string name="LeemenPromoRow">Активировать промокод</string>
     <string name="LeemenPromoTitle">Промокод</string>
     <string name="LeemenPromoHint">Введите код</string>
@@ -425,6 +427,8 @@
     <string name="HiddenAccountsListTitle">Скрытые аккаунты</string>
     <string name="HiddenAccountsListInfo">Эти аккаунты не будут видны в переключателе пока скрытое пространство выключено. Их уведомления и счётчик отключаются. Они снова появятся когда вы войдёте в скрытое пространство.</string>
     <string name="HiddenAccountsAddAccount">Добавить аккаунт</string>
+    <string name="HiddenAccountsAddNew">Войти в новый аккаунт</string>
+    <string name="PrivateSpaceLogoutHiddenAccountsWarning">Скрытые аккаунты тоже выйдут.</string>
     <string name="HiddenAccountsNoneToAdd">Нет других аккаунтов для добавления.</string>
     <string name="HiddenAccountsRemoveConfirm">Перестать скрывать этот аккаунт?</string>
     <string name="HiddenAccountsSwitchPasswordTitle">Пароль для переключения аккаунтов</string>

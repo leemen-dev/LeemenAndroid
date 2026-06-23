@@ -494,7 +494,7 @@ public class NotificationsController extends BaseController {
                 popupArray.add(0, messageObject);
             }
             if (!popupArray.isEmpty() && !AndroidUtilities.needShowPasscode() && !SharedConfig.isWaitingForPasscodeEnter
-                    && !SecondSpaceController.isHiddenFromSelectedAccount(currentAccount)) {
+                    && !SecondSpaceController.isHiddenForNotifications(currentAccount)) {
                 AndroidUtilities.runOnUIThread(() -> {
                     popupReplyMessages = popupArray;
                     Intent popupIntent = new Intent(ApplicationLoader.applicationContext, PopupNotificationActivity.class);
@@ -1262,7 +1262,7 @@ public class NotificationsController extends BaseController {
             }
 
             if (!popupArrayAdd.isEmpty() && !AndroidUtilities.needShowPasscode() && !SharedConfig.isWaitingForPasscodeEnter
-                    && !SecondSpaceController.isHiddenFromSelectedAccount(currentAccount)) {
+                    && !SecondSpaceController.isHiddenForNotifications(currentAccount)) {
                 int popupFinal = popup;
                 AndroidUtilities.runOnUIThread(() -> {
                     popupMessages.addAll(0, popupArrayAdd);
@@ -1727,9 +1727,10 @@ public class NotificationsController extends BaseController {
             if (!UserConfig.getInstance(a).isClientActivated() || !SharedConfig.showNotificationsForAllAccounts && UserConfig.selectedAccount != a) {
                 continue;
             }
-            // Accounts hidden by the currently selected account (in off-mode) must not
-            // contribute to the launcher badge — same "silent by design" principle as hidden chats.
-            if (SecondSpaceController.isHiddenFromSelectedAccount(a)) {
+            // Accounts hidden by the currently selected account (in off-mode), or hidden by ANY account
+            // while themselves selected, must not contribute to the launcher badge — same "silent by
+            // design" principle as hidden chats.
+            if (SecondSpaceController.isHiddenForNotifications(a)) {
                 continue;
             }
             NotificationsController controller = getInstance(a);
@@ -4097,7 +4098,7 @@ public class NotificationsController extends BaseController {
             dismissNotification();
             return;
         }
-        if (SecondSpaceController.isHiddenFromSelectedAccount(currentAccount)) {
+        if (SecondSpaceController.isHiddenForNotifications(currentAccount)) {
             dismissNotification();
             return;
         }

@@ -1914,6 +1914,13 @@ public class SecondSpaceController extends BaseController implements Notificatio
 
     public void setAccountHidden(int otherAccountNum, boolean hidden) {
         if (otherAccountNum == currentAccount) return;
+        // An account that itself hides other accounts (a private-space "owner") can never be hidden.
+        // This keeps the hide-graph acyclic at ANY depth: the edge that would close a cycle always
+        // points at a node that already hides someone, so it is rejected right here. It also subsumes
+        // the direct A↔B reciprocal case (if other hides us, it has hidden accounts).
+        if (hidden && getInstance(otherAccountNum).hasHiddenAccounts()) {
+            return;
+        }
         boolean changed = hidden ? hiddenAccounts.add(otherAccountNum) : hiddenAccounts.remove(otherAccountNum);
         if (!changed) return;
         persistHiddenAccounts();
@@ -1934,10 +1941,34 @@ public class SecondSpaceController extends BaseController implements Notificatio
         return Collections.unmodifiableSet(hiddenAccounts);
     }
 
+    /** True when THIS account hides at least one other account (it is a private-space "owner"). */
+    public boolean hasHiddenAccounts() {
+        return !hiddenAccounts.isEmpty();
+    }
+
     /** Called from logout cleanup — drop a deactivated account from the hide-list. */
     public void onOtherAccountLoggedOut(int otherAccountNum) {
         if (hiddenAccounts.remove(otherAccountNum)) {
             persistHiddenAccounts();
+        }
+    }
+
+    /** Clear the DEVICE-LOCAL, slot-scoped private-space state when THIS account logs out: the
+     *  hidden-account list (slot indices into this device's accounts) and the switch password that
+     *  gates entry into them. Unlike the PS PIN and hidden chats — which are ACCOUNT-level and follow
+     *  the account (re-synced on the next login) — these reference the device's account slots and must
+     *  not survive into the next account that reuses this slot: a stale hide-list would silently defeat
+     *  that account's auto-hide via the acyclic guard ({@link #hasHiddenAccounts}), and
+     *  {@link #isAccountHiddenByAny} would match reused slot indices. This is NOT a full PS wipe —
+     *  account-level state (PIN, hidden chats, premium) is deliberately preserved. */
+    public void clearLocalAccountHideStateForLogout() {
+        if (!hiddenAccounts.isEmpty()) {
+            hiddenAccounts.clear();
+            persistHiddenAccounts();
+        }
+        if (!TextUtils.isEmpty(switchPasswordHash)) {
+            switchPasswordHash = "";
+            getMessagesController().getMainSettings().edit().putString(PREF_SWITCH_PASSWORD_HASH, "").apply();
         }
     }
 
@@ -1957,15 +1988,42 @@ public class SecondSpaceController extends BaseController implements Notificatio
     }
 
     /**
-     * Whether an account should be hidden from the currently selected account's UI.
-     * MODE_REAL reveals everything; MODE_OFF hides accounts in the hide-list.
+     * Whether {@code target} should be hidden from {@code viewer}'s UI (account switcher, notifications,
+     * call popups, widgets…). The viewer sees its OWN hidden account only inside the private space
+     * (MODE_REAL). An account hidden by ANY OTHER account is hidden from everyone else — a private-space
+     * account belongs to its owner and must never surface in another account's view (deniability).
      * Returns {@code false} for self.
      */
+    public static boolean isHiddenFromAccount(int viewerAccountNum, int targetAccountNum) {
+        if (targetAccountNum == viewerAccountNum) return false;
+        SecondSpaceController viewer = getInstance(viewerAccountNum);
+        if (viewer.isAccountHidden(targetAccountNum)) {
+            // Owner: the hidden account is revealed only while the private space is open (MODE_REAL).
+            return !viewer.isRealActive();
+        }
+        // Not ours, but hidden by some other account → never visible in this account's view.
+        return isAccountHiddenByAny(targetAccountNum);
+    }
+
+    /**
+     * Whether an account should be hidden from the currently selected account's UI. The owner sees its
+     * own hidden account only in MODE_REAL; an account hidden by any other account is hidden from
+     * everyone else. Returns {@code false} for self.
+     */
     public static boolean isHiddenFromSelectedAccount(int targetAccountNum) {
-        int selected = UserConfig.selectedAccount;
-        if (targetAccountNum == selected) return false;
-        SecondSpaceController ssc = getInstance(selected);
-        return ssc.activeHiddenAccountsForMode(ssc.activeMode).contains(targetAccountNum);
+        return isHiddenFromAccount(UserConfig.selectedAccount, targetAccountNum);
+    }
+
+    /**
+     * Whether {@code account}'s notifications / launcher badge must be suppressed in the current device
+     * state. Like {@link #isHiddenFromSelectedAccount} but with a self-backstop: an account hidden by
+     * ANY other account stays silent even when it is itself the selected account — e.g. the app was
+     * force-killed while a hidden account was current, before {@code LaunchActivity} bounces selection
+     * off it. Mirrors the call-leak backstop in MessagesController (isHiddenFromSelectedAccount alone
+     * returns false for the self case).
+     */
+    public static boolean isHiddenForNotifications(int account) {
+        return isHiddenFromSelectedAccount(account) || isAccountHiddenByAny(account);
     }
 
     public static boolean isAccountHiddenByAny(int accountNum) {

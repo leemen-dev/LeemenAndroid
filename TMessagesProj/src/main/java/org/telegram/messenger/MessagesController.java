@@ -15420,6 +15420,14 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void performLogout(int type) {
+        performLogout(type, false);
+    }
+
+    public void performLogout(int type, boolean cascaded) {
+        // Leemen: snapshot this account's hidden (PS) accounts BEFORE any cleanup wipes the hide-list.
+        // They exist only as THIS owner's private-space accounts, so they're logged out too (below).
+        java.util.HashSet<Integer> hiddenToLogout = new java.util.HashSet<>(
+                SecondSpaceController.getInstance(currentAccount).getHiddenAccounts());
         // Leemen: drop this account's backend identity + sync state on logout, before the slot is reused.
         org.telegram.messenger.leemen.LeemenRealtime.disconnect(currentAccount);
         org.telegram.messenger.leemen.LeemenSync.clearAccount(currentAccount);
@@ -15431,7 +15439,10 @@ public class MessagesController extends BaseController implements NotificationCe
                 getConnectionsManager().cleanup(false);
                 AndroidUtilities.runOnUIThread(() -> {
                     if (response instanceof TLRPC.TL_auth_loggedOut) {
-                        if (((TLRPC.TL_auth_loggedOut) response).future_auth_token != null) {
+                        // Leemen: a cascaded PS-account logout must NOT persist its re-login token — it
+                        // lands in the device-global saved_tokens and would be sent to the server on the
+                        // next login of any number, correlating the hidden account with this device.
+                        if (!cascaded && ((TLRPC.TL_auth_loggedOut) response).future_auth_token != null) {
                             AuthTokensHelper.addLogOutToken((TLRPC.TL_auth_loggedOut) response);
                         }
                     }
@@ -15449,29 +15460,55 @@ public class MessagesController extends BaseController implements NotificationCe
             SecondSpaceController.getInstance(a).onOtherAccountLoggedOut(currentAccount);
         }
 
-        boolean shouldHandle = true;
-        ArrayList<NotificationCenter.NotificationCenterDelegate> observers = getNotificationCenter().getObservers(NotificationCenter.appDidLogout);
-        if (observers != null) {
-            for (int a = 0, N = observers.size(); a < N; a++) {
-                if (observers.get(a) instanceof LaunchActivity) {
-                    shouldHandle = false;
-                    break;
-                }
+        // Leemen: cascade logout to this account's hidden (PS) accounts — with the owner gone there is
+        // nothing left to reveal them, so they must not stay logged in. clearConfig() above already
+        // deactivated THIS account, so a hide-edge pointing back here can't bounce the logout into a
+        // loop (isClientActivated() is now false for currentAccount). Each cascaded account logs out
+        // the same way (server logout for type 1) and recursively takes its own hidden accounts.
+        for (Integer n : hiddenToLogout) {
+            if (n == null || n == currentAccount) continue;
+            if (UserConfig.getInstance(n).isClientActivated()) {
+                MessagesController.getInstance(n).performLogout(type, true);
             }
         }
-        if (shouldHandle) {
-            if (UserConfig.selectedAccount == currentAccount) {
-                int account = -1;
-                for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-                    if (UserConfig.getInstance(a).isClientActivated()) {
-                        account = a;
+
+        // Leemen: clear THIS account's DEVICE-LOCAL, slot-scoped private-space state on logout —
+        // symmetric to the cross-account cleanup above. The hidden-account list (slot indices) and the
+        // switch password reference this device's account slots; if left behind, the next account to
+        // reuse this slot would inherit them (a stale hide-list silently defeats its auto-hide via the
+        // acyclic guard, and isAccountHiddenByAny would match reused indices). Account-level PS state
+        // (PIN, hidden chats, premium) is deliberately PRESERVED — it follows the account and re-syncs
+        // on the next login. hiddenToLogout was snapshotted above, so the cascade is intact.
+        SecondSpaceController.getInstance(currentAccount).clearLocalAccountHideStateForLogout();
+
+        // Only the top-level logout may reassign selectedAccount / clear the shared fragment stack. A
+        // cascaded PS-account logout must never touch global UI state — it isn't the selected account,
+        // and the owner's single (deferred) switch is authoritative.
+        if (!cascaded) {
+            boolean shouldHandle = true;
+            ArrayList<NotificationCenter.NotificationCenterDelegate> observers = getNotificationCenter().getObservers(NotificationCenter.appDidLogout);
+            if (observers != null) {
+                for (int a = 0, N = observers.size(); a < N; a++) {
+                    if (observers.get(a) instanceof LaunchActivity) {
+                        shouldHandle = false;
                         break;
                     }
                 }
-                if (account != -1) {
-                    UserConfig.selectedAccount = account;
-                    UserConfig.getInstance(0).saveConfig(false);
-                    LaunchActivity.clearFragments();
+            }
+            if (shouldHandle) {
+                if (UserConfig.selectedAccount == currentAccount) {
+                    int account = -1;
+                    for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                        if (UserConfig.getInstance(a).isClientActivated()) {
+                            account = a;
+                            break;
+                        }
+                    }
+                    if (account != -1) {
+                        UserConfig.selectedAccount = account;
+                        UserConfig.getInstance(0).saveConfig(false);
+                        LaunchActivity.clearFragments();
+                    }
                 }
             }
         }

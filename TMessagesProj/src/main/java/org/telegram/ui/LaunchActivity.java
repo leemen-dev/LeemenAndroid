@@ -1264,12 +1264,14 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
         // Outgoing-account Private Space auto-exit on switch (deniability requirement).
         SecondSpaceController.getInstance(outgoing).setActive(false);
-        // Refresh per-account tray visibility against the NEW selected account's hide-list.
+        // Refresh per-account tray visibility against the NEW selected account's view. Uses the explicit
+        // viewer form (selectedAccount isn't updated until below): an account stays hidden if the new
+        // account owns it (and isn't in its private space) OR it's a private-space account of some OTHER
+        // account — in which case it must not surface here either.
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (a == account) continue;
             if (!UserConfig.getInstance(a).isClientActivated()) continue;
-            SecondSpaceController ns = SecondSpaceController.getInstance(account);
-            if (!ns.isActive() && ns.isAccountHidden(a)) {
+            if (SecondSpaceController.isHiddenFromAccount(account, a)) {
                 org.telegram.messenger.NotificationsController.getInstance(a).hideNotifications();
             } else {
                 org.telegram.messenger.NotificationsController.getInstance(a).showNotifications();

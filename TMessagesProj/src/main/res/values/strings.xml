@@ -2371,6 +2371,8 @@
     <string name="HiddenAccountsListTitle">Hidden accounts</string>
     <string name="HiddenAccountsListInfo">These accounts won\'t appear in the account switcher while Private Space is off. Their notifications and badges are muted. They reappear when you enter Private Space.</string>
     <string name="HiddenAccountsAddAccount">Add account</string>
+    <string name="HiddenAccountsAddNew">Log into a new account</string>
+    <string name="PrivateSpaceLogoutHiddenAccountsWarning">Your hidden accounts will be logged out too.</string>
     <string name="HiddenAccountsNoneToAdd">No other accounts to add.</string>
     <string name="HiddenAccountsRemoveConfirm">Stop hiding this account?</string>
     <!-- Hidden accounts: single switch password, set in the main account, gating switching INTO a hidden account -->
@@ -2495,6 +2497,8 @@
     <string name="LeemenPremiumFeat2Desc">Your private space, encrypted, on every device.</string>
     <string name="LeemenPremiumFeat3Title">Priority &amp; new perks</string>
     <string name="LeemenPremiumFeat3Desc">Early access to upcoming privacy features.</string>
+    <string name="LeemenPremiumFeatAccountTitle">Hide a whole account</string>
+    <string name="LeemenPremiumFeatAccountDesc">Hide an entire account, not just chats — it disappears from the account switcher until you open Private Space.</string>
     <string name="LeemenPromoRow">Redeem promo code</string>
     <string name="LeemenPromoTitle">Promo code</string>
     <string name="LeemenPromoHint">Enter code</string>
