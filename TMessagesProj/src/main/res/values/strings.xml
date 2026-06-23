@@ -2373,6 +2373,16 @@
     <string name="HiddenAccountsAddAccount">Add account</string>
     <string name="HiddenAccountsAddNew">Log into a new account</string>
     <string name="PrivateSpaceLogoutHiddenAccountsWarning">Your hidden accounts will be logged out too.</string>
+    <string name="PrivacyWarningButtonAccDescr">Privacy warning</string>
+    <string name="PrivacyWarningNoCloudPasswordTitle">Set a cloud password</string>
+    <string name="PrivacyWarningNoCloudPasswordText">You haven\'t set a Telegram cloud password. Without it, someone who gets into your account could open a session where your hidden chats are visible. Set a cloud password to protect them.</string>
+    <string name="PrivacyWarningSetCloudPassword">Set password</string>
+    <string name="PrivacyWarningOtherSessionTitle">Hidden chats are exposed</string>
+    <string name="PrivacyWarningOtherSessionText">There\'s an active session in another app where your hidden chats are visible. End it to keep them private — you can always log back in.</string>
+    <string name="PrivacyWarningOpenSessions">Sessions</string>
+    <string name="PrivacyWarningNotNow">Not now</string>
+    <string name="PrivacyWarningSessionCell">Your hidden chats are visible here</string>
+    <string name="PrivacyWarningCloudPasswordValue">Off — your hidden chats are at risk</string>
     <string name="HiddenAccountsNoneToAdd">No other accounts to add.</string>
     <string name="HiddenAccountsRemoveConfirm">Stop hiding this account?</string>
     <!-- Hidden accounts: single switch password, set in the main account, gating switching INTO a hidden account -->

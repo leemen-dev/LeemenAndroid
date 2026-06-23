@@ -1527,6 +1527,13 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                         } else {
                             value = getString(R.string.PasswordOff);
                         }
+                        // Leemen: inside the private space, flag that no cloud password is set — the hidden
+                        // chats are then exposed in a non-leemen session. Only in MODE_REAL (deniability).
+                        if (currentPassword != null && !currentPassword.has_password
+                                && org.telegram.messenger.SecondSpaceController.getInstance(currentAccount).isRealActive()) {
+                            icon = R.drawable.msg_warning;
+                            value = getString(R.string.PrivacyWarningCloudPasswordValue);
+                        }
                         textCell2.setTextAndValueAndIcon(getString(R.string.TwoStepVerification), value, true, icon, true);
                     } else if (position == passkeysRow) {
                         value = "";

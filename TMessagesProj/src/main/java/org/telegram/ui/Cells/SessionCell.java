@@ -184,6 +184,9 @@ public class SessionCell extends FrameLayout {
 
     public void setSession(TLObject object, boolean divider) {
         needDivider = divider;
+        // Leemen: clear any private-space warning styling left on a recycled cell.
+        detailTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+        detailTextView.setCompoundDrawables(null, null, null, null);
 
         if (object instanceof TLRPC.TL_authorization) {
             TLRPC.TL_authorization session = (TLRPC.TL_authorization) object;
@@ -232,6 +235,24 @@ public class SessionCell extends FrameLayout {
             stringBuilder.append(" ").append(session.app_version);
 
             detailTextView.setText(stringBuilder);
+
+            // Leemen: inside the private space, flag a NON-LEEMEN session — the hidden chats are visible
+            // there. Only shown in MODE_REAL (deniability); recycled cells are reset at the top.
+            if (org.telegram.messenger.leemen.LeemenPrivacyWarning.isNonLeemenActiveSession(session)
+                    && org.telegram.messenger.SecondSpaceController.getInstance(currentAccount).isRealActive()) {
+                detailTextView.setTextColor(Theme.getColor(Theme.key_color_yellow));
+                detailTextView.setText(LocaleController.getString(R.string.PrivacyWarningSessionCell));
+                android.graphics.drawable.Drawable warnIcon = getResources().getDrawable(R.drawable.msg_warning).mutate();
+                warnIcon.setColorFilter(new android.graphics.PorterDuffColorFilter(Theme.getColor(Theme.key_color_yellow), android.graphics.PorterDuff.Mode.SRC_IN));
+                int sz = dp(16);
+                warnIcon.setBounds(0, 0, sz, sz);
+                detailTextView.setCompoundDrawablePadding(dp(5));
+                if (LocaleController.isRTL) {
+                    detailTextView.setCompoundDrawables(null, null, warnIcon, null);
+                } else {
+                    detailTextView.setCompoundDrawables(warnIcon, null, null, null);
+                }
+            }
         } else if (object instanceof TLRPC.TL_webAuthorization) {
             TLRPC.TL_webAuthorization session = (TLRPC.TL_webAuthorization) object;
             TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(session.bot_id);

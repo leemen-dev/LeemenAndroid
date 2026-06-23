@@ -486,6 +486,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private ValueAnimator contactsAlphaAnimator;
     private ViewPage[] viewPages;
     private ActionBarMenuItem passcodeItem;
+    /** In-private-space warning button (top-right): lights up in MODE_REAL when something is privacy-wrong
+     *  (no cloud password and/or a non-leemen session). Each click shows the next active warning. */
+    private ActionBarMenuItem privacyWarningItem;
+    private int privacyWarningCursor;
+    private static final int privacy_warning_id = 1037;
     private ActionBarMenuItem downloadsItem;
     private DownloadProgressIcon downloadProgressIcon;
     private boolean downloadsItemVisible;
@@ -3242,6 +3247,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             passcodeItem = menu.addItem(1, R.drawable.outline_header_lock_24);
             passcodeItem.setContentDescription(getString(R.string.AccDescrPasscodeLock));
 
+            privacyWarningItem = menu.addItem(privacy_warning_id, R.drawable.msg_warning);
+            privacyWarningItem.setIconColor(getThemedColor(Theme.key_color_yellow));
+            privacyWarningItem.setContentDescription(getString(R.string.PrivacyWarningButtonAccDescr));
+            privacyWarningItem.setVisibility(View.GONE);
+
             downloadsItem = menu.addItem(3, new ColorDrawable(Color.TRANSPARENT));
             downloadsItem.addView(downloadProgressIcon = new DownloadProgressIcon(currentAccount, context));
             downloadsItem.setContentDescription(getString(R.string.DownloadsTabs));
@@ -3858,6 +3868,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
+                if (id == privacy_warning_id) {
+                    showNextPrivacyWarning();
+                    return;
+                }
                 if ((id == SearchViewPager.forwardItemId || id == SearchViewPager.gotoItemId || id == SearchViewPager.deleteItemId || id == SearchViewPager.speedItemId) && searchViewPager != null) {
                     searchViewPager.onActionBarItemClick(id);
                     return;
@@ -6950,6 +6964,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     @Override
     public void onResume() {
         super.onResume();
+        // Re-check the in-PS privacy warnings on resume (e.g. after returning from the set-2FA / sessions
+        // screens), so the warning button clears once the user has fixed the condition.
+        if (SecondSpaceController.getInstance(currentAccount).isRealActive()) {
+            org.telegram.messenger.leemen.LeemenPrivacyWarning.refresh(currentAccount, this::updatePrivacyWarningButton);
+        }
+        updatePrivacyWarningButton();
         if (dialogStoriesCell != null) {
             dialogStoriesCell.onResume();
         }
@@ -10714,6 +10734,46 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         ));
     }
 
+    /** Show/hide the in-private-space warning button: only in MODE_REAL, and only when something is
+     *  privacy-wrong (no cloud password and/or a non-leemen session). */
+    private void updatePrivacyWarningButton() {
+        if (privacyWarningItem == null) {
+            return;
+        }
+        boolean show = SecondSpaceController.getInstance(currentAccount).isRealActive()
+                && org.telegram.messenger.leemen.LeemenPrivacyWarning.hasWarning(currentAccount);
+        if ((privacyWarningItem.getVisibility() == View.VISIBLE) != show) {
+            privacyWarningItem.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    /** Show the highest-priority active privacy warning; the warning stays lit and a repeat click advances
+     *  to the next active one (cloud password first, then a non-leemen session). */
+    private void showNextPrivacyWarning() {
+        int account = currentAccount;
+        java.util.ArrayList<Integer> active = new java.util.ArrayList<>();
+        if (org.telegram.messenger.leemen.LeemenPrivacyWarning.isCloudPasswordMissing(account)) {
+            active.add(0); // cloud password (higher priority)
+        }
+        if (org.telegram.messenger.leemen.LeemenPrivacyWarning.hasNonLeemenSession(account)) {
+            active.add(1); // non-leemen session
+        }
+        if (active.isEmpty()) {
+            updatePrivacyWarningButton();
+            return;
+        }
+        if (privacyWarningCursor < 0) {
+            privacyWarningCursor = 0;
+        }
+        int which = active.get(privacyWarningCursor % active.size());
+        privacyWarningCursor++;
+        if (which == 0) {
+            PrivateSpaceWarningUi.showNoCloudPasswordWarning(this);
+        } else {
+            PrivateSpaceWarningUi.showNonLeemenSessionWarning(this);
+        }
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
@@ -10742,11 +10802,15 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 searchViewPager.dialogsSearchAdapter.filterRecent(null);
             }
             if (SecondSpaceController.getInstance(currentAccount).isRealActive()) {
-                // Let the list rebuild + enter animation settle before coaching / offering.
+                // Entering the private space: (re)check the privacy-warning conditions and reset the
+                // which-dialog-next cursor, then let the list settle before coaching / offering.
+                privacyWarningCursor = 0;
+                org.telegram.messenger.leemen.LeemenPrivacyWarning.refresh(currentAccount, this::updatePrivacyWarningButton);
                 AndroidUtilities.runOnUIThread(this::maybeStartPrivateSpaceOnboardingOrPaywall, 350);
             } else {
                 stopPrivateSpaceOnboarding();
             }
+            updatePrivacyWarningButton();
             return;
         }
         if (id == NotificationCenter.dialogsNeedReload) {
