@@ -3652,12 +3652,16 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         return 0;
                     }
                     MessagesController.DialogFilter filter = dialogFilters.get(tabId);
-                    // Same reasoning as the default tab: in a hidden view, recount unread dialogs
-                    // from the filter's own (in-memory) dialog list so the badge matches the rows
-                    // and can't desync from / mismatch units with filter.unreadCount.
+                    // In a hidden view, recount this filter's unread dialogs ourselves so the badge
+                    // matches the visible rows and never leaks a hidden chat's unread. We CANNOT read
+                    // filter.dialogs here: MessagesController.sortDialogs() only rebuilds that list for
+                    // the at-most-two currently-selected filters; for every non-selected folder it is
+                    // stale/empty (and selectDialogFilter(null) clears it), which would wipe the badge
+                    // to 0 on the default tab and make it flicker as folders are selected/deselected
+                    // during swipes. Instead we scan the always-fresh master list (getAllDialogs) and
+                    // apply the filter's own membership predicate, mirroring sortDialogs.
                     if (!ssc.isRealActive() && !ssc.getDialogIds().isEmpty()) {
-                        boolean excludeMuted = (filter.flags & MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_MUTED) != 0;
-                        return visibleUnreadDialogCount(filter.dialogs, excludeMuted);
+                        return visibleUnreadFilterCount(filter);
                     }
                     return filter.unreadCount;
                 }
@@ -9664,6 +9668,61 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 continue;
             }
             count++;
+        }
+        return count;
+    }
+
+    /**
+     * Number of unread dialogs that belong to {@code filter} and are visible in the current
+     * private-space view — i.e. the off-mode folder/filter tab badge.
+     *
+     * We must NOT read {@code filter.dialogs}: MessagesController.sortDialogs() rebuilds that list
+     * only for the currently-selected filter(s) ({@code selectedDialogFilter[0]/[1]}), and
+     * selectDialogFilter(null) clears it on deselect. On the default "All chats" tab no filter is
+     * selected, so every folder's {@code filter.dialogs} is stale/empty — reading it wipes every
+     * folder badge to 0, and the transient repopulation during a tab swipe is the reported flicker.
+     *
+     * Instead we scan {@link MessagesController#getAllDialogs()} (the master dialog list, kept fresh
+     * for ALL filters independent of selection) and apply {@link DialogFilter#includesDialog} exactly
+     * as sortDialogs does — including the encrypted-dialog id remap and the filter's own
+     * EXCLUDE_ARCHIVED / EXCLUDE_MUTED / EXCLUDE_READ scope — while skipping any dialog hidden from
+     * the current view. Result: stable (selection-independent) and deniable (a hidden chat's unread
+     * can never reach the badge, because {@code isHiddenFromCurrentView} drops it before counting).
+     */
+    private int visibleUnreadFilterCount(MessagesController.DialogFilter filter) {
+        MessagesController messagesController = getMessagesController();
+        ArrayList<TLRPC.Dialog> all = messagesController.getAllDialogs();
+        if (all == null || all.isEmpty()) {
+            return 0;
+        }
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        AccountInstance accountInstance = getAccountInstance();
+        int count = 0;
+        for (int i = 0, n = all.size(); i < n; i++) {
+            TLRPC.Dialog d = all.get(i);
+            if (!(d instanceof TLRPC.TL_dialog)) {
+                continue;
+            }
+            // Skip hidden chats first: this is the deniability guarantee and it is checked against the
+            // real dialog id (the same id the rows use), before the encrypted remap below.
+            if (ssc.isHiddenFromCurrentView(d.id)) {
+                continue;
+            }
+            if (d.unread_count <= 0 && !d.unread_mark && d.unread_mentions_count <= 0) {
+                continue;
+            }
+            // Mirror sortDialogs: filter membership for an encrypted dialog is decided on the
+            // underlying user id, but the unread flags are read from the encrypted dialog row.
+            long dialogId = d.id;
+            if (DialogObject.isEncryptedDialog(dialogId)) {
+                TLRPC.EncryptedChat encryptedChat = messagesController.getEncryptedChat(DialogObject.getEncryptedChatId(dialogId));
+                if (encryptedChat != null) {
+                    dialogId = encryptedChat.user_id;
+                }
+            }
+            if (filter.includesDialog(accountInstance, dialogId, d)) {
+                count++;
+            }
         }
         return count;
     }
