@@ -10640,10 +10640,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             return;
         }
         boolean hasHidden = !ssc.getDialogIds().isEmpty();
-        // Subscription lapsed (or never held) while keeping more than the free allowance: on every
-        // entry, offer to renew or trim down to the limit (req #5). Outside the space those chats
-        // stay hidden as usual — expiry never reveals them. Takes precedence over the one-time offer.
-        if (ssc.isOverChatLimit()) {
+        // Subscription lapsed while holding more than the free allowance of hidden chats OR any hidden
+        // account (accounts are premium): on every entry, present a blocking renew-or-reveal gate — the
+        // only ways out are to renew or to reveal/manage in settings (req #5). Outside the space the
+        // hidden chats/accounts stay hidden as usual — expiry never reveals them. Precedes the one-time offer.
+        if (ssc.isOverLimit()) {
             LeemenPremiumActivity.showOverLimitDialog(DialogsActivity.this, currentAccount);
             return;
         }

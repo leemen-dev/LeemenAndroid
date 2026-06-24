@@ -2579,8 +2579,8 @@
     <string name="PrivateSpaceLimitReachedTitle">Chat limit reached</string>
     <string name="PrivateSpaceLimitReachedMessage">Without a subscription you can hide only one chat. Subscribe to Leemen Premium to hide unlimited chats.</string>
     <string name="PrivateSpaceOverLimitTitle">Subscription ended</string>
-    <string name="PrivateSpaceOverLimitMessage">Your Leemen Premium subscription has ended. Renew it to keep your hidden chats, or remove the extra ones to keep just one.</string>
-    <string name="PrivateSpaceOverLimitRemove">Manage chats</string>
+    <string name="PrivateSpaceOverLimitMessage">Your Leemen Premium subscription has ended. Renew it to keep your hidden chats and accounts, or reveal them to continue.</string>
+    <string name="PrivateSpaceOverLimitRemove">Reveal chats &amp; accounts</string>
     <string name="BlockUserMultiTitle">Block User</string>
     <string name="BlockUserChatsTitle">CHATS</string>
     <string name="BlockUserContactsTitle">CONTACTS</string>

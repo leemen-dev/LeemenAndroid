@@ -402,8 +402,8 @@
     <string name="PrivateSpaceLimitReachedTitle">Достигнут лимит чатов</string>
     <string name="PrivateSpaceLimitReachedMessage">Без подписки можно скрыть только один чат. Оформите Leemen Premium, чтобы прятать неограниченное количество чатов.</string>
     <string name="PrivateSpaceOverLimitTitle">Подписка закончилась</string>
-    <string name="PrivateSpaceOverLimitMessage">Подписка Leemen Premium закончилась. Продлите её, чтобы сохранить скрытые чаты, или удалите лишние, оставив один.</string>
-    <string name="PrivateSpaceOverLimitRemove">Управлять чатами</string>
+    <string name="PrivateSpaceOverLimitMessage">Подписка Leemen Premium закончилась. Продлите её, чтобы сохранить скрытые чаты и аккаунты, или раскройте их, чтобы продолжить.</string>
+    <string name="PrivateSpaceOverLimitRemove">Раскрыть чаты и аккаунты</string>
     <string name="PrivateSpaceIntroDescription">Скрытые чаты не показываются в основном списке чатов, в подсказках поиска, уведомлениях и виджетах, когда защищённое пространство выключено. Откройте настройки, чтобы добавить чаты сейчас.</string>
 
     <!-- PIN -->

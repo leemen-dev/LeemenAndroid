@@ -434,7 +434,11 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         PrivateSpacePaywallBottomSheet.show(fragment, () -> fragment.presentFragment(new LeemenPremiumActivity("limit")));
     }
 
-    /** Renew-or-trim prompt shown on entering the space while over the free limit without a sub. */
+    /** Blocking renew-or-reveal gate shown on entry into the space when the subscription has lapsed while
+     *  over the free allowance (extra hidden chats, or any hidden account). The space itself is NOT
+     *  revealed — this only gates the real-mode UI. Non-cancelable: the user must either renew or go to
+     *  settings to reveal/manage; there is no dismiss-into-an-over-limit space. Revealing is non-destructive
+     *  (chats/accounts simply become visible again) and never happens automatically. */
     public static void showOverLimitDialog(BaseFragment fragment, int account) {
         if (fragment == null || fragment.getParentActivity() == null) {
             return;
@@ -444,6 +448,9 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         b.setMessage(LocaleController.getString(R.string.PrivateSpaceOverLimitMessage));
         b.setPositiveButton(LocaleController.getString(R.string.LeemenPremiumRenew), (d, w) -> fragment.presentFragment(new LeemenPremiumActivity("limit")));
         b.setNegativeButton(LocaleController.getString(R.string.PrivateSpaceOverLimitRemove), (d, w) -> fragment.presentFragment(new SecondSpaceSettingsActivity()));
-        fragment.showDialog(b.create());
+        AlertDialog dialog = b.create();
+        dialog.setCancelable(false);
+        dialog.setCanceledOnTouchOutside(false);
+        fragment.showDialog(dialog);
     }
 }

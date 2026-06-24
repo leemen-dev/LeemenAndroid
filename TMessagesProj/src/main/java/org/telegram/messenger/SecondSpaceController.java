@@ -65,6 +65,11 @@ public class SecondSpaceController extends BaseController implements Notificatio
      *  real Leemen billing is wired. */
     public static final int MAX_HIDDEN_CHATS_FREE = 1;
 
+    /** Hiding a whole account is a Leemen Premium feature — none are free (free allowance = 0).
+     *  Enforced at the UI add-site ({@code SecondSpaceSettingsActivity.openAccountPicker}) and as a
+     *  model-level backstop in {@link #setAccountHidden(int, boolean)}. Revealing is always allowed. */
+    public static final int MAX_HIDDEN_ACCOUNTS_FREE = 0;
+
     /** A single step in the tab-tap gesture sequence. */
     public static final class TabStep {
         public final int tabIndex;
@@ -1580,10 +1585,22 @@ public class SecondSpaceController extends BaseController implements Notificatio
         return hasLeemenPremium() || dialogIds.size() + n <= MAX_HIDDEN_CHATS_FREE;
     }
 
-    /** Premium-aware: holds more hidden chats than allowed and has no active subscription.
-     *  Triggers the renew-or-trim prompt on entry into the space. */
+    /** Premium-aware: holds more hidden chats than allowed and has no active subscription. */
     public boolean isOverChatLimit() {
         return !hasLeemenPremium() && dialogIds.size() > MAX_HIDDEN_CHATS_FREE;
+    }
+
+    /** Premium-aware: holds hidden accounts with no active subscription (hiding accounts is premium —
+     *  none are free). */
+    public boolean isOverAccountLimit() {
+        return !hasLeemenPremium() && hiddenAccounts.size() > MAX_HIDDEN_ACCOUNTS_FREE;
+    }
+
+    /** Premium-aware: over the free allowance on hidden chats OR hidden accounts, with no active
+     *  subscription. Triggers the renew-or-reveal gate on entry into the space (the space itself is
+     *  never auto-revealed — expiry only nudges, it never exposes hidden content). */
+    public boolean isOverLimit() {
+        return isOverChatLimit() || isOverAccountLimit();
     }
 
     /** Put {@code message} into Telegram's global {@code dialogMessagesByIds} so that
@@ -2037,6 +2054,12 @@ public class SecondSpaceController extends BaseController implements Notificatio
         // points at a node that already hides someone, so it is rejected right here. It also subsumes
         // the direct A↔B reciprocal case (if other hides us, it has hidden accounts).
         if (hidden && getInstance(otherAccountNum).hasHiddenAccounts()) {
+            return;
+        }
+        // Hiding an account is a premium feature (MAX_HIDDEN_ACCOUNTS_FREE = 0). Model-level backstop for
+        // the UI gate (openAccountPicker). REVEALING (hidden==false) is never blocked — losing premium must
+        // never trap a user's accounts as hidden; they can always unhide and the entry prompt nudges them to.
+        if (hidden && !hasLeemenPremium() && hiddenAccounts.size() >= MAX_HIDDEN_ACCOUNTS_FREE) {
             return;
         }
         boolean changed = hidden ? hiddenAccounts.add(otherAccountNum) : hiddenAccounts.remove(otherAccountNum);
