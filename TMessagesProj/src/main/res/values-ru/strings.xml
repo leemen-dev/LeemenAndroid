@@ -265,22 +265,22 @@
     <string name="RemindDayYearAt">\'Напомнить\' d MMM yyyy \'в\' HH:mm</string>
 
     <!-- Private Space -->
-    <string name="PrivateSpace">Скрытое пространство</string>
-    <string name="PrivateSpaceTitle">Скрытое пространство</string>
+    <string name="PrivateSpace">Защищённое пространство</string>
+    <string name="PrivateSpaceTitle">Защищённое пространство</string>
     <string name="PrivateSpaceSelectChats">Скрытые чаты</string>
     <string name="PrivateSpaceAddChat">Добавить чаты</string>
-    <string name="PrivateSpaceAddChatsInfo">Эти чаты будут скрыты, когда вы выйдете из скрытого пространства.</string>
-    <string name="PrivateSpaceRemoveChatConfirm">Убрать этот чат из скрытого пространства?</string>
-    <string name="PrivateSpaceSettings">Настройки скрытого пространства</string>
-    <string name="PrivateSpaceEnter">Войти в скрытое пространство</string>
-    <string name="PrivateSpaceExit">Выйти из скрытого пространства</string>
+    <string name="PrivateSpaceAddChatsInfo">Эти чаты будут скрыты, когда вы выйдете из защищённого пространства.</string>
+    <string name="PrivateSpaceRemoveChatConfirm">Убрать этот чат из защищённого пространства?</string>
+    <string name="PrivateSpaceSettings">Настройки защищённого пространства</string>
+    <string name="PrivateSpaceEnter">Войти в защищённое пространство</string>
+    <string name="PrivateSpaceExit">Выйти из защищённого пространства</string>
     <string name="PrivateSpaceExitTab">Выйти</string>
-    <string name="PrivateSpaceEmpty">В скрытом пространстве пока нет чатов. Откройте настройки, чтобы добавить их.</string>
+    <string name="PrivateSpaceEmpty">В защищённом пространстве пока нет чатов. Откройте настройки, чтобы добавить их.</string>
     <string name="PrivateSpaceEmptyOpenSettings">Открыть настройки</string>
     <string name="PrivateSpaceHide">Скрыть чат</string>
     <string name="PrivateSpaceUnhide">Показать чат</string>
     <string name="PrivateSpaceOnboardingHideHint">Зажмите любой чат и выберите «Скрыть чат», чтобы он пропал из обычного списка.</string>
-    <string name="PrivateSpaceOnboardingHidden">Чат скрыт. Вне скрытого пространства его не видно.</string>
+    <string name="PrivateSpaceOnboardingHidden">Чат скрыт. Вне защищённого пространства его не видно.</string>
     <string name="LeemenOnboardingSettingsHint">Настройте своё пространство в Настройках — добавьте чаты для скрытия, PIN и способ входа.</string>
     <string name="LeemenTourHideChats">Добавляйте сюда чаты, которые хотите скрыть. Они исчезнут из обычного списка.</string>
     <string name="LeemenTourPin">Задайте PIN, чтобы пространство могли открыть только вы.</string>
@@ -291,11 +291,11 @@
     <string name="PrivateSpacePaywallTitle">Безлимит скрытых чатов</string>
     <string name="PrivateSpacePaywallSubtitle">Первый чат вы скрыли бесплатно. Оформите подписку, чтобы прятать сколько угодно чатов.</string>
     <string name="PrivateSpacePaywallFeature1Title">Прячьте сколько угодно</string>
-    <string name="PrivateSpacePaywallFeature1Text">Переносите в скрытое пространство любое число чатов, а не только первый.</string>
+    <string name="PrivateSpacePaywallFeature1Text">Переносите в защищённое пространство любое число чатов, а не только первый.</string>
     <string name="PrivateSpacePaywallFeature2Title">Полная приватность</string>
     <string name="PrivateSpacePaywallFeature2Text">Скрытые чаты не видны в списке, поиске, уведомлениях и виджетах.</string>
     <string name="PrivateSpacePaywallFeature3Title">Откроете только вы</string>
-    <string name="PrivateSpacePaywallFeature3Text">Доступ к скрытому пространству — по PIN или секретному жесту.</string>
+    <string name="PrivateSpacePaywallFeature3Text">Доступ к защищённому пространству — по PIN или секретному жесту.</string>
     <string name="PrivateSpacePaywallButton">Оформить подписку</string>
     <string name="PrivateSpacePaywallLater">Не сейчас</string>
     <string name="PrivateSpacePaywallActivated">Подписка активирована. Прячьте сколько угодно чатов!</string>
@@ -313,7 +313,7 @@
     <string name="LeemenAnalyticsConsentEnable">Включить</string>
     <string name="LeemenAnalyticsConsentLater">Не сейчас</string>
     <string name="LeemenPremium">Leemen Premium</string>
-    <string name="LeemenPremiumScreenSubtitle">Безлимит чатов в скрытом пространстве</string>
+    <string name="LeemenPremiumScreenSubtitle">Безлимит чатов в защищённом пространстве</string>
     <string name="LeemenPremiumFeatureUnlimited">Прячьте сколько угодно чатов, а не только один.</string>
     <string name="LeemenPremiumPlanMonthly">Месяц</string>
     <string name="LeemenPremiumPlanYearly">Год</string>
@@ -327,7 +327,7 @@
     <string name="LeemenPremiumStatusUnlimited">Безлимит чатов</string>
     <string name="LeemenPremiumFeat1Desc">Прячьте сколько угодно чатов.</string>
     <string name="LeemenPremiumFeat2Title">Синхронизация устройств</string>
-    <string name="LeemenPremiumFeat2Desc">Скрытое пространство, зашифровано, на всех устройствах.</string>
+    <string name="LeemenPremiumFeat2Desc">Защищённое пространство, зашифровано, на всех устройствах.</string>
     <string name="LeemenPremiumFeat3Title">Приоритет и новые функции</string>
     <string name="LeemenPremiumFeat3Desc">Ранний доступ к будущим приватным функциям.</string>
     <string name="LeemenPremiumFeatAccountTitle">Скрыть целый аккаунт</string>
@@ -403,29 +403,29 @@
     <string name="PrivateSpaceOverLimitTitle">Подписка закончилась</string>
     <string name="PrivateSpaceOverLimitMessage">Подписка Leemen Premium закончилась. Продлите её, чтобы сохранить скрытые чаты, или удалите лишние, оставив один.</string>
     <string name="PrivateSpaceOverLimitRemove">Управлять чатами</string>
-    <string name="PrivateSpaceIntroDescription">Скрытые чаты не показываются в основном списке чатов, в подсказках поиска, уведомлениях и виджетах, когда скрытое пространство выключено. Откройте настройки, чтобы добавить чаты сейчас.</string>
+    <string name="PrivateSpaceIntroDescription">Скрытые чаты не показываются в основном списке чатов, в подсказках поиска, уведомлениях и виджетах, когда защищённое пространство выключено. Откройте настройки, чтобы добавить чаты сейчас.</string>
 
     <!-- PIN -->
     <string name="PrivateSpacePinTitle">Пароль</string>
     <string name="PrivateSpacePinOff">Выкл.</string>
     <string name="PrivateSpacePinOn">Вкл.</string>
-    <string name="PrivateSpacePinInfo">Если задан, его нужно вводить каждый раз при входе в скрытое пространство.</string>
+    <string name="PrivateSpacePinInfo">Если задан, его нужно вводить каждый раз при входе в защищённое пространство.</string>
     <string name="PrivateSpacePinSetTitle">Задайте PIN (4–6 цифр)</string>
     <string name="PrivateSpacePinEnterTitle">Введите PIN</string>
-    <string name="PrivateSpacePinEnterSubtitle">Введите PIN скрытого пространства, чтобы продолжить.</string>
-    <string name="PrivateSpacePinSetSubtitle">Выберите PIN из 4–6 цифр. Он будет требоваться при каждом входе в скрытое пространство.</string>
+    <string name="PrivateSpacePinEnterSubtitle">Введите PIN защищённого пространства, чтобы продолжить.</string>
+    <string name="PrivateSpacePinSetSubtitle">Выберите PIN из 4–6 цифр. Он будет требоваться при каждом входе в защищённое пространство.</string>
     <string name="PrivateSpacePinConfirmTitle">Подтвердите PIN</string>
     <string name="PrivateSpacePinConfirmSubtitle">Введите PIN ещё раз для подтверждения.</string>
     <string name="PrivateSpacePinRemoveTitle">Удалить PIN</string>
-    <string name="PrivateSpacePinRemoveSubtitle">Введите текущий PIN. Скрытое пространство перестанет требовать пароль.</string>
+    <string name="PrivateSpacePinRemoveSubtitle">Введите текущий PIN. Защищённое пространство перестанет требовать пароль.</string>
     <string name="PrivateSpacePinEnter">Войти</string>
     <string name="PrivateSpacePinHint">PIN</string>
     <string name="PrivateSpacePinWrong">Неверный PIN. Попробуйте ещё раз.</string>
     <string name="PrivateSpacePinMismatch">PIN-коды не совпадают.</string>
     <string name="PrivateSpacePinTooShort">PIN должен содержать минимум %1$d цифр.</string>
-    <string name="PrivateSpacePinRemoveConfirm">Удалить PIN? Скрытое пространство перестанет требовать пароль.</string>
+    <string name="PrivateSpacePinRemoveConfirm">Удалить PIN? Защищённое пространство перестанет требовать пароль.</string>
     <string name="HiddenAccountsListTitle">Скрытые аккаунты</string>
-    <string name="HiddenAccountsListInfo">Эти аккаунты не будут видны в переключателе пока скрытое пространство выключено. Их уведомления и счётчик отключаются. Они снова появятся когда вы войдёте в скрытое пространство.</string>
+    <string name="HiddenAccountsListInfo">Эти аккаунты не будут видны в переключателе пока защищённое пространство выключено. Их уведомления и счётчик отключаются. Они снова появятся когда вы войдёте в защищённое пространство.</string>
     <string name="HiddenAccountsAddAccount">Добавить аккаунт</string>
     <string name="HiddenAccountsAddNew">Войти в новый аккаунт</string>
     <string name="PrivateSpaceLogoutHiddenAccountsWarning">Скрытые аккаунты тоже выйдут.</string>
@@ -442,17 +442,17 @@
     <string name="HiddenAccountsNoneToAdd">Нет других аккаунтов для добавления.</string>
     <string name="HiddenAccountsRemoveConfirm">Перестать скрывать этот аккаунт?</string>
     <string name="HiddenAccountsSwitchPasswordTitle">Пароль для переключения аккаунтов</string>
-    <string name="HiddenAccountsSwitchPasswordInfo">Если задан, переход в скрытый аккаунт потребует ввода этого пароля. Он задаётся здесь, в основном аккаунте, и не связан с PIN-кодом скрытого пространства.</string>
+    <string name="HiddenAccountsSwitchPasswordInfo">Если задан, переход в скрытый аккаунт потребует ввода этого пароля. Он задаётся здесь, в основном аккаунте, и не связан с PIN-кодом защищённого пространства.</string>
     <string name="HiddenAccountsSwitchPasswordRemoveConfirm">Удалить пароль? Переход в скрытый аккаунт перестанет его требовать.</string>
     <string name="HiddenAccountEnterPasswordTitle">Введите пароль</string>
     <string name="HiddenAccountWrongPassword">Неверный пароль. Попробуйте ещё раз.</string>
     <string name="PrivateSpaceExposureHide">Скрыть снаружи</string>
-    <string name="PrivateSpaceEyeHint">Иконка глаза отмечает сообщения, видимые вне скрытого пространства. Выделите сообщение чтобы снова скрыть.</string>
-    <string name="PrivateSpaceToolbarHint">Эти кнопки показывают выбранные сообщения вне скрытого пространства или прячут их обратно.</string>
+    <string name="PrivateSpaceEyeHint">Иконка глаза отмечает сообщения, видимые вне защищённого пространства. Выделите сообщение чтобы снова скрыть.</string>
+    <string name="PrivateSpaceToolbarHint">Эти кнопки показывают выбранные сообщения вне защищённого пространства или прячут их обратно.</string>
     <string name="PrivateSpaceSequenceDiscardTitle">Отменить изменения?</string>
     <string name="PrivateSpaceSequenceDiscardMessage">Отредактированная последовательность не сохранится. Нажмите галочку чтобы применить.</string>
     <string name="PrivateSpacePinInSearch">PIN в поле поиска</string>
-    <string name="PrivateSpacePinInSearchInfo">Если включено, ввод PIN в строку поиска чатов открывает скрытое пространство.</string>
+    <string name="PrivateSpacePinInSearchInfo">Если включено, ввод PIN в строку поиска чатов открывает защищённое пространство.</string>
     <string name="PrivateSpacePinTimeoutTitle">Запоминать PIN</string>
     <string name="PrivateSpacePinTimeoutOff">Не запоминать</string>
     <string name="PrivateSpacePinTimeoutMinutes">%1$d мин</string>
@@ -461,7 +461,7 @@
     <string name="PrivateSpaceSequenceTitle">Комбинация нажатий</string>
     <string name="PrivateSpaceSequenceRowOff">Выкл.</string>
     <string name="PrivateSpaceSequenceRowOn">%1$d шаг(ов)</string>
-    <string name="PrivateSpaceSequenceInfo">Выполните эту комбинацию нажатий на нижних вкладках, чтобы открыть скрытое пространство. Между шагами должно проходить не более 3 секунд.</string>
+    <string name="PrivateSpaceSequenceInfo">Выполните эту комбинацию нажатий на нижних вкладках, чтобы открыть защищённое пространство. Между шагами должно проходить не более 3 секунд.</string>
     <string name="PrivateSpaceSequenceAddStep">Добавить шаг</string>
     <string name="PrivateSpaceSequenceClear">Очистить комбинацию</string>
     <string name="PrivateSpaceSequencePickTab">Выберите вкладку</string>
@@ -471,41 +471,41 @@
     <string name="PrivateSpaceSequenceRemoveStep">Удалить этот шаг из комбинации?</string>
     <string name="PrivateSpaceSequenceTooShort">Комбинация должна содержать хотя бы одно долгое нажатие или минимум 3 коротких.</string>
     <string name="PrivateSpaceSequenceConfirmTitle">Проверьте свою комбинацию</string>
-    <string name="PrivateSpaceSequenceConfirmMessage">Комбинация сохранена. Чтобы убедиться, что она работает, выйдите из скрытого пространства и попробуйте войти новой комбинацией. Пока вы этого не сделаете, кнопка входа в настройках будет видна.</string>
-    <string name="PrivateSpaceSequenceConfirmMessageAgain">Комбинация обновлена. Чтобы убедиться, что новая комбинация работает, выйдите из скрытого пространства и попробуйте войти ею. Кнопка входа будет видна, пока вы не подтвердите.</string>
+    <string name="PrivateSpaceSequenceConfirmMessage">Комбинация сохранена. Чтобы убедиться, что она работает, выйдите из защищённого пространства и попробуйте войти новой комбинацией. Пока вы этого не сделаете, кнопка входа в настройках будет видна.</string>
+    <string name="PrivateSpaceSequenceConfirmMessageAgain">Комбинация обновлена. Чтобы убедиться, что новая комбинация работает, выйдите из защищённого пространства и попробуйте войти ею. Кнопка входа будет видна, пока вы не подтвердите.</string>
 
     <!-- Entry button -->
     <string name="PrivateSpaceShowEntryButton">Показывать кнопку входа в настройках приватности</string>
-    <string name="PrivateSpaceShowEntryButtonInfo">Если выключено, войти в скрытое пространство можно долгим нажатием на вкладку «Чаты» внизу.</string>
+    <string name="PrivateSpaceShowEntryButtonInfo">Если выключено, войти в защищённое пространство можно долгим нажатием на вкладку «Чаты» внизу.</string>
     <string name="PrivateSpaceShowEntryButtonBlocked">Сначала настройте способ входа — иначе вы потеряете доступ.</string>
-    <string name="PrivateSpaceShowEntryButtonBlockedNoShortcut">Сначала настройте комбинацию нажатий или включите ввод PIN в поиске — иначе вы потеряете доступ к скрытому пространству.</string>
-    <string name="PrivateSpaceShowEntryButtonBlockedUntested">Хотя бы один раз войдите в скрытое пространство своим способом. После подтверждения, что он работает, кнопку можно скрыть.</string>
+    <string name="PrivateSpaceShowEntryButtonBlockedNoShortcut">Сначала настройте комбинацию нажатий или включите ввод PIN в поиске — иначе вы потеряете доступ к защищённому пространству.</string>
+    <string name="PrivateSpaceShowEntryButtonBlockedUntested">Хотя бы один раз войдите в защищённое пространство своим способом. После подтверждения, что он работает, кнопку можно скрыть.</string>
     <string name="PrivateSpaceShortcutRetestRequired">Способы входа изменились. Кнопка входа остаётся видимой, пока вы не подтвердите, что новый способ работает.</string>
 
     <!-- Pending off-mode messages (legacy popup; kept for compatibility) -->
-    <string name="PrivateSpacePendingDesc_one">У вас %1$d новое сообщение в этом чате, отправленное вне скрытого пространства. Что с ним сделать?</string>
-    <string name="PrivateSpacePendingDesc_few">У вас %1$d новых сообщения в этом чате, отправленных вне скрытого пространства. Что с ними сделать?</string>
-    <string name="PrivateSpacePendingDesc_many">У вас %1$d новых сообщений в этом чате, отправленных вне скрытого пространства. Что с ними сделать?</string>
-    <string name="PrivateSpacePendingDesc_other">У вас %1$d новых сообщений в этом чате, отправленных вне скрытого пространства. Что с ними сделать?</string>
-    <string name="PrivateSpacePendingHide">Оставить в скрытом пространстве</string>
+    <string name="PrivateSpacePendingDesc_one">У вас %1$d новое сообщение в этом чате, отправленное вне защищённого пространства. Что с ним сделать?</string>
+    <string name="PrivateSpacePendingDesc_few">У вас %1$d новых сообщения в этом чате, отправленных вне защищённого пространства. Что с ними сделать?</string>
+    <string name="PrivateSpacePendingDesc_many">У вас %1$d новых сообщений в этом чате, отправленных вне защищённого пространства. Что с ними сделать?</string>
+    <string name="PrivateSpacePendingDesc_other">У вас %1$d новых сообщений в этом чате, отправленных вне защищённого пространства. Что с ними сделать?</string>
+    <string name="PrivateSpacePendingHide">Оставить в защищённом пространстве</string>
     <string name="PrivateSpacePendingShow">Показывать вне</string>
     <string name="PrivateSpacePendingChoose">Выбрать…</string>
     <string name="PrivateSpacePendingChooseTitle">Выберите сообщения для показа</string>
     <string name="PrivateSpacePendingChooseApply">Применить</string>
 
     <!-- Exposure flow (popup + multi-select + Show outside) -->
-    <string name="PrivateSpaceExposureTitle">Управление видимостью вне скрытого пространства</string>
-    <string name="PrivateSpaceExposureExplanation">Выберите сообщения, которые будут видны вне скрытого пространства. Отмеченные показываются, остальные остаются скрытыми.</string>
-    <string name="PrivateSpaceExposurePopupBody_one">Вы отправили %1$d сообщение в этом чате, пока скрытое пространство было выключено. Выберите, какие сообщения останутся видны вне скрытого пространства, или оставьте все скрытыми.</string>
-    <string name="PrivateSpaceExposurePopupBody_few">Вы отправили %1$d сообщения в этом чате, пока скрытое пространство было выключено. Выберите, какие сообщения останутся видны вне скрытого пространства, или оставьте все скрытыми.</string>
-    <string name="PrivateSpaceExposurePopupBody_many">Вы отправили %1$d сообщений в этом чате, пока скрытое пространство было выключено. Выберите, какие сообщения останутся видны вне скрытого пространства, или оставьте все скрытыми.</string>
-    <string name="PrivateSpaceExposurePopupBody_other">Вы отправили %1$d сообщений в этом чате, пока скрытое пространство было выключено. Выберите, какие сообщения останутся видны вне скрытого пространства, или оставьте все скрытыми.</string>
+    <string name="PrivateSpaceExposureTitle">Управление видимостью вне защищённого пространства</string>
+    <string name="PrivateSpaceExposureExplanation">Выберите сообщения, которые будут видны вне защищённого пространства. Отмеченные показываются, остальные остаются скрытыми.</string>
+    <string name="PrivateSpaceExposurePopupBody_one">Вы отправили %1$d сообщение в этом чате, пока защищённое пространство было выключено. Выберите, какие сообщения останутся видны вне защищённого пространства, или оставьте все скрытыми.</string>
+    <string name="PrivateSpaceExposurePopupBody_few">Вы отправили %1$d сообщения в этом чате, пока защищённое пространство было выключено. Выберите, какие сообщения останутся видны вне защищённого пространства, или оставьте все скрытыми.</string>
+    <string name="PrivateSpaceExposurePopupBody_many">Вы отправили %1$d сообщений в этом чате, пока защищённое пространство было выключено. Выберите, какие сообщения останутся видны вне защищённого пространства, или оставьте все скрытыми.</string>
+    <string name="PrivateSpaceExposurePopupBody_other">Вы отправили %1$d сообщений в этом чате, пока защищённое пространство было выключено. Выберите, какие сообщения останутся видны вне защищённого пространства, или оставьте все скрытыми.</string>
     <string name="PrivateSpaceExposureManage">Выбрать</string>
     <string name="PrivateSpaceExposureSkip">Скрыть всё</string>
     <string name="PrivateSpaceExposureActionShort">Показать вне</string>
     <string name="PrivateSpaceExposureConfirm">Показать вне</string>
-    <string name="PrivateSpaceExposureConfirmBody_one">Сделать %1$d выбранное сообщение видимым вне скрытого пространства?</string>
-    <string name="PrivateSpaceExposureConfirmBody_few">Сделать %1$d выбранных сообщения видимыми вне скрытого пространства?</string>
-    <string name="PrivateSpaceExposureConfirmBody_many">Сделать %1$d выбранных сообщений видимыми вне скрытого пространства?</string>
-    <string name="PrivateSpaceExposureConfirmBody_other">Сделать %1$d выбранных сообщений видимыми вне скрытого пространства?</string>
+    <string name="PrivateSpaceExposureConfirmBody_one">Сделать %1$d выбранное сообщение видимым вне защищённого пространства?</string>
+    <string name="PrivateSpaceExposureConfirmBody_few">Сделать %1$d выбранных сообщения видимыми вне защищённого пространства?</string>
+    <string name="PrivateSpaceExposureConfirmBody_many">Сделать %1$d выбранных сообщений видимыми вне защищённого пространства?</string>
+    <string name="PrivateSpaceExposureConfirmBody_other">Сделать %1$d выбранных сообщений видимыми вне защищённого пространства?</string>
 </resources>
