@@ -5868,6 +5868,7 @@
     <string name="AppIconNox">Nox</string>
     <string name="LeemenIconTeal">Teal</string>
     <string name="LeemenIconViolet">Violet</string>
+    <string name="LeemenIconTurbo">Turbo</string>
     <string name="LeemenIconGraphite">Graphite</string>
     <string name="AppIconChangedTo">App icon has been changed to %1$s</string>
     <string name="FileTooLarge">File Too Large</string>
