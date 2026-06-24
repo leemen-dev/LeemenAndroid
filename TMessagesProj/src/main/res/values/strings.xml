@@ -2770,14 +2770,14 @@
     <string name="NotificationsPriorityUrgent">Urgent</string>
     <string name="RepeatNotificationsNever">Never</string>
     <string name="RepeatNotifications">Repeat Notifications</string>
-    <string name="PhoneNumberHelp">You can change your Leemen number here. Your account and all your cloud data — messages, media, contacts, etc. will be moved to the new number.</string>
+    <string name="PhoneNumberHelp">You can change your Telegram number here. Your account and all your cloud data — messages, media, contacts, etc. will be moved to the new number.</string>
     <string name="PhoneNumberAlert">Users will see your new number if they have it in their address book or your privacy settings allow them to see it. You can modify this in Settings &gt; Privacy and Security &gt; Phone number.</string>
     <string name="PhoneNumberChange2">Change Number</string>
     <string name="PhoneNumberChangeTitle">Change number</string>
     <string name="PhoneNumberKeepButton">Keep %1$s</string>
     <string name="ChangePhoneNewNumber">New Number</string>
     <string name="ChangePhoneHelp">We will send an SMS with a confirmation code to your new number.</string>
-    <string name="ChangePhoneNumberOccupied">The number %1$s is already connected to a Leemen account. Please delete that account before migrating to the new number.</string>
+    <string name="ChangePhoneNumberOccupied">The number %1$s is already connected to a Telegram account. Please delete that account before migrating to the new number.</string>
     <string name="NotificationsOther">Other</string>
     <string name="VibrationDisabled">Disabled</string>
     <string name="PopupEnabled">Enabled</string>
@@ -2941,7 +2941,7 @@
     <string name="AuthAnotherClientInfo1">Download Telegram on your computer from *getdesktop.telegram.org*.</string>
     <string name="AuthAnotherClientInfo2">Run Telegram Desktop to get the QR code.</string>
     <string name="AuthAnotherClientInfo3">Scan the QR code to connect your account.</string>
-    <string name="AuthAnotherClientUrl">This code can be used to allow someone to log in to your Leemen account.\n\nTo confirm Leemen login, please go to Settings &gt; Devices &gt; Scan QR and scan the code.</string>
+    <string name="AuthAnotherClientUrl">This code can be used to allow someone to log in to your Telegram account.\n\nTo confirm Telegram login, please go to Settings &gt; Devices &gt; Scan QR and scan the code.</string>
     <string name="QRCodePermissionNoCameraWithHint">**Leemen** needs camera access so that you can scan QR codes. Tap Settings -> Permissions, and turn **Camera** on.</string>
     <string name="SetProfilePhoto">Set Profile Photo</string>
     <string name="AppUpdate">Update Leemen</string>
@@ -2982,7 +2982,7 @@
     <string name="ChannelTitleChanged">Channel title updated.</string>
     <string name="ChannelDescriptionChanged">Channel description updated.</string>
     <string name="CheckPhoneNumber">Is %1$s still your number?</string>
-    <string name="CheckPhoneNumberInfo">Keep your number up to date to ensure you can always log into Leemen. **Learn more**</string>
+    <string name="CheckPhoneNumberInfo">Keep your number up to date to ensure you can always log into Telegram. **Learn more**</string>
     <string name="CheckPhoneNumberLearnMoreUrl">https://telegram.org/faq#q-i-have-a-new-phone-number-what-do-i-do</string>
     <string name="CheckPhoneNumberYes">Yes</string>
     <string name="CheckPhoneNumberYes2">👍 Yes</string>
@@ -3015,9 +3015,9 @@
     <string name="PassportRequestedInformation">Requested Information</string>
     <string name="PassportProvidedInformation">Provided Information</string>
     <string name="PassportInfoTitle">What is Telegram Passport?</string>
-    <string name="PassportInfo2">With Telegram Passport you can easily sign up for websites and services that require identity verification.\n\nYour information, personal data, and documents are protected by end-to-end encryption. Nobody, including Leemen, can access them without your permission.\n\nYou can visit our *FAQ* to learn more.</string>
+    <string name="PassportInfo2">With Telegram Passport you can easily sign up for websites and services that require identity verification.\n\nYour information, personal data, and documents are protected by end-to-end encryption. Nobody, including Telegram, can access them without your permission.\n\nYou can visit our *FAQ* to learn more.</string>
     <string name="PassportInfoUrl">https://telegram.org/faq#passport</string>
-    <string name="TelegramPassportCreatePasswordInfo">Please create a password to secure your personal data with end-to-end encryption.\n\nThis password will also be required whenever you log in to Leemen on a new device.</string>
+    <string name="TelegramPassportCreatePasswordInfo">Please create a password to secure your personal data with end-to-end encryption.\n\nThis password will also be required whenever you log in to Telegram on a new device.</string>
     <string name="TelegramPassportCreatePassword">CREATE A PASSWORD</string>
     <string name="TelegramPassportDelete">Delete Telegram Passport</string>
     <string name="TelegramPassportDeleteTitle">Delete Telegram passport</string>
@@ -3057,7 +3057,7 @@
     <string name="PassportDeletePhoneAlert">Delete phone number?</string>
     <string name="PassportPhoneInfo">Enter your phone number</string>
     <string name="PassportPhoneUseSame">Use %1$s</string>
-    <string name="PassportPhoneUseSameInfo">Use the same phone number as on Leemen.</string>
+    <string name="PassportPhoneUseSameInfo">Use the same phone number as on Telegram.</string>
     <string name="PassportPhoneUseSameEmailInfo">Use the same email as on Leemen.</string>
     <string name="PassportPhoneUseOther">Or enter a new phone number</string>
     <string name="PassportPhoneUploadInfo">Note: You will receive a confirmation code on the phone number you provide.</string>
@@ -3216,8 +3216,8 @@
     <string name="Disconnect">Disconnect</string>
     <string name="TerminateWebSessionStop">Block %1$s</string>
     <string name="TerminateAllWebSessions">Disconnect All Websites</string>
-    <string name="AreYouSureWebSessions">Are you sure you want to disconnect all websites where you used Leemen to log in?</string>
-    <string name="ClearOtherWebSessionsHelp">You can log in on websites that support signing in with Leemen.</string>
+    <string name="AreYouSureWebSessions">Are you sure you want to disconnect all websites where you used Telegram to log in?</string>
+    <string name="ClearOtherWebSessionsHelp">You can log in on websites that support signing in with Telegram.</string>
     <string name="LoginAttempts">Incomplete login attempts</string>
     <string name="LoginAttemptsInfo">The devices above have no access to your messages. The code was entered correctly, but no correct password was given.</string>
     <!--filters-->
@@ -3641,7 +3641,7 @@
     <string name="YourEmailInfo">Please add your valid email. It is the only way to recover a forgotten password.</string>
     <string name="YourEmailSkip">Skip</string>
     <string name="YourEmailSkipWarning">Warning</string>
-    <string name="YourEmailSkipWarningText">No, seriously.\n\nIf you forget your password, you will lose access to your Leemen account. There will be no way to restore it.</string>
+    <string name="YourEmailSkipWarningText">No, seriously.\n\nIf you forget your password, you will lose access to your Telegram account. There will be no way to restore it.</string>
     <string name="YourEmailAlmostThere">Almost there!</string>
     <string name="YourEmailAlmostThereText">Please check your email (don\'t forget the spam folder) to complete Two-Step Verification setup.</string>
     <string name="YourPasswordSuccess">Success!</string>
@@ -3817,7 +3817,7 @@
     <string name="PrivacyPaymentsPaymentInfoCleared">Payment info cleared.</string>
     <string name="PrivacyPaymentsShippingInfoCleared">Shipping info cleared.</string>
     <string name="PrivacyPaymentsPaymentShippingCleared">Payment and shipping info cleared.</string>
-    <string name="PrivacyBotsInfo">Websites where you used Leemen to log in.</string>
+    <string name="PrivacyBotsInfo">Websites where you used Telegram to log in.</string>
     <string name="PrivacyClearShipping">Shipping info</string>
     <string name="PrivacyClearPayment">Payment info</string>
     <string name="PrivacyDeleteCloudDrafts">Delete All Cloud Drafts</string>
@@ -4109,7 +4109,7 @@
     <string name="UpdateTelegram">Update Leemen</string>
     <string name="UpdateAppAlert">Sorry, your Leemen app is out of date and can\'t handle this request. Please update Leemen.</string>
     <string name="InvalidPhoneNumber">Invalid phone number. Please check the number and try again.</string>
-    <string name="PleaseLoginPassport">Please log in to your Leemen account to use Telegram Passport.</string>
+    <string name="PleaseLoginPassport">Please log in to your Telegram account to use Telegram Passport.</string>
     <string name="BannedPhoneNumber">This phone number is banned.</string>
     <string name="CodeExpired">Code expired, please retry login.</string>
     <string name="WrongCodeTitle">Wrong code</string>
@@ -4119,7 +4119,7 @@
     <string name="EmailTokenInvalid">Invalid email token.</string>
     <string name="EmailAddressInvalid">Invalid email address.</string>
     <string name="EmailLogin">Email Login</string>
-    <string name="EmailLoginChangeMessage">This email address will be used every time you log in to your Leemen account from a new device.</string>
+    <string name="EmailLoginChangeMessage">This email address will be used every time you log in to your Telegram account from a new device.</string>
     <string name="ChangeEmail">Change Email</string>
     <string name="FloodWait">Too many attempts, please try again later</string>
     <string name="FloodWaitTime">Too many attempts, please try again in %1$s</string>
@@ -4211,8 +4211,8 @@
     <string name="SendMessagesToGroupText">Do you want to send this message to **%1$s**?</string>
     <string name="SendGameToGroupText">Do you want to share this game to **%1$s**?</string>
     <string name="SendContactToGroupText">Do you want to send this contact to **%1$s**?</string>
-    <string name="NoUsernameFound">There is no Leemen account with this username.</string>
-    <string name="NoPhoneFound">There is no Leemen account with this phone number.</string>
+    <string name="NoUsernameFound">There is no Telegram account with this username.</string>
+    <string name="NoPhoneFound">There is no Telegram account with this phone number.</string>
     <string name="NoFolderFound">No chat list found.</string>
     <string name="NoTopicsCreated">no created topics</string>
     <string name="NoMonoforumTopicsCreated">no received messages</string>
@@ -6416,7 +6416,7 @@
     <string name="LoginEmailResetInSinglePattern">%1$s</string>
     <string name="LoginEmailResetInDoublePattern">%1$s and %2$s</string>
     <string name="LoginEmailResetTitle">Reset Email</string>
-    <string name="LoginEmailResetMessage">You can change your login email if you are logged into Leemen from another device. Otherwise, if you don\'t have access to email %1$s, you can reset this email with an **SMS** code in **%2$s**.</string>
+    <string name="LoginEmailResetMessage">You can change your login email if you are logged into Telegram from another device. Otherwise, if you don\'t have access to email %1$s, you can reset this email with an **SMS** code in **%2$s**.</string>
     <string name="LoginEmailResetButton">Reset Login Email</string>
     <string name="LoginEmailResetPremiumRequiredTitle">Telegram Premium Required</string>
     <string name="LoginEmailResetPremiumRequiredMessage">Due to the high cost of SMS in your country, you need a **Telegram Premium** account to immediately reset this email via an SMS code.\n\nYou can ask a friend to gift a Premium subscription for your account **%1$s**</string>
@@ -9695,7 +9695,7 @@
     <string name="AccountFrozenBottomSubtitle">Tap to view details</string>
     <string name="AccountFrozenTitle">Your Account is Frozen</string>
     <string name="AccountFrozen1Title">Violation of Terms</string>
-    <string name="AccountFrozen1Text">Your account was frozen for breaking Leemen’s Terms and Conditions.</string>
+    <string name="AccountFrozen1Text">Your account was frozen for breaking Telegram’s Terms and Conditions.</string>
     <string name="AccountFrozen2Title">Read-Only Mode</string>
     <string name="AccountFrozen2Text">You can access your account but can’t send messages or take actions.</string>
     <string name="AccountFrozen3Title">Appeal Before Deactivation</string>
@@ -9707,7 +9707,7 @@
     <string name="SMSFee1Text">Telecom providers in your country charge Leemen very high prices for SMS.</string>
     <string name="SMSFee1TextCountry">Telecom providers in your country (%s) charge Leemen very high prices for SMS.</string>
     <string name="SMSFee2Title">Verification Required</string>
-    <string name="SMSFee2Text">Leemen needs to send you an SMS with a verification code to confirm your phone number.</string>
+    <string name="SMSFee2Text">Telegram needs to send you an SMS with a verification code to confirm your phone number.</string>
     <string name="SMSFee3Title">Support via **Telegram Premium >**</string>
     <string name="SMSFee3Text">Sign up for 1-week Telegram Premium subscription to help cover the SMS costs.</string>
     <string name="SMSFeePurchaseTitle">Sign up for %s</string>

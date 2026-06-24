@@ -39,9 +39,9 @@
     <string name="SentFragmentCode">Отримайте код для %1$s у розділі «Anonymous Numbers» на Fragment.</string>
     <string name="SentSmsCodeTitle">Введіть код</string>
     <string name="OpenFragment">Відкрити Fragment</string>
-    <string name="SentCallCode">Ми телефонуємо на ваш номер **%1$s**.\n\nВідповідати на виклик не потрібно, Telegram автоматично зробить усе сам.</string>
+    <string name="SentCallCode">Ми телефонуємо на ваш номер **%1$s**.\n\nВідповідати на виклик не потрібно, Leemen автоматично зробить усе сам.</string>
     <string name="SentCallOnly">Ми телефонуємо на номер **%1$s**, щоб продиктувати код.</string>
-    <string name="CallText">Telegram зателефонує вам за %1$d:%2$02d</string>
+    <string name="CallText">Leemen зателефонує вам за %1$d:%2$02d</string>
     <string name="SmsText">Ми надішлемо вам SMS за %1$d:%2$02d</string>
     <string name="Calling">Телефонуємо вам...</string>
     <string name="SendingSms">Надсилаємо SMS...</string>
@@ -222,18 +222,18 @@
     <string name="CheckYourNewEmailSubtitle">Введіть код, який ми щойно надіслали на вашу нову е-пошту %1$s.</string>
     <string name="LoginOrSingInWithGoogle">або</string>
     <!--Intro view-->
-    <string name="Page1Title">Telegram</string>
+    <string name="Page1Title">Leemen</string>
     <string name="Page2Title">Швидкий</string>
     <string name="Page3Title">Безплатний</string>
     <string name="Page4Title">Захищений</string>
     <string name="Page5Title">Потужний</string>
     <string name="Page6Title">Хмарний</string>
     <string name="Page1Message">**Найшвидший** месенджер у світі.\n**Безплатний** і **захищений**.</string>
-    <string name="Page2Message">**Telegram** доставляє повідомлення\nшвидше за всі інші застосунки.</string>
-    <string name="Page3Message">У **Telegram** можна безплатно зберігати\nскільки завгодно повідомлень і медіафайлів.</string>
-    <string name="Page4Message">**Telegram** оберігає ваші повідомлення\nвід хакерських атак.</string>
-    <string name="Page5Message">**Telegram** не обмежує вас\nу розмірі чатів і медіа.</string>
-    <string name="Page6Message">**Telegram** надає вам доступ до\nповідомлень з безлічі пристроїв.</string>
+    <string name="Page2Message">**Leemen** доставляє повідомлення\nшвидше за всі інші застосунки.</string>
+    <string name="Page3Message">У **Leemen** можна безплатно зберігати\nскільки завгодно повідомлень і медіафайлів.</string>
+    <string name="Page4Message">**Leemen** оберігає ваші повідомлення\nвід хакерських атак.</string>
+    <string name="Page5Message">**Leemen** не обмежує вас\nу розмірі чатів і медіа.</string>
+    <string name="Page6Message">**Leemen** надає вам доступ до\nповідомлень з безлічі пристроїв.</string>
     <string name="StartMessaging">Почати спілкування</string>
     <!--date formatters-->
     <string name="formatterBoostExpired">dd MMM yyyy</string>
