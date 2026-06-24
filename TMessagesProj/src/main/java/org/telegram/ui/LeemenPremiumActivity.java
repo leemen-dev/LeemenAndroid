@@ -206,6 +206,9 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         loadPrices();
         // Sync entitlement from Play (cross-device restore + acknowledgement retry); server is truth.
         LeemenBilling.getInstance().restore(currentAccount);
+        // Reconcile local premium DOWN from /me too — restore() only ratchets up, so a server-side
+        // revoke (hold/expire/refund deletes the row) is observed here when the paywall opens.
+        LeemenBilling.reconcileEntitlements(currentAccount);
         // One subscription across platforms (CONTRACT §7/§10): if /me shows an active paid sub on another
         // platform, hide the buy button.
         LeemenBilling.checkOtherPlatformSubscription(currentAccount, source -> {
