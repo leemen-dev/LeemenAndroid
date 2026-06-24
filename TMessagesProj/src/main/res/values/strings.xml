@@ -2512,6 +2512,7 @@
     <string name="LeemenPromoRow">Redeem promo code</string>
     <string name="LeemenPromoTitle">Promo code</string>
     <string name="LeemenPromoHint">Enter code</string>
+    <string name="LeemenPremiumSubscriptionActive">Subscription active</string>
     <string name="LeemenPromoButton">Redeem</string>
     <string name="LeemenPromoSuccess">Promo code applied</string>
     <string name="LeemenPromoError">Couldn\'t redeem code</string>

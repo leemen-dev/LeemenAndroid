@@ -335,6 +335,7 @@
     <string name="LeemenPromoRow">Активировать промокод</string>
     <string name="LeemenPromoTitle">Промокод</string>
     <string name="LeemenPromoHint">Введите код</string>
+    <string name="LeemenPremiumSubscriptionActive">Подписка активна</string>
     <string name="LeemenPromoButton">Активировать</string>
     <string name="LeemenPromoSuccess">Промокод применён</string>
     <string name="LeemenPromoError">Не удалось активировать код</string>

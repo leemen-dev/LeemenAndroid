@@ -333,6 +333,59 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
         });
     }
 
+    /** Result of {@link #checkOtherPlatformSubscription}: the {@code source} of an active paid
+     *  subscription on a platform OTHER than Google Play, or {@code null} if there is none. */
+    public interface OtherPlatformCallback {
+        void onResult(@Nullable String otherPlatformSource);
+    }
+
+    /** One-subscription-across-platforms gate (CONTRACT §7/§10): inspect {@code /me.entitlements} for an
+     *  active paid subscription whose {@code source} is a DIFFERENT billing platform — anything other than
+     *  Google Play (this platform) or a {@code promo} grant (not a store sub). The caller must NOT start a
+     *  Play purchase while one exists. Callback on the UI thread; {@code null} = clear to purchase. Fails
+     *  OPEN (null) on any error — the server additionally rejects a redundant Play purchase. */
+    public static void checkOtherPlatformSubscription(final int account, final OtherPlatformCallback cb) {
+        final String token = LeemenAccount.getToken(account);
+        if (token == null) {
+            cb.onResult(null);
+            return;
+        }
+        LeemenRestClient.get(LeemenConfig.EP_ME, token, (resp, httpCode, ec, em) -> {
+            String src = null;
+            try {
+                if (resp != null && httpCode >= 200 && httpCode < 300
+                        && resp.has("entitlements") && resp.get("entitlements").isJsonArray()) {
+                    com.google.gson.JsonArray arr = resp.getAsJsonArray("entitlements");
+                    long now = System.currentTimeMillis();
+                    for (int i = 0; i < arr.size(); i++) {
+                        if (!arr.get(i).isJsonObject()) {
+                            continue;
+                        }
+                        JsonObject e = arr.get(i).getAsJsonObject();
+                        String source = e.has("source") && !e.get("source").isJsonNull()
+                                ? e.get("source").getAsString() : null;
+                        if (source == null || "play".equals(source) || "promo".equals(source)) {
+                            continue; // this platform, or a non-store grant
+                        }
+                        boolean active;
+                        if (!e.has("expires_at") || e.get("expires_at").isJsonNull()) {
+                            active = true; // perpetual entitlement
+                        } else {
+                            active = parseExpiryMs(e.get("expires_at").getAsString()) > now;
+                        }
+                        if (active) {
+                            src = source;
+                            break;
+                        }
+                    }
+                }
+            } catch (Throwable ignore) {
+                src = null;
+            }
+            cb.onResult(src);
+        });
+    }
+
     /** POST the purchase token to the backend for server-side verification + entitlement grant.
      *  result(granted, expiresMs) — expiresMs is the backend-confirmed expiry (epoch ms). A DEBUG build
      *  may, for a LIVE purchase only, fall back to a local grant when the endpoint isn't deployed yet

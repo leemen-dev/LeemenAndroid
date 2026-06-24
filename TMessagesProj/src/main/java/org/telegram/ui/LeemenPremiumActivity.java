@@ -11,7 +11,6 @@ import android.graphics.drawable.GradientDrawable;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -27,7 +26,6 @@ import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.leemen.LeemenAnalytics;
 import org.telegram.messenger.leemen.LeemenBilling;
 import org.telegram.messenger.leemen.LeemenConfig;
-import org.telegram.messenger.leemen.LeemenPromo;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -41,13 +39,11 @@ import java.util.HashMap;
 
 /**
  * Leemen Premium subscription screen — Telegram-Premium-style: premium-gradient hero, feature list,
- * plan cards, a gradient Subscribe button, and a "Redeem promo code" row.
- *
- * Billing is local-only for now: Subscribe grants the entitlement via
- * {@link SecondSpaceController#activateLeemenPremiumLocally(int)}; a redeemed promo grants it via the
- * backend ({@link LeemenPromo}) and reflects the returned expiry. Analytics fires paywall_view /
+ * plan cards, and a gradient Subscribe button. Purchase goes through Google Play
+ * ({@link LeemenBilling#launchPurchase}), server-verified and reflected via the FlowListener. Per the
+ * one-subscription-across-platforms rule (CONTRACT §7/§10), the Subscribe button is hidden when /me
+ * reports an active paid subscription from another platform. Analytics fires paywall_view /
  * paywall_cta_tap / subscribe_flow_started (allowlisted, non-PS).
- * TODO(billing): replace local activation with a Google Play / backend-verified purchase.
  */
 public class LeemenPremiumActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
 
@@ -56,6 +52,10 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
     private PlanRow yearlyRow;
     private TextView subscribeButton;
     private TextView statusView;
+    /** Non-null when /me shows an active paid subscription on a DIFFERENT platform — the buy button +
+     *  plan cards are then hidden (one subscription across platforms, CONTRACT §7/§10). */
+    private String otherPlatformSource;
+    private LinearLayout plansContainer;
     private final String placement;
 
     public LeemenPremiumActivity() {
@@ -164,6 +164,7 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         LinearLayout plans = new LinearLayout(context);
         plans.setOrientation(LinearLayout.VERTICAL);
         plans.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+        plansContainer = plans;
         content.addView(plans, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 12, 0, 0));
 
         yearlyRow = new PlanRow(context,
@@ -181,11 +182,6 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
                 false);
         monthlyRow.setOnClickListener(v -> selectPlan(1));
         plans.addView(monthlyRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 60));
-
-        // --- redeem promo code ---
-        TextView promoRow = linkRow(context, LocaleController.getString(R.string.LeemenPromoRow));
-        promoRow.setOnClickListener(v -> showPromoDialog());
-        content.addView(promoRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 50, 0, 12, 0, 0));
 
         root.addView(scrollView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP, 0, 0, 0, 72));
 
@@ -210,6 +206,12 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         loadPrices();
         // Sync entitlement from Play (cross-device restore + acknowledgement retry); server is truth.
         LeemenBilling.getInstance().restore(currentAccount);
+        // One subscription across platforms (CONTRACT §7/§10): if /me shows an active paid sub on another
+        // platform, hide the buy button.
+        LeemenBilling.checkOtherPlatformSubscription(currentAccount, source -> {
+            otherPlatformSource = source;
+            updateState();
+        });
 
         HashMap<String, String> props = new HashMap<>();
         props.put("placement", placement);
@@ -307,20 +309,6 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         container.addView(row, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
     }
 
-    private TextView linkRow(Context context, CharSequence text) {
-        TextView row = new TextView(context);
-        row.setText(text);
-        row.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
-        row.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-        row.setBackground(Theme.getSelectorDrawable(true));
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(21), 0, dp(21), 0);
-        Drawable arrow = context.getResources().getDrawable(R.drawable.msg_arrowright).mutate();
-        arrow.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText), PorterDuff.Mode.MULTIPLY));
-        row.setCompoundDrawablesWithIntrinsicBounds(null, null, arrow, null);
-        return row;
-    }
-
     private void selectPlan(int months) {
         selectedMonths = months;
         if (monthlyRow != null) {
@@ -340,6 +328,9 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         if (getParentActivity() == null) {
             return;
         }
+        if (otherPlatformSource != null) {
+            return; // one active subscription across platforms — don't start a Play purchase here
+        }
         String basePlan = selectedMonths == 12
                 ? org.telegram.messenger.leemen.LeemenConfig.PLAY_BASE_PLAN_YEARLY
                 : org.telegram.messenger.leemen.LeemenConfig.PLAY_BASE_PLAN_MONTHLY;
@@ -349,69 +340,24 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
                 .launchPurchase(getParentActivity(), currentAccount, basePlan);
     }
 
-    private void showPromoDialog() {
-        if (getParentActivity() == null) {
-            return;
-        }
-        Context context = getParentActivity();
-        EditText input = new EditText(context);
-        input.setTextColor(Theme.getColor(Theme.key_dialogTextBlack));
-        input.setHintTextColor(Theme.getColor(Theme.key_dialogTextHint));
-        input.setText("");
-        input.setHint(LocaleController.getString(R.string.LeemenPromoHint));
-        input.setSingleLine(true);
-        FrameLayout container = new FrameLayout(context);
-        container.setPadding(dp(22), dp(4), dp(22), 0);
-        container.addView(input, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-
-        AlertDialog.Builder b = new AlertDialog.Builder(context);
-        b.setTitle(LocaleController.getString(R.string.LeemenPromoTitle));
-        b.setView(container);
-        b.setPositiveButton(LocaleController.getString(R.string.LeemenPromoButton), (d, w) -> {
-            String code = input.getText().toString().trim();
-            if (!code.isEmpty()) {
-                redeemPromo(code);
-            }
-        });
-        b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
-        showDialog(b.create());
-    }
-
-    private void redeemPromo(String code) {
-        if (getParentActivity() == null) {
-            return;
-        }
-        AlertDialog progress = new AlertDialog(getParentActivity(), AlertDialog.ALERT_TYPE_SPINNER);
-        progress.setCanCancel(false);
-        showDialog(progress);
-        LeemenPromo.redeem(currentAccount, code, (ok, entId, kind, expiresAt, reason) -> {
-            try { progress.dismiss(); } catch (Exception ignore) {}
-            if (getParentActivity() == null || fragmentView == null) {
-                return; // fragment left while the request was in flight
-            }
-            if (ok) {
-                long until = LeemenBilling.parseExpiryMs(expiresAt);
-                SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-                if (until > 0) {
-                    ssc.setLeemenPremiumUntil(until);
-                } else {
-                    ssc.activateLeemenPremiumLocally(1);
-                }
-                updateState();
-                BulletinFactory.of(this)
-                        .createSimpleBulletin(R.raw.chats_infotip, LocaleController.getString(R.string.LeemenPromoSuccess))
-                        .show();
-            } else {
-                BulletinFactory.of(this)
-                        .createErrorBulletin(LocaleController.getString(R.string.LeemenPromoError))
-                        .show();
-            }
-        });
-    }
-
     private void updateState() {
         if (subscribeButton == null) {
             return;
+        }
+        if (otherPlatformSource != null) {
+            // Active paid subscription on another platform — just show it's active, hide the buy button
+            // (one subscription across platforms, CONTRACT §7/§10).
+            statusView.setVisibility(View.VISIBLE);
+            statusView.setText(LocaleController.getString(R.string.LeemenPremiumSubscriptionActive));
+            subscribeButton.setVisibility(View.GONE);
+            if (plansContainer != null) {
+                plansContainer.setVisibility(View.GONE);
+            }
+            return;
+        }
+        subscribeButton.setVisibility(View.VISIBLE);
+        if (plansContainer != null) {
+            plansContainer.setVisibility(View.VISIBLE);
         }
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
         if (ssc.hasLeemenPremium()) {
