@@ -190,9 +190,11 @@ public final class LeemenIdentity {
                 if (resp != null && code >= 200 && code < 300 && resp.has("token") && resp.has("sync_account_id")) {
                     String token = resp.get("token").getAsString();
                     String syncId = resp.get("sync_account_id").getAsString();
+                    String masterId = resp.has("master_account_id") && !resp.get("master_account_id").isJsonNull()
+                            ? resp.get("master_account_id").getAsString() : null;
                     String privacy = resp.has("privacy_mode") && !resp.get("privacy_mode").isJsonNull()
                             ? resp.get("privacy_mode").getAsString() : null;
-                    LeemenAccount.save(account, token, syncId, privacy);
+                    LeemenAccount.save(account, token, syncId, masterId, privacy);
                     LeemenKey.ensureKey(account); // chain Phase 2: acquire K_master right after bind
                     // A session token now exists → let the Terms/Privacy acceptance gate run (LaunchActivity).
                     try {

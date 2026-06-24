@@ -34,6 +34,51 @@ public final class LeemenAccount {
         return prefs().getString("sync_" + account, null);
     }
 
+    /** master_account_id (UUID, == JWT `sub`) returned by /v1/auth/telegram; null until first bind.
+     *  This is the principal identity; it is the value Google Play's obfuscatedAccountId MUST equal so
+     *  /v1/entitlements/play binds the purchase to this account (contract §4/§7). Stored verbatim.
+     *
+     *  Backfill: installs bound before this field was persisted have no stored value. Since it is
+     *  identical to the JWT `sub` we already hold, decode it from the token once and cache it — this
+     *  keeps purchases binding correctly across the upgrade without forcing a re-auth. */
+    public static String getMasterAccountId(int account) {
+        String stored = prefs().getString("master_" + account, null);
+        if (!TextUtils.isEmpty(stored)) {
+            return stored;
+        }
+        String sub = subFromToken(getToken(account));
+        if (!TextUtils.isEmpty(sub)) {
+            prefs().edit().putString("master_" + account, sub).apply();
+        }
+        return sub;
+    }
+
+    /** Read the `sub` claim (== master_account_id) from our own session JWT WITHOUT verifying the
+     *  signature — verification is the server's job; we only parse a token we minted-for ourselves to
+     *  recover a value the server already vouched for. Returns null on any malformed input. */
+    private static String subFromToken(String token) {
+        if (TextUtils.isEmpty(token)) {
+            return null;
+        }
+        try {
+            int dot1 = token.indexOf('.');
+            int dot2 = dot1 < 0 ? -1 : token.indexOf('.', dot1 + 1);
+            if (dot1 <= 0 || dot2 <= dot1) {
+                return null;
+            }
+            byte[] json = android.util.Base64.decode(token.substring(dot1 + 1, dot2),
+                    android.util.Base64.URL_SAFE | android.util.Base64.NO_WRAP | android.util.Base64.NO_PADDING);
+            com.google.gson.JsonObject claims = com.google.gson.JsonParser
+                    .parseString(new String(json, java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+            if (claims.has("sub") && !claims.get("sub").isJsonNull()) {
+                String sub = claims.get("sub").getAsString();
+                return TextUtils.isEmpty(sub) ? null : sub;
+            }
+        } catch (Throwable ignore) {
+        }
+        return null;
+    }
+
     /** Privacy mode reported by the backend ("default" | "max"); null until first bind. */
     public static String getPrivacyMode(int account) {
         return prefs().getString("privacy_" + account, null);
@@ -182,10 +227,15 @@ public final class LeemenAccount {
     }
 
     /** Persist the result of a successful /v1/auth/telegram bind. */
-    public static void save(int account, String token, String syncAccountId, String privacyMode) {
+    public static void save(int account, String token, String syncAccountId, String masterAccountId, String privacyMode) {
         SharedPreferences.Editor e = prefs().edit()
                 .putString("token_" + account, token)
                 .putString("sync_" + account, syncAccountId);
+        if (!TextUtils.isEmpty(masterAccountId)) {
+            // Store the UUID verbatim (canonical lowercase, dashed) — Play's obfuscatedAccountId must
+            // match it byte-for-byte under exact string equality (contract §4). Never hash/normalize.
+            e.putString("master_" + account, masterAccountId);
+        }
         if (privacyMode != null) {
             e.putString("privacy_" + account, privacyMode);
         }
@@ -219,6 +269,7 @@ public final class LeemenAccount {
         prefs().edit()
                 .remove("token_" + account)
                 .remove("sync_" + account)
+                .remove("master_" + account)
                 .remove("privacy_" + account)
                 .remove("kmaster_" + account)
                 .remove("disabled_" + account)

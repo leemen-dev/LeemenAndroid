@@ -463,25 +463,16 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
         org.telegram.messenger.AndroidUtilities.runOnUIThread(() -> l.onPurchaseResult(ok, reason));
     }
 
-    /** Stable, non-reversible per-account id for Play fraud signals (optional). */
+    /** Play's obfuscatedAccountId — MUST be the raw master_account_id UUID exactly as /v1/auth/telegram
+     *  returned it (== JWT `sub`). The backend reads externalAccountIdentifiers.obfuscatedExternalAccountId
+     *  back from subscriptionsv2.get and compares it to `sub` by exact string equality (no case-fold/trim/
+     *  dash-strip); any other value → 409 purchase_account_mismatch and the grant never lands (contract §4).
+     *  So forward the stored UUID verbatim — do NOT hash it, do NOT derive it from the Telegram uid. Null
+     *  when the account isn't bound yet (no purchase should start in that state). */
     @Nullable
     private static String obfuscatedAccountId(int account) {
-        try {
-            long uid = UserConfig.getInstance(account).getClientUserId();
-            if (uid == 0) {
-                return null;
-            }
-            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] d = md.digest(("leemen:" + uid).getBytes("UTF-8"));
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < 16; i++) { // 32 hex chars ≤ Google's 64 limit
-                sb.append(Character.forDigit((d[i] >> 4) & 0xF, 16));
-                sb.append(Character.forDigit(d[i] & 0xF, 16));
-            }
-            return sb.toString();
-        } catch (Throwable e) {
-            return null;
-        }
+        String masterId = LeemenAccount.getMasterAccountId(account);
+        return TextUtils.isEmpty(masterId) ? null : masterId;
     }
 
     /** Parse a backend expires_at (epoch ms / epoch s / ISO-8601) → epoch ms, or 0 if unknown. */
