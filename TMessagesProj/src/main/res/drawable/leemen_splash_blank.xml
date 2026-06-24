@@ -1,0 +1,9 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="320dp"
+    android:viewportWidth="320"
+    android:viewportHeight="320">
+    <!-- intentionally transparent: the cold-start window is flat graphite,
+         the Leemen L fold-in plays as an in-activity Lottie overlay -->
+    <path android:pathData="M0,0h320v320h-320z" android:fillColor="#00000000"/>
+</vector>

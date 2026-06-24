@@ -110,6 +110,22 @@
 
         <activity-alias
             android:enabled="false"
+            android:name="org.telegram.messenger.GraphiteIcon"
+            android:targetActivity="org.telegram.ui.LaunchActivity"
+            android:icon="@mipmap/icon_7_launcher_sa"
+            android:roundIcon="@mipmap/icon_7_launcher_sa"
+            android:exported="true"
+            tools:node="replace">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:enabled="false"
             android:name="org.telegram.messenger.NoxIcon"
             android:targetActivity="org.telegram.ui.LaunchActivity"
             android:icon="@mipmap/icon_2_launcher_sa"

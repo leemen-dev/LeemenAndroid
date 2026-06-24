@@ -3484,11 +3484,14 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             } else {
                 statusDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(null, dp(26));
                 statusDrawable.center = true;
-                logoDrawable = context.getResources().getDrawable(R.drawable.telegram_logo_2).mutate();
-                logoDrawable.setBounds(0, dp(2), logoDrawable.getIntrinsicWidth(), dp(2) + logoDrawable.getIntrinsicHeight());
-                logoDrawable.setColorFilter(getThemedColor(Theme.key_telegram_color_dialogsLogo), PorterDuff.Mode.MULTIPLY);
-                SpannableStringBuilder ssb = new SpannableStringBuilder(getString(R.string.AppName));
-                ssb.setSpan(new ImageSpan(logoDrawable), 0, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                // Leemen brand: round "L" icon (keeps its blue) + app-name text (follows the theme color).
+                logoDrawable = null; // skips the legacy wordmark recolor in the theme-update path
+                org.telegram.ui.Components.ColoredImageSpan lSpan = new org.telegram.ui.Components.ColoredImageSpan(context.getResources().getDrawable(R.drawable.logo_middle).mutate(), org.telegram.ui.Components.ColoredImageSpan.ALIGN_CENTER);
+                lSpan.recolorDrawable = false;
+                lSpan.setSize(dp(24));
+                SpannableStringBuilder ssb = new SpannableStringBuilder(".");
+                ssb.setSpan(lSpan, 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                ssb.append("  ").append(getString(R.string.AppName));
                 actionBar.setTitle(ssb, statusDrawable);
                 updateStatus(UserConfig.getInstance(currentAccount).getCurrentUser(), false);
             }

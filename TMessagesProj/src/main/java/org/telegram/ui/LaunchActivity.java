@@ -296,6 +296,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     private FrameLayout shadowTabletSide;
     private SizeNotifierFrameLayout backgroundTablet;
     public FrameLayout frameLayout;
+    private static boolean leemenSplashShown;
     private FireworksOverlay fireworksOverlay;
     private BottomSheetTabsOverlay bottomSheetTabsOverlay;
     public DrawerLayoutContainer drawerLayoutContainer;
@@ -671,6 +672,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             } catch (Exception e) {
                 FileLog.e(e);
             }
+        }
+        if (!leemenSplashShown && savedInstanceState == null) {
+            leemenSplashShown = true;
+            showLeemenSplash();
         }
         checkLayout();
         checkSystemBarColors();
@@ -1118,6 +1123,30 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
     public void removeOnUserLeaveHintListener(Runnable callback) {
         onUserLeaveHintListeners.remove(callback);
+    }
+
+    private void showLeemenSplash() {
+        try {
+            final FrameLayout cover = new FrameLayout(this);
+            cover.setBackgroundColor(0xFF1C1C24);
+            RLottieImageView img = new RLottieImageView(this);
+            img.setAutoRepeat(false);
+            img.setAnimation(R.raw.leemen_splash, 160, 160);
+            img.setScaleType(ImageView.ScaleType.CENTER);
+            cover.addView(img, LayoutHelper.createFrame(160, 160, Gravity.CENTER));
+            frameLayout.addView(cover, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+            final Runnable remove = () -> {
+                if (cover.getParent() != null) {
+                    frameLayout.removeView(cover);
+                }
+            };
+            img.setOnAnimationEndListener(() -> AndroidUtilities.runOnUIThread(() ->
+                    cover.animate().alpha(0f).setDuration(150).withEndAction(remove).start()));
+            img.playAnimation();
+            AndroidUtilities.runOnUIThread(remove, 2200); // failsafe if the end callback never fires
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
     }
 
     private BaseFragment getClientNotActivatedFragment() {

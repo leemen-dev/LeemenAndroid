@@ -326,9 +326,8 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
 
         telegramLogoView = new ImageView(context);
         telegramLogoView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        telegramLogoView.setImageResource(R.drawable.telegram_logo_2);
-        telegramLogoView.setColorFilter(getTextLogoColor(), PorterDuff.Mode.MULTIPLY);
-        addView(telegramLogoView, LayoutHelper.createFrame(90, 22));
+        telegramLogoView.setImageResource(R.drawable.logo_middle); // round Leemen "L" (keeps its own blue)
+        addView(telegramLogoView, LayoutHelper.createFrame(22, 22));
 
         statusDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(null, dp(26));
         statusDrawable.center = true;
@@ -1112,7 +1111,7 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
         if (subtitleOverlayContainer != null) {
             subtitleOverlayContainer.updateColors();
         }
-        telegramLogoView.setColorFilter(getTextLogoColor(), PorterDuff.Mode.MULTIPLY);
+        // telegramLogoView shows the round Leemen "L" kept in its own blue (not theme-tinted)
         AndroidUtilities.forEachViews(recyclerListView, view -> {
             StoryCell cell = (StoryCell) view;
             cell.invalidate();
