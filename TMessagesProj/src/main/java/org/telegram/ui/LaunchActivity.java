@@ -673,7 +673,11 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 FileLog.e(e);
             }
         }
-        if (!leemenSplashShown && savedInstanceState == null) {
+        // Android 12+ plays the branded fold-in in the OS SplashScreen slot (windowSplashScreenAnimatedIcon =
+        // leemen_splash_anim, ~450ms — Telegram-style placement & timing). Only pre-12, where that slot does
+        // not exist, fall back to the in-app Lottie overlay so old devices still get the brand splash.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+                && !leemenSplashShown && savedInstanceState == null) {
             leemenSplashShown = true;
             showLeemenSplash();
         }
