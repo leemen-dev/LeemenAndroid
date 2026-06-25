@@ -1426,11 +1426,25 @@ public class LocaleController {
         return localeInfo == null || TextUtils.isEmpty(localeInfo.name) ? getString("LanguageName", R.string.LanguageName) : localeInfo.name;
     }
 
+    /** Resource keys carrying Leemen brand identity. These are served ONLY from local resources and are
+     *  never taken from the cloud/Telegram langpack, which still ships the original "Telegram" values and
+     *  would otherwise replace our brand once a remote langpack loads (e.g. the intro title flips from
+     *  "Leemen Beta" to "Telegram"). Remote localization stays fully enabled for every other key. Extend
+     *  this set if another brand string is seen reverting to "Telegram". */
+    private static final java.util.Set<String> BRAND_STRINGS = new java.util.HashSet<>(java.util.Arrays.asList(
+            "AppName"
+    ));
+
     private String getStringInternal(String key, int res) {
         return getStringInternal(key, null, 0, res);
     }
 
     private String getStringInternal(String key, String fallback, int fallbackRes, int res) {
+        if (res != 0 && BRAND_STRINGS.contains(key)) {
+            try {
+                return ApplicationLoader.applicationContext.getString(res);
+            } catch (Exception ignored) {}
+        }
         String value = BuildVars.USE_CLOUD_STRINGS ? localeValues.get(key) : null;
         if (value == null) {
             if (BuildVars.USE_CLOUD_STRINGS && fallback != null) {
