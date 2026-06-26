@@ -1426,14 +1426,15 @@ public class LocaleController {
         return localeInfo == null || TextUtils.isEmpty(localeInfo.name) ? getString("LanguageName", R.string.LanguageName) : localeInfo.name;
     }
 
-    /** Resource keys carrying Leemen brand identity. These are served ONLY from local resources and are
-     *  never taken from the cloud/Telegram langpack, which still ships the original "Telegram" values and
-     *  would otherwise replace our brand once a remote langpack loads (e.g. the intro title flips from
-     *  "Leemen Beta" to "Telegram"). Remote localization stays fully enabled for every other key. Extend
-     *  this set if another brand string is seen reverting to "Telegram". */
-    private static final java.util.Set<String> BRAND_STRINGS = new java.util.HashSet<>(java.util.Arrays.asList(
-            "AppName"
-    ));
+    /** Resource keys carrying Leemen brand identity (we changed their value from the upstream Telegram
+     *  text). Served ONLY from local resources — never from the cloud/Telegram "android" langpack, which
+     *  still ships the original "Telegram" values and would otherwise revert our whole rebrand once a
+     *  remote langpack loads (e.g. the intro title flips "Leemen Beta" -> "Telegram"). Remote localization
+     *  stays fully enabled for every other key. The list is GENERATED (see {@link
+     *  org.telegram.messenger.leemen.LeemenBrandStrings}) by diffing our resources against upstream;
+     *  regenerate after any further Telegram->Leemen rebrand of a shared key. */
+    private static final java.util.Set<String> BRAND_STRINGS = new java.util.HashSet<>(
+            java.util.Arrays.asList(org.telegram.messenger.leemen.LeemenBrandStrings.KEYS));
 
     private String getStringInternal(String key, int res) {
         return getStringInternal(key, null, 0, res);
