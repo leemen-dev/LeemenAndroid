@@ -1607,7 +1607,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                         }
                         textCell2.setTextAndValueAndIcon(getString(R.string.Passcode), value, true, icon, true);
                     } else if (position == privateSpaceEnterRow) {
-                        textCell2.setTextAndValueAndIcon(getString(R.string.PrivateSpaceEnter), "", true, R.drawable.msg2_secret, true);
+                        textCell2.setTextAndValueAndIcon(getString(R.string.PrivateSpaceEnter), "", true, R.drawable.msg_stories_views, true);
                     } else if (position == blockedRow) {
                         int totalCount = getMessagesController().totalBlockedCount;
                         if (totalCount == 0) {
