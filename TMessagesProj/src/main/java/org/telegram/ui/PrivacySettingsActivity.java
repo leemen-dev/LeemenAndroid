@@ -167,10 +167,6 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
     private int privacyModeRow;
     private int analyticsConsentRow;
     private int analyticsConsentDetailRow;
-    // Leemen: account deletion is search-only (no visible row) for deniability — reachable only via the
-    // Settings search, gated by the PS PIN. This flag is set when this screen is opened from that search
-    // entry and is consumed exactly once in onResume() to launch the PIN-gated deletion.
-    private boolean openLeemenDeleteFromSearch;
     private int privacyPolicyRow;
     private int termsRow;
     private int rowCount;
@@ -777,30 +773,44 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
 
     // --- Leemen account deletion (store-visible OFF-mode entry; full in-app, PIN-gated when a PS PIN exists) ---
 
-    private void runLeemenAccountDeletion() {
-        if (getParentActivity() == null) {
+    /** Show the search-only "delete account" dialog on {@code f} directly — WITHOUT navigating into Privacy
+     *  settings. PIN-gated when a PS PIN exists (else a plain destructive confirm). */
+    public static void showLeemenDeleteDialog(BaseFragment f) {
+        if (f == null || f.getParentActivity() == null) {
             return;
         }
-        AlertDialog progress = new AlertDialog(getParentActivity(), AlertDialog.ALERT_TYPE_SPINNER);
+        SecondSpaceController psc = SecondSpaceController.getInstance(f.getCurrentAccount());
+        if (psc.hasPassword()) {
+            promptPinThenDeleteLeemenAccount(f, psc);
+        } else {
+            confirmThenDeleteLeemenAccount(f);
+        }
+    }
+
+    private static void runLeemenAccountDeletion(BaseFragment f) {
+        if (f.getParentActivity() == null) {
+            return;
+        }
+        AlertDialog progress = new AlertDialog(f.getParentActivity(), AlertDialog.ALERT_TYPE_SPINNER);
         progress.setCanCancel(false);
         progress.show();
         // Variant B: server erasure → log out all Leemen clients → this device to a clean first-run.
-        org.telegram.messenger.leemen.LeemenAccount.deleteAndLogoutEverywhere(currentAccount, () -> {
+        org.telegram.messenger.leemen.LeemenAccount.deleteAndLogoutEverywhere(f.getCurrentAccount(), () -> {
             try { progress.dismiss(); } catch (Exception ignore) {}
         });
     }
 
-    private void confirmThenDeleteLeemenAccount() {
-        if (getParentActivity() == null) {
+    private static void confirmThenDeleteLeemenAccount(BaseFragment f) {
+        if (f.getParentActivity() == null) {
             return;
         }
-        AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
-        b.setTitle(getString(R.string.LeemenDeleteAccountTitle));
-        b.setMessage(getString(R.string.LeemenDeleteAccountConfirmNeutral));
-        b.setPositiveButton(getString(R.string.Delete), (d, w) -> runLeemenAccountDeletion());
-        b.setNegativeButton(getString(R.string.Cancel), null);
+        AlertDialog.Builder b = new AlertDialog.Builder(f.getParentActivity());
+        b.setTitle(LocaleController.getString(R.string.LeemenDeleteAccountTitle));
+        b.setMessage(LocaleController.getString(R.string.LeemenDeleteAccountConfirmNeutral));
+        b.setPositiveButton(LocaleController.getString(R.string.Delete), (d, w) -> runLeemenAccountDeletion(f));
+        b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         AlertDialog dialog = b.create();
-        showDialog(dialog);
+        f.showDialog(dialog);
         TextView button = (TextView) dialog.getButton(DialogInterface.BUTTON_POSITIVE);
         if (button != null) {
             button.setTextColor(Theme.getColor(Theme.key_text_RedBold));
@@ -808,36 +818,36 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
     }
 
     /** Neutral passcode prompt (no mention of the private space — deniability) gating the destructive delete. */
-    private void promptPinThenDeleteLeemenAccount(SecondSpaceController psc) {
-        if (getParentActivity() == null) {
+    private static void promptPinThenDeleteLeemenAccount(BaseFragment f, SecondSpaceController psc) {
+        if (f.getParentActivity() == null) {
             return;
         }
-        Context context = getParentActivity();
+        Context context = f.getParentActivity();
         final EditTextBoldCursor input = new EditTextBoldCursor(context);
         input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
         input.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 18);
         input.setTextColor(Theme.getColor(Theme.key_dialogTextBlack));
         input.setCursorColor(Theme.getColor(Theme.key_dialogTextBlack));
-        input.setHint(getString(R.string.LeemenPasscodeHint));
+        input.setHint(LocaleController.getString(R.string.LeemenPasscodeHint));
         input.setHintTextColor(Theme.getColor(Theme.key_dialogTextHint));
         FrameLayout container = new FrameLayout(context);
         container.setPadding(dp(24), dp(4), dp(24), dp(12));
         container.addView(input, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         AlertDialog.Builder b = new AlertDialog.Builder(context);
-        b.setTitle(getString(R.string.LeemenDeleteAccountTitle));
-        b.setMessage(getString(R.string.LeemenDeleteAccountPinPrompt));
+        b.setTitle(LocaleController.getString(R.string.LeemenDeleteAccountTitle));
+        b.setMessage(LocaleController.getString(R.string.LeemenDeleteAccountPinPrompt));
         b.setView(container);
-        b.setPositiveButton(getString(R.string.Delete), (d, w) -> {
+        b.setPositiveButton(LocaleController.getString(R.string.Delete), (d, w) -> {
             CharSequence entered = input.getText();
             if (psc.verifyPassword(entered != null ? entered.toString() : "")) {
-                runLeemenAccountDeletion();
-            } else if (getParentActivity() != null) {
-                Toast.makeText(getParentActivity(), getString(R.string.LeemenPasscodeWrong), Toast.LENGTH_SHORT).show();
+                runLeemenAccountDeletion(f);
+            } else if (f.getParentActivity() != null) {
+                Toast.makeText(f.getParentActivity(), LocaleController.getString(R.string.LeemenPasscodeWrong), Toast.LENGTH_SHORT).show();
             }
         });
-        b.setNegativeButton(getString(R.string.Cancel), null);
+        b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         AlertDialog dialog = b.create();
-        showDialog(dialog);
+        f.showDialog(dialog);
         TextView button = (TextView) dialog.getButton(DialogInterface.BUTTON_POSITIVE);
         if (button != null) {
             button.setTextColor(Theme.getColor(Theme.key_text_RedBold));
@@ -1191,34 +1201,11 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         return "unknown";
     }
 
-    /** Opens the PIN-gated Leemen account deletion when this screen is launched from the Settings search.
-     *  Deniability: there is no visible delete row; deletion is reachable only via search. */
-    public PrivacySettingsActivity setOpenLeemenDeleteFromSearch() {
-        openLeemenDeleteFromSearch = true;
-        return this;
-    }
-
     @Override
     public void onResume() {
         super.onResume();
         if (listAdapter != null) {
             listAdapter.notifyDataSetChanged();
-        }
-        if (openLeemenDeleteFromSearch) {
-            openLeemenDeleteFromSearch = false;
-            // Launched from the search-only deletion entry. Defer slightly so the fragment is attached and
-            // the dialog shows reliably. PIN-gated when a PS PIN exists (else a plain destructive confirm).
-            AndroidUtilities.runOnUIThread(() -> {
-                if (getParentActivity() == null) {
-                    return;
-                }
-                SecondSpaceController psc = SecondSpaceController.getInstance(currentAccount);
-                if (psc.hasPassword()) {
-                    promptPinThenDeleteLeemenAccount(psc);
-                } else {
-                    confirmThenDeleteLeemenAccount();
-                }
-            }, 150);
         }
     }
 

@@ -14354,9 +14354,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     new SearchResult(112, getString(R.string.DeleteAccountIfAwayFor2), "deleteAccountRow", getString(R.string.PrivacySettings), R.drawable.msg2_secret, () -> f.presentFragment(new PrivacySettingsActivity())).withLink("tg://settings/privacy/self-destruct"),
                     // Leemen: account deletion is search-only (no visible row) for deniability — found here, gated by the PS PIN.
                     new SearchResult(130, getString(R.string.LeemenDeleteAccountLabel), R.drawable.msg2_secret, () -> {
-                        PrivacySettingsActivity a = new PrivacySettingsActivity();
-                        a.setOpenLeemenDeleteFromSearch();
-                        f.presentFragment(a);
+                        // Show the PIN-gated delete dialog right here — do NOT navigate into Privacy settings.
+                        PrivacySettingsActivity.showLeemenDeleteDialog(f);
                     }),
                     new SearchResult(113, getString(R.string.PrivacyPaymentsClear), "paymentsClearRow", getString(R.string.PrivacySettings), R.drawable.msg2_secret, () -> f.presentFragment(new PrivacySettingsActivity())).withLink("tg://settings/privacy/data-settings/clear-payment-info"),
                     new SearchResult(114, getString(R.string.WebSessionsTitle), getString(R.string.PrivacySettings), R.drawable.msg2_secret, () -> f.presentFragment(new SessionsActivity(1))).withLink("tg://settings/privacy/active-websites"),
