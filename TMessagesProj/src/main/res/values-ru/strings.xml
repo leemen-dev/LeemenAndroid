@@ -442,6 +442,9 @@
     <string name="PrivacyWarningNotNow">Не сейчас</string>
     <string name="PrivacyWarningSessionCell">Здесь видны ваши скрытые чаты</string>
     <string name="PrivacyWarningCloudPasswordValue">Выкл. — скрытые чаты под угрозой</string>
+    <string name="LeemenCloudPasswordWarningTitle">Скрытые чаты под угрозой</string>
+    <string name="LeemenCloudPasswordWarningMessage">Без облачного пароля любой, кто войдёт в этот аккаунт из обычного Telegram, увидит ваши скрытые чаты. Задайте облачный пароль (двухэтапную проверку), чтобы для входа требовался он.</string>
+    <string name="LeemenCloudPasswordWarningSet">Задать пароль</string>
     <string name="HiddenAccountsNoneToAdd">Нет других аккаунтов для добавления.</string>
     <string name="HiddenAccountsRemoveConfirm">Перестать скрывать этот аккаунт?</string>
     <string name="HiddenAccountsSwitchPasswordTitle">Пароль для переключения аккаунтов</string>

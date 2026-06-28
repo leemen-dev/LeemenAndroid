@@ -729,6 +729,52 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         }
     }
 
+    // --- Leemen: cloud-password warning (no 2FA → hidden chats exposed in a stock-Telegram session) ---
+
+    /** Show/hide a tappable yellow warning triangle in the cloud-password row's value slot. */
+    private void configureCloudPasswordWarning(TextCell cell, boolean show) {
+        ImageView iv = cell.getValueImageView();
+        if (!show) {
+            iv.setOnClickListener(null);
+            iv.setClickable(false);
+            iv.setColorFilter(null);
+            iv.setBackground(null);
+            iv.setPadding(0, 0, 0, 0);
+            return;
+        }
+        iv.setImageResource(R.drawable.warning_sign);
+        iv.setColorFilter(new PorterDuffColorFilter(0xFFF5A623, PorterDuff.Mode.SRC_IN)); // warning amber
+        iv.setScaleType(ImageView.ScaleType.CENTER);
+        iv.setPadding(dp(8), dp(8), dp(8), dp(8)); // enlarge the tap target around the 24dp triangle
+        iv.setBackground(Theme.createSelectorDrawable(Theme.getColor(Theme.key_listSelector), Theme.RIPPLE_MASK_CIRCLE_20DP));
+        iv.setVisibility(View.VISIBLE);
+        iv.setClickable(true);
+        iv.setOnClickListener(v -> showCloudPasswordWarningDialog());
+    }
+
+    private void showCloudPasswordWarningDialog() {
+        if (getParentActivity() == null) {
+            return;
+        }
+        AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
+        b.setTitle(getString(R.string.LeemenCloudPasswordWarningTitle));
+        b.setMessage(getString(R.string.LeemenCloudPasswordWarningMessage));
+        b.setPositiveButton(getString(R.string.LeemenCloudPasswordWarningSet), (d, w) -> openCloudPasswordSetup());
+        b.setNegativeButton(getString(R.string.Close), null);
+        showDialog(b.create());
+    }
+
+    /** Open cloud-password (2FA) setup — same destination as tapping the row when no password is set. */
+    private void openCloudPasswordSetup() {
+        if (currentPassword == null || getParentActivity() == null) {
+            return;
+        }
+        int type = TextUtils.isEmpty(currentPassword.email_unconfirmed_pattern)
+                ? TwoStepVerificationSetupActivity.TYPE_INTRO
+                : TwoStepVerificationSetupActivity.TYPE_EMAIL_CONFIRM;
+        presentFragment(new TwoStepVerificationSetupActivity(type, currentPassword));
+    }
+
     // --- Leemen account deletion (store-visible OFF-mode entry; full in-app, PIN-gated when a PS PIN exists) ---
 
     private void runLeemenAccountDeletion() {
@@ -1519,6 +1565,11 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                     } else if (position == passwordRow) {
                         value = "";
                         int icon = R.drawable.menu_2sv;
+                        // Leemen: with no cloud password, the hidden chats are exposed to anyone who signs into
+                        // the account from a stock Telegram client. Flag it with a tappable yellow warning
+                        // triangle (the risk is explained in a dialog), not an inline label that overflows the
+                        // row. Only in MODE_REAL — never surface the PS-specific risk outside the space.
+                        boolean cloudPasswordWarning = false;
                         if (currentPassword == null) {
                             showLoading = true;
                         } else if (currentPassword.has_password) {
@@ -1526,15 +1577,13 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                             value = getString(R.string.PasswordOn);
                         } else {
                             value = getString(R.string.PasswordOff);
+                            cloudPasswordWarning = org.telegram.messenger.SecondSpaceController.getInstance(currentAccount).isRealActive();
                         }
-                        // Leemen: inside the private space, flag that no cloud password is set — the hidden
-                        // chats are then exposed in a non-leemen session. Only in MODE_REAL (deniability).
-                        if (currentPassword != null && !currentPassword.has_password
-                                && org.telegram.messenger.SecondSpaceController.getInstance(currentAccount).isRealActive()) {
-                            icon = R.drawable.msg_warning;
-                            value = getString(R.string.PrivacyWarningCloudPasswordValue);
+                        if (cloudPasswordWarning) {
+                            value = ""; // show only the warning triangle, not the off-state text
                         }
                         textCell2.setTextAndValueAndIcon(getString(R.string.TwoStepVerification), value, true, icon, true);
+                        configureCloudPasswordWarning(textCell2, cloudPasswordWarning);
                     } else if (position == passkeysRow) {
                         value = "";
                         if (currentPasskeys == null) {

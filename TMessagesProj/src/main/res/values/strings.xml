@@ -2383,6 +2383,9 @@
     <string name="PrivacyWarningNotNow">Not now</string>
     <string name="PrivacyWarningSessionCell">Your hidden chats are visible here</string>
     <string name="PrivacyWarningCloudPasswordValue">Off — your hidden chats are at risk</string>
+    <string name="LeemenCloudPasswordWarningTitle">Your hidden chats are at risk</string>
+    <string name="LeemenCloudPasswordWarningMessage">Without a cloud password, anyone who signs into this account from a regular Telegram app can see your hidden chats. Set a cloud password (two-step verification) so signing in requires it.</string>
+    <string name="LeemenCloudPasswordWarningSet">Set password</string>
     <string name="HiddenAccountsNoneToAdd">No other accounts to add.</string>
     <string name="HiddenAccountsRemoveConfirm">Stop hiding this account?</string>
     <!-- Hidden accounts: single switch password, set in the main account, gating switching INTO a hidden account -->
