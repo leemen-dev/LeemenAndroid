@@ -50,6 +50,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private static final String PREF_SELF_PINNED = "second_space_self_pinned";
     private static final String PREF_ALLOW_SCREENSHOTS = "second_space_allow_screenshots";
     private static final String PREF_ONBOARDING_DONE = "second_space_onboarding_done";
+    private static final String PREF_INTRO_SHOWN = "second_space_intro_shown";
     private static final String PREF_PAYWALL_SHOWN = "second_space_paywall_shown";
     /** Leemen Premium expiry, epoch ms. {@code 0} = never subscribed. Local-only for now:
      *  set by {@link #activateLeemenPremiumLocally(int)} until real billing is wired. */
@@ -1515,6 +1516,17 @@ public class SecondSpaceController extends BaseController implements Notificatio
 
     public void markOnboardingDone() {
         markOnboardingDone("first_hide");
+    }
+
+    /** True once the first-entry intro modal has been shown. Shown at most once, on a new user's very
+     *  first entry into the space; old/already-onboarded accounts ({@link #isOnboardingDone()}) never see
+     *  it because the caller gates on onboarding being unfinished. */
+    public boolean isIntroShown() {
+        return getMessagesController().getMainSettings().getBoolean(PREF_INTRO_SHOWN, false);
+    }
+
+    public void markIntroShown() {
+        getMessagesController().getMainSettings().edit().putBoolean(PREF_INTRO_SHOWN, true).apply();
     }
 
     /** @param lastStep how onboarding completed (e.g. "settings_tour" or "first_hide"), for analytics. */

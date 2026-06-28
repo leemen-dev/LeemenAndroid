@@ -609,7 +609,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private ActiveGiftAuctionsHintCell activeGiftAuctionsHintCell;
     private DialogsHintCell dialogsHintCell;
     private DialogsHintCell privateSpaceEmptyHintCell;
-    private boolean privateSpaceIntroPopupShown;
     private UnconfirmedAuthHintCell authHintCell;
     private Long cacheSize, deviceSize;
 
@@ -10561,13 +10560,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (privateSpaceEmptyHintCell != null) {
             topPanelLayout.setViewVisible(privateSpaceEmptyHintCell, show);
         }
-        // First-time users get the interactive coach-marks (started from the mode-change
-        // handler) instead of this modal. Only fall back to the legacy popup for users who
-        // already finished onboarding.
-        if (show && !privateSpaceIntroPopupShown && SecondSpaceController.getInstance(currentAccount).isOnboardingDone()) {
-            privateSpaceIntroPopupShown = true;
-            showPrivateSpaceIntroPopup();
-        }
     }
 
     /**
@@ -10660,6 +10652,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 ssc.markPaywallShown();
                 showPrivateSpacePaywall();
             }
+        } else if (!ssc.isIntroShown()) {
+            // Brand-new user's very first entry: explain the space up front with the intro modal (once).
+            // Old / already-onboarded accounts are isOnboardingDone() and never reach this branch, so they
+            // see neither this modal nor the coach-marks.
+            ssc.markIntroShown();
+            showPrivateSpaceIntroPopup();
         } else if (!hasHidden) {
             startPrivateSpaceOnboarding();
         }
