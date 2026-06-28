@@ -321,6 +321,7 @@
     <string name="LeemenPremiumPriceMonthly">$10 / мес</string>
     <string name="LeemenPremiumPriceYearly">$96 / год</string>
     <string name="LeemenPremiumYearlyBadge">−20%</string>
+    <string name="LeemenPremiumDiscountBadge">−%1$d%%</string>
     <string name="LeemenPremiumSubscribe">Оформить подписку</string>
     <string name="LeemenPremiumActiveUntil">Активна до %1$s</string>
     <string name="LeemenPremiumActivated">Leemen Premium активирован</string>

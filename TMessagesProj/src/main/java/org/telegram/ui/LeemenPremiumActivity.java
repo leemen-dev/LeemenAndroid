@@ -3,10 +3,17 @@ package org.telegram.ui;
 import static org.telegram.messenger.AndroidUtilities.dp;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
+import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
-import android.graphics.drawable.Drawable;
+import android.graphics.RectF;
+import android.graphics.Shader;
 import android.graphics.drawable.GradientDrawable;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -19,6 +26,7 @@ import android.widget.TextView;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.BillingController;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -32,25 +40,39 @@ import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.Premium.PremiumButtonView;
+import org.telegram.ui.Components.Premium.StarParticlesView;
 import org.telegram.ui.Components.RadioButton;
 
 import java.util.Date;
 import java.util.HashMap;
 
 /**
- * Leemen Premium subscription screen — Telegram-Premium-style: premium-gradient hero, feature list,
- * plan cards, and a gradient Subscribe button. Purchase goes through Google Play
- * ({@link LeemenBilling#launchPurchase}), server-verified and reflected via the FlowListener. Per the
- * one-subscription-across-platforms rule (CONTRACT §7/§10), the Subscribe button is hidden when /me
- * reports an active paid subscription from another platform. Analytics fires paywall_view /
- * paywall_cta_tap / subscribe_flow_started (allowlisted, non-PS).
+ * Leemen Premium subscription screen — styled to read like Telegram Premium: a dark starry hero with a
+ * premium-gradient star carrying the Leemen "L", an annual/monthly selector with a Play-derived discount
+ * badge + struck-through "12× monthly" price, premium feature rows, and a gradient Subscribe button.
+ *
+ * The screen is always dark (a premium "space" surface) regardless of the app theme. Prices, the discount
+ * percentage, and the strike-through amount are pulled from Google Play ({@link LeemenBilling#queryProduct})
+ * — nothing is hardcoded; the string resources are only fallbacks until Play responds. Purchase goes through
+ * {@link LeemenBilling#launchPurchase}, server-verified and reflected via the FlowListener. Per the
+ * one-subscription-across-platforms rule (CONTRACT §7/§10), the Subscribe button + plans are hidden when /me
+ * reports an active paid subscription from another platform. Analytics fires paywall_view / paywall_cta_tap /
+ * subscribe_flow_started (allowlisted, non-PS).
  */
 public class LeemenPremiumActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
+
+    // Always-dark premium palette (independent of the app theme, like Telegram's premium hero).
+    private static final int BG = 0xFF0E1621;
+    private static final int CARD = 0xFF18222E;
+    private static final int TEXT = 0xFFFFFFFF;
+    private static final int TEXT2 = 0xFF8A9AAA;
+    private static final int DIVIDER = 0x14FFFFFF;
 
     private int selectedMonths = 12; // yearly by default (better value)
     private PlanRow monthlyRow;
     private PlanRow yearlyRow;
-    private TextView subscribeButton;
+    private PremiumButtonView subscribeButton;
     private TextView statusView;
     /** Non-null when /me shows an active paid subscription on a DIFFERENT platform — the buy button +
      *  plan cards are then hidden (one subscription across platforms, CONTRACT §7/§10). */
@@ -81,6 +103,10 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
         actionBar.setAllowOverlayTitle(true);
         actionBar.setTitle(LocaleController.getString(R.string.LeemenPremium));
+        actionBar.setBackgroundColor(BG);
+        actionBar.setTitleColor(TEXT);
+        actionBar.setItemsColor(TEXT, false);
+        actionBar.setCastShadows(false);
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
@@ -91,7 +117,7 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         });
 
         FrameLayout root = new FrameLayout(context);
-        root.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray));
+        root.setBackgroundColor(BG);
 
         ScrollView scrollView = new ScrollView(context);
         scrollView.setFillViewport(true);
@@ -101,51 +127,84 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         content.setPadding(0, 0, 0, dp(16));
         scrollView.addView(content, LayoutHelper.createScroll(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP));
 
-        // --- gradient hero ---
-        LinearLayout hero = new LinearLayout(context);
-        hero.setOrientation(LinearLayout.VERTICAL);
-        hero.setGravity(Gravity.CENTER);
-        GradientDrawable heroBg = new GradientDrawable(GradientDrawable.Orientation.TL_BR, premiumColors());
-        hero.setBackground(heroBg);
-        hero.setPadding(dp(22), dp(28), dp(22), dp(28));
+        // --- dark starry hero ---
+        FrameLayout hero = new FrameLayout(context);
 
-        ImageView icon = new ImageView(context);
-        icon.setScaleType(ImageView.ScaleType.CENTER);
-        icon.setImageResource(R.drawable.large_hidden);
-        icon.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN));
-        hero.addView(icon, LayoutHelper.createLinear(64, 64, Gravity.CENTER_HORIZONTAL, 0, 4, 0, 8));
+        StarParticlesView stars = new StarParticlesView(context);
+        stars.setClipWithGradient();
+        hero.addView(stars, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+
+        LinearLayout heroContent = new LinearLayout(context);
+        heroContent.setOrientation(LinearLayout.VERTICAL);
+        heroContent.setGravity(Gravity.CENTER_HORIZONTAL);
+        heroContent.setPadding(dp(24), dp(18), dp(24), dp(22));
+
+        Bitmap lBitmap = BitmapFactory.decodeResource(context.getResources(), R.mipmap.icon_foreground);
+        StarLogoView starLogo = new StarLogoView(context, lBitmap, premiumColors());
+        heroContent.addView(starLogo, LayoutHelper.createLinear(116, 116, Gravity.CENTER_HORIZONTAL, 0, 6, 0, 14));
 
         TextView title = new TextView(context);
         title.setText(LocaleController.getString(R.string.LeemenPremium));
         title.setTypeface(AndroidUtilities.bold());
-        title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 24);
-        title.setTextColor(Color.WHITE);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 23);
+        title.setTextColor(TEXT);
         title.setGravity(Gravity.CENTER);
-        hero.addView(title, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 2, 0, 0));
+        heroContent.addView(title, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL));
 
         TextView subtitle = new TextView(context);
         subtitle.setText(LocaleController.getString(R.string.LeemenPremiumScreenSubtitle));
         subtitle.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
-        subtitle.setTextColor(0xCCFFFFFF);
+        subtitle.setTextColor(TEXT2);
         subtitle.setGravity(Gravity.CENTER);
-        hero.addView(subtitle, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 12, 6, 12, 0));
+        subtitle.setLineSpacing(dp(2), 1.0f);
+        heroContent.addView(subtitle, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 8, 8, 8, 0));
 
+        hero.addView(heroContent, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
         content.addView(hero, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
         // --- active-until status ---
         statusView = new TextView(context);
         statusView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         statusView.setTypeface(AndroidUtilities.bold());
-        statusView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGreenText));
+        statusView.setTextColor(0xFF4FCB78);
         statusView.setGravity(Gravity.CENTER_HORIZONTAL);
         statusView.setVisibility(View.GONE);
-        content.addView(statusView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 22, 10, 22, 2));
+        content.addView(statusView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 4, 10, 4, 2));
 
-        // --- feature list (placeholder copy — refine per product) ---
+        // --- plan selector (rounded card) ---
+        LinearLayout plans = new LinearLayout(context);
+        plans.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable plansBg = new GradientDrawable();
+        plansBg.setColor(CARD);
+        plansBg.setCornerRadius(dp(14));
+        plans.setBackground(plansBg);
+        plansContainer = plans;
+        content.addView(plans, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 16, 8, 16, 0));
+
+        yearlyRow = new PlanRow(context,
+                LocaleController.getString(R.string.LeemenPremiumPlanYearly),
+                LocaleController.getString(R.string.LeemenPremiumPriceYearly),
+                LocaleController.getString(R.string.LeemenPremiumYearlyBadge),
+                false);
+        yearlyRow.setOnClickListener(v -> selectPlan(12));
+        plans.addView(yearlyRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 64));
+
+        View divider = new View(context);
+        divider.setBackgroundColor(DIVIDER);
+        plans.addView(divider, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 1, 0, 0, 0, 0));
+
+        monthlyRow = new PlanRow(context,
+                LocaleController.getString(R.string.LeemenPremiumPlanMonthly),
+                LocaleController.getString(R.string.LeemenPremiumPriceMonthly),
+                null,
+                false);
+        monthlyRow.setOnClickListener(v -> selectPlan(1));
+        plans.addView(monthlyRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 64));
+
+        // --- feature list ---
         LinearLayout features = new LinearLayout(context);
         features.setOrientation(LinearLayout.VERTICAL);
-        features.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
-        features.setPadding(0, dp(6), 0, dp(6));
+        features.setPadding(0, dp(10), 0, dp(6));
         addFeature(features, R.drawable.large_hidden,
                 LocaleController.getString(R.string.LeemenPremiumFeatureUnlimited),
                 LocaleController.getString(R.string.LeemenPremiumFeat1Desc));
@@ -158,47 +217,17 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         addFeature(features, R.drawable.msg_premium_liststar,
                 LocaleController.getString(R.string.LeemenPremiumFeat3Title),
                 LocaleController.getString(R.string.LeemenPremiumFeat3Desc));
-        content.addView(features, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 12, 0, 0));
+        content.addView(features, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 10, 0, 0));
 
-        // --- plan cards ---
-        LinearLayout plans = new LinearLayout(context);
-        plans.setOrientation(LinearLayout.VERTICAL);
-        plans.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
-        plansContainer = plans;
-        content.addView(plans, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 12, 0, 0));
-
-        yearlyRow = new PlanRow(context,
-                LocaleController.getString(R.string.LeemenPremiumPlanYearly),
-                LocaleController.getString(R.string.LeemenPremiumPriceYearly),
-                LocaleController.getString(R.string.LeemenPremiumYearlyBadge),
-                true);
-        yearlyRow.setOnClickListener(v -> selectPlan(12));
-        plans.addView(yearlyRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 60));
-
-        monthlyRow = new PlanRow(context,
-                LocaleController.getString(R.string.LeemenPremiumPlanMonthly),
-                LocaleController.getString(R.string.LeemenPremiumPriceMonthly),
-                null,
-                false);
-        monthlyRow.setOnClickListener(v -> selectPlan(1));
-        plans.addView(monthlyRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 60));
-
-        root.addView(scrollView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP, 0, 0, 0, 72));
+        root.addView(scrollView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP, 0, 0, 0, 76));
 
         // --- bottom gradient Subscribe button ---
         FrameLayout buttonContainer = new FrameLayout(context);
-        buttonContainer.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
-        subscribeButton = new TextView(context);
-        subscribeButton.setGravity(Gravity.CENTER);
-        subscribeButton.setTextColor(Color.WHITE);
-        subscribeButton.setTypeface(AndroidUtilities.bold());
-        subscribeButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-        GradientDrawable btnBg = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, premiumColors());
-        btnBg.setCornerRadius(dp(8));
-        subscribeButton.setBackground(btnBg);
-        subscribeButton.setOnClickListener(v -> onSubscribeClick());
+        buttonContainer.setBackgroundColor(BG);
+        subscribeButton = new PremiumButtonView(context, true, getResourceProvider());
+        subscribeButton.setButton(LocaleController.getString(R.string.LeemenPremiumSubscribe), v -> onSubscribeClick());
         buttonContainer.addView(subscribeButton, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.CENTER_VERTICAL, 16, 0, 16, 0));
-        root.addView(buttonContainer, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 72, Gravity.BOTTOM));
+        root.addView(buttonContainer, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 76, Gravity.BOTTOM));
 
         fragmentView = root;
         selectPlan(selectedMonths);
@@ -222,7 +251,8 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         return root;
     }
 
-    /** Replace the static fallback prices with Google Play's localized (region-aware) prices. */
+    /** Replace the static fallback prices with Google Play's localized (region-aware) prices, and derive
+     *  the yearly discount badge + struck-through "12× monthly" amount from the real Play prices. */
     private void loadPrices() {
         LeemenBilling.getInstance().queryProduct(details -> {
             if (details == null || monthlyRow == null || yearlyRow == null) {
@@ -235,6 +265,19 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
             }
             if (yearly != null) {
                 yearlyRow.setPrice(yearly);
+            }
+            // Discount + strike-through from real Play amounts: yearly vs 12× monthly, same currency.
+            long monthlyMicros = LeemenBilling.priceMicros(details, LeemenConfig.PLAY_BASE_PLAN_MONTHLY);
+            long yearlyMicros = LeemenBilling.priceMicros(details, LeemenConfig.PLAY_BASE_PLAN_YEARLY);
+            String currency = LeemenBilling.priceCurrency(details, LeemenConfig.PLAY_BASE_PLAN_YEARLY);
+            if (monthlyMicros > 0 && yearlyMicros > 0 && currency != null) {
+                long fullYearMicros = monthlyMicros * 12L;
+                if (yearlyMicros < fullYearMicros) {
+                    int percent = Math.round((1f - (float) yearlyMicros / fullYearMicros) * 100f);
+                    yearlyRow.setBadge(LocaleController.formatString(R.string.LeemenPremiumDiscountBadge, percent));
+                    yearlyRow.setStrikethrough(
+                            BillingController.getInstance().formatCurrency(fullYearMicros, currency, 6));
+                }
             }
         });
     }
@@ -301,12 +344,13 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         t.setText(title);
         t.setTypeface(AndroidUtilities.bold());
         t.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-        t.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+        t.setTextColor(TEXT);
         texts.addView(t);
         TextView d = new TextView(context);
         d.setText(desc);
         d.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
-        d.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
+        d.setTextColor(TEXT2);
+        d.setLineSpacing(dp(1), 1.0f);
         texts.addView(d, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 1, 0, 0));
         row.addView(texts, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
         container.addView(row, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
@@ -369,42 +413,133 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
                     .format(new Date(ssc.getLeemenPremiumUntil()));
             statusView.setVisibility(View.VISIBLE);
             statusView.setText(LocaleController.formatString(R.string.LeemenPremiumActiveUntil, date));
-            subscribeButton.setText(LocaleController.getString(R.string.LeemenPremiumRenew));
+            subscribeButton.setButton(LocaleController.getString(R.string.LeemenPremiumRenew), v -> onSubscribeClick());
         } else {
             statusView.setVisibility(View.GONE);
-            subscribeButton.setText(LocaleController.getString(R.string.LeemenPremiumSubscribe));
+            subscribeButton.setButton(LocaleController.getString(R.string.LeemenPremiumSubscribe), v -> onSubscribeClick());
         }
     }
 
-    private class PlanRow extends FrameLayout {
+    /** A premium-gradient five-point star carrying the white Leemen "L" silhouette in its centre. */
+    private static class StarLogoView extends View {
+        // The "L" glyph occupies this fraction of icon_foreground's height (content is centred in the bitmap).
+        private static final float L_CONTENT_FRACTION = 106f / 324f;
+
+        private final Path starPath = new Path();
+        private final Paint starPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint lPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        private final RectF lDst = new RectF();
+        private final Bitmap lBitmap;
+        private final int[] colors;
+
+        StarLogoView(Context context, Bitmap lBitmap, int[] colors) {
+            super(context);
+            this.lBitmap = lBitmap;
+            this.colors = colors;
+            lPaint.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN));
+        }
+
+        @Override
+        protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+            super.onSizeChanged(w, h, oldw, oldh);
+            buildStar(w, h);
+            starPaint.setShader(new LinearGradient(0, 0, w, h, colors, null, Shader.TileMode.CLAMP));
+        }
+
+        private void buildStar(int w, int h) {
+            starPath.reset();
+            float cx = w / 2f, cy = h / 2f;
+            float rOuter = Math.min(w, h) / 2f * 0.96f;
+            float rInner = rOuter * 0.45f;
+            for (int i = 0; i < 10; i++) {
+                float r = (i % 2 == 0) ? rOuter : rInner;
+                double a = -Math.PI / 2 + i * Math.PI / 5;
+                float x = cx + (float) (r * Math.cos(a));
+                float y = cy + (float) (r * Math.sin(a));
+                if (i == 0) {
+                    starPath.moveTo(x, y);
+                } else {
+                    starPath.lineTo(x, y);
+                }
+            }
+            starPath.close();
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            canvas.drawPath(starPath, starPaint);
+            if (lBitmap != null && lBitmap.getHeight() > 0) {
+                float starH = Math.min(getWidth(), getHeight());
+                float lH = starH * 0.40f;
+                float destH = lH / L_CONTENT_FRACTION;
+                float destW = destH * lBitmap.getWidth() / (float) lBitmap.getHeight();
+                float cx = getWidth() / 2f;
+                float cy = getHeight() / 2f - starH * 0.04f; // nudge up to sit in the star's optical centre
+                lDst.set(cx - destW / 2f, cy - destH / 2f, cx + destW / 2f, cy + destH / 2f);
+                canvas.drawBitmap(lBitmap, null, lDst, lPaint);
+            }
+        }
+    }
+
+    /** One selectable plan: radio + name (+ optional discount badge) on the left, struck-through full price
+     *  over the actual price on the right. */
+    private class PlanRow extends LinearLayout {
         private final RadioButton radio;
+        private final TextView badgeView;
+        private final TextView strikeView;
         private final TextView priceView;
 
-        PlanRow(Context context, CharSequence name, CharSequence price, CharSequence badge, boolean topDivider) {
+        PlanRow(Context context, CharSequence name, CharSequence price, CharSequence badge, boolean unusedDivider) {
             super(context);
+            setOrientation(HORIZONTAL);
+            setGravity(Gravity.CENTER_VERTICAL);
             setBackground(Theme.getSelectorDrawable(false));
-            boolean rtl = LocaleController.isRTL;
+            setPadding(dp(16), 0, dp(16), 0);
 
             radio = new RadioButton(context);
             radio.setSize(dp(20));
-            radio.setColor(Theme.getColor(Theme.key_radioBackground), Theme.getColor(Theme.key_radioBackgroundChecked));
-            addView(radio, LayoutHelper.createFrame(22, 22, Gravity.CENTER_VERTICAL | (rtl ? Gravity.RIGHT : Gravity.LEFT), 21, 0, 21, 0));
+            radio.setColor(0xFF55657A, premiumColors()[0]);
+            addView(radio, LayoutHelper.createLinear(22, 22, Gravity.CENTER_VERTICAL, 0, 0, 14, 0));
 
             TextView nameView = new TextView(context);
             nameView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
-            nameView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-            CharSequence n = name;
+            nameView.setTypeface(AndroidUtilities.bold());
+            nameView.setTextColor(TEXT);
+            nameView.setText(name);
+            addView(nameView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
+
+            badgeView = new TextView(context);
+            badgeView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11);
+            badgeView.setTypeface(AndroidUtilities.bold());
+            badgeView.setTextColor(Color.WHITE);
+            badgeView.setPadding(dp(6), dp(2), dp(6), dp(2));
+            GradientDrawable badgeBg = new GradientDrawable();
+            badgeBg.setColor(0xFF3AA856);
+            badgeBg.setCornerRadius(dp(6));
+            badgeView.setBackground(badgeBg);
+            badgeView.setVisibility(View.GONE);
             if (badge != null) {
-                n = TextUtils_concat(name, "   ", badge);
+                badgeView.setText(badge);
+                badgeView.setVisibility(View.VISIBLE);
             }
-            nameView.setText(n);
-            addView(nameView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL | (rtl ? Gravity.RIGHT : Gravity.LEFT), 60, 0, 60, 0));
+            addView(badgeView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 8, 0, 0, 0));
+
+            // spacer pushes the price cluster to the right
+            View spacer = new View(context);
+            addView(spacer, LayoutHelper.createLinear(0, 1, 1f));
+
+            strikeView = new TextView(context);
+            strikeView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12);
+            strikeView.setTextColor(TEXT2);
+            strikeView.getPaint().setStrikeThruText(true);
+            strikeView.setVisibility(View.GONE);
+            addView(strikeView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 0, 0, 6, 0));
 
             priceView = new TextView(context);
             priceView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-            priceView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
+            priceView.setTextColor(TEXT);
             priceView.setText(price);
-            addView(priceView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL | (rtl ? Gravity.LEFT : Gravity.RIGHT), 21, 0, 21, 0));
+            addView(priceView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
         }
 
         void setChecked(boolean checked) {
@@ -414,15 +549,16 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         void setPrice(CharSequence price) {
             priceView.setText(price);
         }
-    }
 
-    private static CharSequence TextUtils_concat(CharSequence a, CharSequence sep, CharSequence b) {
-        android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder();
-        sb.append(a).append(sep);
-        int start = sb.length();
-        sb.append(b);
-        sb.setSpan(new android.text.style.ForegroundColorSpan(Theme.getColor(Theme.key_windowBackgroundWhiteGreenText)), start, sb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        return sb;
+        void setBadge(CharSequence badge) {
+            badgeView.setText(badge);
+            badgeView.setVisibility(View.VISIBLE);
+        }
+
+        void setStrikethrough(CharSequence full) {
+            strikeView.setText(full);
+            strikeView.setVisibility(View.VISIBLE);
+        }
     }
 
     /** Limit-reached upsell shown when a free user tries to hide more than the allowed chats.

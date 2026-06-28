@@ -203,16 +203,36 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
     /** Localized formatted price for a base plan ("monthly"/"yearly"), or null if unavailable. */
     @Nullable
     public static String formattedPrice(@Nullable ProductDetails details, String basePlanId) {
+        ProductDetails.PricingPhase phase = recurringPhase(details, basePlanId);
+        return phase == null ? null : phase.getFormattedPrice();
+    }
+
+    /** Recurring (non-intro) price in micros for a base plan, or 0 if unavailable.
+     *  Lets the paywall compute the yearly discount + struck-through "12× monthly" price from real
+     *  Play data (region-aware) instead of hardcoding any amount. */
+    public static long priceMicros(@Nullable ProductDetails details, String basePlanId) {
+        ProductDetails.PricingPhase phase = recurringPhase(details, basePlanId);
+        return phase == null ? 0 : phase.getPriceAmountMicros();
+    }
+
+    /** ISO currency code for a base plan's recurring price, or null if unavailable. */
+    @Nullable
+    public static String priceCurrency(@Nullable ProductDetails details, String basePlanId) {
+        ProductDetails.PricingPhase phase = recurringPhase(details, basePlanId);
+        return phase == null ? null : phase.getPriceCurrencyCode();
+    }
+
+    /** The recurring (last, non-intro) pricing phase of a base plan, or null. */
+    @Nullable
+    private static ProductDetails.PricingPhase recurringPhase(@Nullable ProductDetails details, String basePlanId) {
         ProductDetails.SubscriptionOfferDetails offer = offerFor(details, basePlanId);
         if (offer == null) {
             return null;
         }
         List<ProductDetails.PricingPhase> phases = offer.getPricingPhases().getPricingPhaseList();
-        // Use the last phase = the recurring (non-intro) price.
         for (int i = phases.size() - 1; i >= 0; i--) {
-            String p = phases.get(i).getFormattedPrice();
-            if (!TextUtils.isEmpty(p)) {
-                return p;
+            if (!TextUtils.isEmpty(phases.get(i).getFormattedPrice())) {
+                return phases.get(i);
             }
         }
         return null;

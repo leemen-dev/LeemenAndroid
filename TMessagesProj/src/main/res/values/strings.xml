@@ -2498,6 +2498,7 @@
     <string name="LeemenPremiumPriceMonthly">$10 / month</string>
     <string name="LeemenPremiumPriceYearly">$96 / year</string>
     <string name="LeemenPremiumYearlyBadge">−20%</string>
+    <string name="LeemenPremiumDiscountBadge">−%1$d%%</string>
     <string name="LeemenPremiumSubscribe">Subscribe</string>
     <string name="LeemenPremiumActiveUntil">Active until %1$s</string>
     <string name="LeemenPremiumActivated">Leemen Premium activated</string>
