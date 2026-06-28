@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="AppName">Leemen Beta</string>
+    <string name="AppName">Leemen</string>
     <string name="AppNameBeta">Leemen Beta</string>
     <string name="LanguageName">Русский</string>
     <string name="English">Английский</string>
