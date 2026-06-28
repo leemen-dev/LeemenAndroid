@@ -1,6 +1,7 @@
 package org.telegram.ui;
 
 import android.content.Context;
+import android.graphics.RectF;
 import android.os.Bundle;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -38,6 +39,7 @@ import org.telegram.ui.Cells.ShadowSectionCell;
 import org.telegram.ui.Cells.TextCheckCell;
 import org.telegram.ui.Cells.TextInfoPrivacyCell;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.LeemenTourOverlay;
 import org.telegram.ui.Components.RecyclerListView;
 
 import java.util.ArrayList;
@@ -96,11 +98,10 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     private boolean hasOtherAccounts;
 
     /** First-run guided tour: walks the user through the key settings rows with a "Next" button. */
+    private static final int TOUR_STEPS = 4;
     private boolean onboardingTour;
     private int tourStep;
-    private View tourCard;
-    private TextView tourText;
-    private TextView tourNext;
+    private LeemenTourOverlay tourOverlay;
 
     @Override
     public boolean onFragmentCreate() {
@@ -216,47 +217,15 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             return;
         }
         LeemenAnalytics.track("onboarding_step_view", Collections.singletonMap("step", "settings_tour"));
-        Context context = getParentActivity();
-
-        LinearLayout card = new LinearLayout(context);
-        card.setOrientation(LinearLayout.HORIZONTAL);
-        card.setGravity(Gravity.CENTER_VERTICAL);
-        card.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
-        card.setElevation(AndroidUtilities.dp(8));
-        // Bottom padding includes the system nav-bar inset so the card clears the gesture/nav area.
-        card.setPadding(AndroidUtilities.dp(20), AndroidUtilities.dp(14), AndroidUtilities.dp(12),
-                AndroidUtilities.dp(14) + AndroidUtilities.navigationBarHeight);
-
-        TextView text = new TextView(context);
-        text.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-        text.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
-        text.setLineSpacing(AndroidUtilities.dp(2), 1.0f);
-        card.addView(text, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
-
-        TextView next = new TextView(context);
-        next.setTextColor(Theme.getColor(Theme.key_featuredStickers_addButton));
-        next.setTypeface(AndroidUtilities.bold());
-        next.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-        next.setGravity(Gravity.CENTER);
-        next.setBackground(Theme.getSelectorDrawable(false));
-        next.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(8), AndroidUtilities.dp(16), AndroidUtilities.dp(8));
-        next.setOnClickListener(v -> {
-            tourStep++;
-            showTourStep();
-        });
-        card.addView(next, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
-
-        ((FrameLayout) fragmentView).addView(card,
-                LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM));
-        tourCard = card;
-        tourText = text;
-        tourNext = next;
+        tourOverlay = new LeemenTourOverlay(getParentActivity());
+        ((FrameLayout) fragmentView).addView(tourOverlay,
+                LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         tourStep = 0;
         showTourStep();
     }
 
     private void showTourStep() {
-        if (tourCard == null) {
+        if (tourOverlay == null) {
             return;
         }
         final int row;
@@ -268,28 +237,52 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             case 3: row = switchRow; textRes = R.string.LeemenTourHideButton; break;
             default: finishTour(); return;
         }
-        tourText.setText(LocaleController.getString(textRes));
-        tourNext.setText(LocaleController.getString(tourStep >= 3 ? R.string.LeemenTourDone : R.string.LeemenTourNext));
-        final int target = row;
-        // Spotlight the row; the highlight callback scrolls it into view. Large removeAfter so it
-        // persists until the next step re-highlights (moving the selector) or the tour finishes.
-        listView.highlightRow(() -> {
-            ((LinearLayoutManager) listView.getLayoutManager()).scrollToPositionWithOffset(target, AndroidUtilities.dp(80));
-            return target;
-        }, 30000);
+        final boolean last = tourStep >= TOUR_STEPS - 1;
+        final CharSequence text = LocaleController.getString(textRes);
+        final CharSequence counter = LocaleController.formatString(R.string.LeemenTourStep, tourStep + 1, TOUR_STEPS);
+        final CharSequence btn = LocaleController.getString(last ? R.string.LeemenTourDone : R.string.LeemenTourNext);
+        // Park the target in the upper-middle so the bubble has room beneath it, then spotlight it
+        // once the row view actually exists (the scroll/layout pass completes on a later frame).
+        ((LinearLayoutManager) listView.getLayoutManager()).scrollToPositionWithOffset(row, AndroidUtilities.dp(140));
+        // Measure bounds after the scroll's layout pass settles (post), then retry if still pending.
+        listView.post(() -> spotlightRow(row, text, counter, btn, 0));
+    }
+
+    /** Resolves the target row's on-screen bounds and points the spotlight at it; retries briefly
+     *  while the row is still being laid out / scrolled into view. */
+    private void spotlightRow(int row, CharSequence text, CharSequence counter, CharSequence btn, int attempt) {
+        if (tourOverlay == null) {
+            return;
+        }
+        RecyclerView.ViewHolder holder = listView.findViewHolderForAdapterPosition(row);
+        if (holder == null) {
+            if (attempt < 8) {
+                AndroidUtilities.runOnUIThread(() -> spotlightRow(row, text, counter, btn, attempt + 1), 16);
+            }
+            return;
+        }
+        View item = holder.itemView;
+        int[] o = new int[2];
+        int[] r = new int[2];
+        tourOverlay.getLocationInWindow(o);
+        item.getLocationInWindow(r);
+        float left = r[0] - o[0] + AndroidUtilities.dp(8);
+        float top = r[1] - o[1] + AndroidUtilities.dp(2);
+        RectF target = new RectF(left, top,
+                left + item.getWidth() - AndroidUtilities.dp(16),
+                top + item.getHeight() - AndroidUtilities.dp(4));
+        tourOverlay.setStep(target, AndroidUtilities.dp(10), text, counter, btn, v -> {
+            tourStep++;
+            showTourStep();
+        });
     }
 
     private void finishTour() {
         onboardingTour = false;
-        if (tourCard != null && tourCard.getParent() instanceof ViewGroup) {
-            ((ViewGroup) tourCard.getParent()).removeView(tourCard);
+        if (tourOverlay != null && tourOverlay.getParent() instanceof ViewGroup) {
+            ((ViewGroup) tourOverlay.getParent()).removeView(tourOverlay);
         }
-        tourCard = null;
-        tourText = null;
-        tourNext = null;
-        if (listView != null) {
-            listView.removeHighlightRow();
-        }
+        tourOverlay = null;
         // Marks onboarding done (also fires onboarding_completed analytics).
         SecondSpaceController.getInstance(currentAccount).markOnboardingDone("settings_tour");
     }

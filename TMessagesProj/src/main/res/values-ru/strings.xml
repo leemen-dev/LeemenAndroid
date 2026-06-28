@@ -288,6 +288,7 @@
     <string name="LeemenTourHideButton">Скройте кнопку входа для полной незаметности — открывайте пространство выбранным способом.</string>
     <string name="LeemenTourNext">Далее</string>
     <string name="LeemenTourDone">Готово</string>
+    <string name="LeemenTourStep">Шаг %1$d из %2$d</string>
     <string name="PrivateSpacePaywallTitle">Безлимит скрытых чатов</string>
     <string name="PrivateSpacePaywallSubtitle">Первый чат вы скрыли бесплатно. Оформите подписку, чтобы прятать сколько угодно чатов.</string>
     <string name="PrivateSpacePaywallFeature1Title">Прячьте сколько угодно</string>
