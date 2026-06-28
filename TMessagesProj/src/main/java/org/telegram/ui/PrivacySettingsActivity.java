@@ -877,6 +877,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
 
     public void updateRows(boolean notify) {
         passkeysRow = -1;
+        privacyModeRow = -1;
         rowCount = 0;
 
         securitySectionRow = rowCount++;
@@ -891,6 +892,11 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
             privateSpaceEnterRow = rowCount++;
         } else {
             privateSpaceEnterRow = -1;
+        }
+        // Leemen: the Protected Space encryption key (max-privacy passphrase + recovery) lives in Security,
+        // but only inside the real space — never surfaced in a normal / off-mode session (deniability).
+        if (privateSpace.isRealActive()) {
+            privacyModeRow = rowCount++;
         }
         if (getMessagesController().config.settingsDisplayPasskeys.get() && Build.VERSION.SDK_INT >= 28 && BuildVars.SUPPORTS_PASSKEYS) {
             passkeysRow = rowCount++;
@@ -975,7 +981,6 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         secretWebpageRow = rowCount++;
         secretDetailRow = rowCount++;
         dataSectionRow = rowCount++;
-        privacyModeRow = rowCount++;
         analyticsConsentRow = rowCount++;
         privacyPolicyRow = rowCount++;
         termsRow = rowCount++;
@@ -1416,9 +1421,6 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                         }
                         textCell.setTextAndValue(getString("DeleteAccountIfAwayFor3", R.string.DeleteAccountIfAwayFor3), value, deleteAccountUpdate, true);
                         deleteAccountUpdate = false;
-                    } else if (position == privacyModeRow) {
-                        textCell.setTextAndValue(getString(R.string.LeemenPrivacyModeTitle),
-                                getString(org.telegram.messenger.leemen.LeemenAccount.isMaxPrivacy(currentAccount) ? R.string.LeemenMaxValueOn : R.string.LeemenMaxValueOff), true);
                     } else if (position == privacyPolicyRow) {
                         textCell.setText(getString(R.string.LeemenPrivacyPolicy), true);
                     } else if (position == termsRow) {
@@ -1608,6 +1610,10 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                         textCell2.setTextAndValueAndIcon(getString(R.string.Passcode), value, true, icon, true);
                     } else if (position == privateSpaceEnterRow) {
                         textCell2.setTextAndValueAndIcon(getString(R.string.PrivateSpaceEnter), "", true, R.drawable.msg_stories_views, true);
+                    } else if (position == privacyModeRow) {
+                        textCell2.setTextAndValueAndIcon(getString(R.string.LeemenPSEncryptionTitle),
+                                getString(org.telegram.messenger.leemen.LeemenAccount.isMaxPrivacy(currentAccount) ? R.string.LeemenMaxValueOn : R.string.LeemenMaxValueOff),
+                                true, R.drawable.outline_shield_lock_24, true);
                     } else if (position == blockedRow) {
                         int totalCount = getMessagesController().totalBlockedCount;
                         if (totalCount == 0) {
@@ -1630,8 +1636,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
             if (position == passportRow || position == lastSeenRow || position == phoneNumberRow ||
                     position == deleteAccountRow || position == webSessionsRow || position == groupsRow || position == paymentsClearRow ||
                     position == secretMapRow || position == contactsDeleteRow || position == botsBiometryRow ||
-                    position == privacyPolicyRow || position == termsRow ||
-                    position == privacyModeRow) {
+                    position == privacyPolicyRow || position == termsRow) {
                 return 0;
             } else if (position == privacyShadowRow || position == deleteAccountDetailRow || position == groupsDetailRow || position == sessionsDetailRow || position == secretDetailRow || position == botsDetailRow || position == contactsDetailRow || position == newChatsSectionRow || position == analyticsConsentDetailRow) {
                 return 1;
@@ -1641,7 +1646,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                 return 3;
             } else if (position == botsAndWebsitesShadowRow) {
                 return 4;
-            } else if (position == autoDeleteMesages || position == sessionsRow || position == emailLoginRow || position == passwordRow || position == passkeysRow || position == passcodeRow || position == privateSpaceEnterRow || position == blockedRow) {
+            } else if (position == autoDeleteMesages || position == sessionsRow || position == emailLoginRow || position == passwordRow || position == passkeysRow || position == passcodeRow || position == privateSpaceEnterRow || position == privacyModeRow || position == blockedRow) {
                 return 5;
             }
             return 0;

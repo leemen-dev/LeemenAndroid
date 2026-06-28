@@ -92,6 +92,9 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     private int switchPasswordShadowRow;
     private int switchPasswordRow;
     private int switchPasswordInfoRow;
+    private int encryptionShadowRow;
+    private int encryptionRow;
+    private int encryptionInfoRow;
     /** Accounts currently in the hide-list (shown as removable rows). */
     private final ArrayList<Integer> hiddenAccountsList = new ArrayList<>();
     /** Whether any OTHER activated account exists at all (gates the whole section). */
@@ -170,6 +173,8 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                 showPinTimeoutPicker();
             } else if (position == sequenceRow) {
                 presentFragment(new PrivateSpaceTabSequenceActivity());
+            } else if (position == encryptionRow) {
+                presentFragment(new LeemenPrivacyModeActivity());
             } else if (position == pinInSearchRow) {
                 onPinInSearchSwitchClick((TextCheckCell) view);
             } else if (position == addHiddenAccountRow) {
@@ -655,6 +660,11 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             pinInSearchRow = -1;
             pinInSearchInfoRow = -1;
         }
+        // Protected Space encryption key (max-privacy passphrase + recovery). Always available here — this
+        // screen is reachable only from inside the space — and mirrors the row in Privacy → Security.
+        encryptionShadowRow = rowCount++;
+        encryptionRow = rowCount++;
+        encryptionInfoRow = rowCount++;
         // The hidden-account section is a Leemen Premium feature. Show its "Add account" entry whenever
         // the user could add a PS account — another logged-in account exists to hide, OR a free slot is
         // available to log into a brand-new account. Free users still see the row (tap opens the paywall),
@@ -819,6 +829,8 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpaceSequenceInfo));
                     } else if (position == pinInSearchInfoRow) {
                         privacyCell.setText(LocaleController.getString(R.string.PrivateSpacePinInSearchInfo));
+                    } else if (position == encryptionInfoRow) {
+                        privacyCell.setText(LocaleController.getString(R.string.LeemenPSEncryptionInfo));
                     } else if (position == hiddenAccountsInfoRow) {
                         privacyCell.setText(LocaleController.getString(R.string.HiddenAccountsListInfo));
                     } else if (position == switchPasswordInfoRow) {
@@ -905,6 +917,12 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                                 LocaleController.getString(R.string.HiddenAccountsSwitchPasswordTitle),
                                 LocaleController.getString(on ? R.string.PrivateSpacePinOn : R.string.PrivateSpacePinOff),
                                 false);
+                    } else if (position == encryptionRow) {
+                        boolean on = org.telegram.messenger.leemen.LeemenAccount.isMaxPrivacy(currentAccount);
+                        cell.setTextAndValue(
+                                LocaleController.getString(R.string.LeemenPSEncryptionTitle),
+                                LocaleController.getString(on ? R.string.LeemenMaxValueOn : R.string.LeemenMaxValueOff),
+                                false);
                     }
                     break;
                 }
@@ -934,6 +952,9 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             if (position == sequenceInfoRow) return VIEW_INFO;
             if (position == pinInSearchRow) return VIEW_SWITCH;
             if (position == pinInSearchInfoRow) return VIEW_INFO;
+            if (position == encryptionShadowRow) return VIEW_SHADOW;
+            if (position == encryptionRow) return VIEW_VALUE;
+            if (position == encryptionInfoRow) return VIEW_INFO;
             if (position == hiddenAccountsShadowRow) return VIEW_SHADOW;
             if (position == addHiddenAccountRow) return VIEW_ADD;
             if (position == hiddenAccountsHeaderRow) return VIEW_HEADER;

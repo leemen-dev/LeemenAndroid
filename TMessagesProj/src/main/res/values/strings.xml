@@ -2535,6 +2535,8 @@
     <string name="LeemenPasscodeHint">Passcode</string>
     <string name="LeemenPasscodeWrong">Wrong passcode</string>
     <string name="LeemenPrivacyModeTitle">Privacy mode</string>
+    <string name="LeemenPSEncryptionTitle">Encryption key</string>
+    <string name="LeemenPSEncryptionInfo">Encrypt the Protected Space end-to-end with your own passphrase. You\'ll get a recovery phrase to restore access on a new device.</string>
     <string name="LeemenPrivacyModeInfo">Standard mode keeps an encrypted backup of your synced data that Leemen can restore. Maximum privacy makes it zero-knowledge — only you can decrypt it, using a passphrase you set.</string>
     <string name="LeemenMaxEnabledInfo">Maximum privacy is on. Your synced data is encrypted with your passphrase — Leemen can\'t read or restore it. You\'ll enter the passphrase on each new device.</string>
     <string name="LeemenEnableMax">Enable maximum privacy</string>

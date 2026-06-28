@@ -355,6 +355,8 @@
     <string name="LeemenPasscodeHint">Код-пароль</string>
     <string name="LeemenPasscodeWrong">Неверный код-пароль</string>
     <string name="LeemenPrivacyModeTitle">Режим приватности</string>
+    <string name="LeemenPSEncryptionTitle">Ключ шифрования</string>
+    <string name="LeemenPSEncryptionInfo">Зашифруйте Защищённое пространство сквозным шифрованием своей фразой-паролем. Вы получите фразу для восстановления доступа на новом устройстве.</string>
     <string name="LeemenPrivacyModeInfo">Стандартный режим хранит зашифрованную резервную копию ваших синхронизированных данных, которую Leemen может восстановить. Максимальная приватность делает её zero-knowledge — расшифровать можете только вы, кодовой фразой, которую задаёте сами.</string>
     <string name="LeemenMaxEnabledInfo">Максимальная приватность включена. Ваши синхронизированные данные зашифрованы кодовой фразой — Leemen не может их прочитать или восстановить. На каждом новом устройстве нужно будет ввести фразу.</string>
     <string name="LeemenEnableMax">Включить максимальную приватность</string>
