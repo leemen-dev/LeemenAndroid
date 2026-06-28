@@ -45,6 +45,7 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -732,8 +733,14 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
                     totalCount = res.count;
                     currentDataQuery = finalQuery;
                     int n = messageObjects.size();
+                    // Leemen: never surface media/files/messages that live in a hidden Protected-Space chat (OFF mode).
+                    SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
                     for (int i = 0; i < n; i++) {
                         MessageObject messageObject = messageObjects.get(i);
+                        long hiddenDid = messageObject.getDialogId();
+                        if (ssc.isHiddenFromCurrentView(hiddenDid) && !ssc.isMessageExposed(hiddenDid, messageObject.getId()) && !ssc.isMessagePending(hiddenDid, messageObject.getId())) {
+                            continue;
+                        }
                         ArrayList<MessageObject> messageObjectsByDate = sectionArrays.get(messageObject.monthKey);
                         if (messageObjectsByDate == null) {
                             messageObjectsByDate = new ArrayList<>();
@@ -814,7 +821,15 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
                     if (!filterAndQueryIsSame) {
                         localTipChats.clear();
                         if (finalResultArray != null) {
-                            localTipChats.addAll(finalResultArray);
+                            // Leemen: drop hidden Protected-Space peers from the jump-to-chat tip chips (OFF mode).
+                            SecondSpaceController tipSsc = SecondSpaceController.getInstance(currentAccount);
+                            for (Object o : finalResultArray) {
+                                long d = o instanceof TLRPC.User ? ((TLRPC.User) o).id : (o instanceof TLRPC.Chat ? -((TLRPC.Chat) o).id : 0);
+                                if (d != 0 && tipSsc.isHiddenFromCurrentView(d)) {
+                                    continue;
+                                }
+                                localTipChats.add(o);
+                            }
                         }
                         if (finalQuery != null && finalQuery.length() >= 3 && (LocaleController.getString(R.string.SavedMessages).toLowerCase().startsWith(finalQuery) ||
                                 "saved messages".startsWith(finalQuery))) {

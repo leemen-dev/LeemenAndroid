@@ -1068,6 +1068,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 }
             }
             final int recentCount = filtered2RecentSearchObjects.size();
+            SecondSpaceController hiddenSsc = SecondSpaceController.getInstance(currentAccount);
             for (int a = 0; a < result.size(); a++) {
                 Object obj = result.get(a);
                 long dialogId = 0;
@@ -1082,6 +1083,14 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 } else if (obj instanceof TLRPC.EncryptedChat) {
                     TLRPC.EncryptedChat chat = (TLRPC.EncryptedChat) obj;
                     MessagesController.getInstance(currentAccount).putEncryptedChat(chat, true);
+                }
+
+                // Leemen: never surface a hidden Protected-Space peer in local name search (OFF mode).
+                if (dialogId != 0 && hiddenSsc.isHiddenFromCurrentView(dialogId)) {
+                    result.remove(a);
+                    names.remove(a);
+                    a--;
+                    continue;
                 }
 
                 if (dialogId != 0) {
@@ -1383,8 +1392,13 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                             publicPostsHashtag = finalHashtag;
                             MessagesController.getInstance(currentAccount).putUsers(msgs.users, false);
                             MessagesController.getInstance(currentAccount).putChats(msgs.chats, false);
+                            SecondSpaceController postsSsc = SecondSpaceController.getInstance(currentAccount);
                             for (int i = 0; i < msgs.messages.size(); ++i) {
                                 TLRPC.Message msg = msgs.messages.get(i);
+                                long did = MessageObject.getDialogId(msg);
+                                if (postsSsc.isHiddenFromCurrentView(did) && !postsSsc.isMessageExposed(did, msg.id) && !postsSsc.isMessagePending(did, msg.id)) {
+                                    continue;
+                                }
                                 publicPosts.add(new MessageObject(currentAccount, msg, false, true));
                             }
                             if (delegate != null) {
@@ -2396,8 +2410,9 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 if (delegate != null && delegate.getSearchForumDialogId() == recentSearchObjects.get(i).did || !filter(recentSearchObjects.get(i).object)) {
                     continue;
                 }
-                // Mode-scoped recents: searches performed inside private space stay there.
-                if (!ssActive && ssc.isPrivateSearchOnly(recentSearchObjects.get(i).did)) {
+                // Mode-scoped recents: searches performed inside private space stay there, and a chat that
+                // became hidden after entering recents must never show in OFF mode either.
+                if (!ssActive && (ssc.isPrivateSearchOnly(recentSearchObjects.get(i).did) || ssc.isHiddenFromCurrentView(recentSearchObjects.get(i).did))) {
                     continue;
                 }
                 filteredRecentSearchObjects.add(recentSearchObjects.get(i));
@@ -2414,7 +2429,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
             if (delegate != null && delegate.getSearchForumDialogId() == obj.did || !filter(recentSearchObjects.get(i).object)) {
                 continue;
             }
-            if (!ssActive && ssc.isPrivateSearchOnly(obj.did)) {
+            if (!ssActive && (ssc.isPrivateSearchOnly(obj.did) || ssc.isHiddenFromCurrentView(obj.did))) {
                 continue;
             }
             String title = null, username = null;

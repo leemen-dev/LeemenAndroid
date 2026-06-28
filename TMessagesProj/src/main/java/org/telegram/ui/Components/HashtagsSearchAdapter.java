@@ -6,6 +6,7 @@ import android.view.View;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.MessageObject;
+import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
@@ -128,8 +129,13 @@ public class HashtagsSearchAdapter extends UniversalAdapter {
                     lastRate = msgs.next_rate;
                     MessagesController.getInstance(currentAccount).putUsers(msgs.users, false);
                     MessagesController.getInstance(currentAccount).putChats(msgs.chats, false);
+                    final SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
                     for (int i = 0; i < msgs.messages.size(); ++i) {
                         final TLRPC.Message msg = msgs.messages.get(i);
+                        final long did = MessageObject.getDialogId(msg);
+                        if (ssc.isHiddenFromCurrentView(did) && !ssc.isMessageExposed(did, msg.id) && !ssc.isMessagePending(did, msg.id)) {
+                            continue;
+                        }
                         final MessageObject messageObject = new MessageObject(currentAccount, msg, false, true);
                         messageObject.setQuery(finalQuery);
                         messages.add(messageObject);

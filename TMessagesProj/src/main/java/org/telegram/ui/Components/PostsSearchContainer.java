@@ -29,6 +29,7 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessageObject;
+import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
@@ -272,7 +273,12 @@ public class PostsSearchContainer extends FrameLayout {
 
                 final ArrayList<MessageObject> messages = news ? newsMessages : this.messages;
                 final boolean firstMessages = messages.isEmpty();
+                final SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
                 for (TLRPC.Message message : r.messages) {
+                    final long did = MessageObject.getDialogId(message);
+                    if (ssc.isHiddenFromCurrentView(did) && !ssc.isMessageExposed(did, message.id) && !ssc.isMessagePending(did, message.id)) {
+                        continue;
+                    }
                     final MessageObject msg = new MessageObject(currentAccount, message, false, false);
                     if (!news) {
                         msg.setQuery(req.query);

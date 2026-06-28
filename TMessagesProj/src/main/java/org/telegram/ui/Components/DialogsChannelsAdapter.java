@@ -18,6 +18,7 @@ import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.R;
 import org.telegram.tgnet.ConnectionsManager;
@@ -233,7 +234,13 @@ public class DialogsChannelsAdapter extends UniversalAdapter {
                     MessagesController.getInstance(currentAccount).putUsers(response.users, false);
                     MessagesController.getInstance(currentAccount).putChats(response.chats, false);
 
+                    // Leemen: never surface a message that lives in a hidden Protected-Space chat (OFF mode).
+                    SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
                     for (TLRPC.Message message : response.messages) {
+                        long did = MessageObject.getDialogId(message);
+                        if (ssc.isHiddenFromCurrentView(did) && !ssc.isMessageExposed(did, message.id) && !ssc.isMessagePending(did, message.id)) {
+                            continue;
+                        }
                         MessageObject messageObject = new MessageObject(currentAccount, message, false, true);
                         messageObject.setQuery(query);
                         messages.add(messageObject);
