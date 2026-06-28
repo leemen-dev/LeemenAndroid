@@ -1080,6 +1080,7 @@ public class LocaleController {
                     saveOtherLanguages();
                 }
                 localeValues = stringMap;
+                org.telegram.messenger.leemen.LeemenRebrand.rebrandBrandStrings(localeValues);
                 applyLanguage(localeInfo, true, false, true, false, currentAccount, null);
                 return true;
             }
@@ -1355,6 +1356,7 @@ public class LocaleController {
                 if (hasBase) {
                     localeValues.putAll(getLocaleFileStrings(localeInfo.getPathToFile()));
                 }
+                org.telegram.messenger.leemen.LeemenRebrand.rebrandBrandStrings(localeValues);
             }
             currentLocale = newLocale;
             currentLocaleInfo = localeInfo;
@@ -1426,26 +1428,17 @@ public class LocaleController {
         return localeInfo == null || TextUtils.isEmpty(localeInfo.name) ? getString("LanguageName", R.string.LanguageName) : localeInfo.name;
     }
 
-    /** Resource keys carrying Leemen brand identity (we changed their value from the upstream Telegram
-     *  text). Served ONLY from local resources — never from the cloud/Telegram "android" langpack, which
-     *  still ships the original "Telegram" values and would otherwise revert our whole rebrand once a
-     *  remote langpack loads (e.g. the intro title flips "Leemen Beta" -> "Telegram"). Remote localization
-     *  stays fully enabled for every other key. The list is GENERATED (see {@link
-     *  org.telegram.messenger.leemen.LeemenBrandStrings}) by diffing our resources against upstream;
-     *  regenerate after any further Telegram->Leemen rebrand of a shared key. */
-    private static final java.util.Set<String> BRAND_STRINGS = new java.util.HashSet<>(
-            java.util.Arrays.asList(org.telegram.messenger.leemen.LeemenBrandStrings.KEYS));
+    // Cloud-string branding is fixed at LOAD time, not read time: LeemenRebrand.rebrandBrandStrings rewrites
+    // the Telegram token to "Leemen" in localeValues for the LeemenBrandStrings keys (hooks in applyLanguage /
+    // applyLanguageFile / saveRemoteLocaleStrings). So this read path needs no per-key shield — the cloud value
+    // arrives already rebranded, and the local-resource fallback (also rebranded) covers keys the cloud hasn't
+    // delivered yet. Disk stays canonical Telegram text, so langpack version/delta bookkeeping is unaffected.
 
     private String getStringInternal(String key, int res) {
         return getStringInternal(key, null, 0, res);
     }
 
     private String getStringInternal(String key, String fallback, int fallbackRes, int res) {
-        if (res != 0 && BRAND_STRINGS.contains(key)) {
-            try {
-                return ApplicationLoader.applicationContext.getString(res);
-            } catch (Exception ignored) {}
-        }
         String value = BuildVars.USE_CLOUD_STRINGS ? localeValues.get(key) : null;
         if (value == null) {
             if (BuildVars.USE_CLOUD_STRINGS && fallback != null) {
@@ -3153,6 +3146,7 @@ public class LocaleController {
                         editor.commit();
 
                         localeValues = valuesToSet;
+                        org.telegram.messenger.leemen.LeemenRebrand.rebrandBrandStrings(localeValues);
                         currentLocale = newLocale;
                         currentLocaleInfo = localeInfo;
                         if (!TextUtils.isEmpty(currentLocaleInfo.pluralLangCode)) {
