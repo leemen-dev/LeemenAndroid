@@ -242,7 +242,7 @@ public class SessionCell extends FrameLayout {
                     && org.telegram.messenger.SecondSpaceController.getInstance(currentAccount).isRealActive()) {
                 detailTextView.setTextColor(Theme.getColor(Theme.key_color_yellow));
                 detailTextView.setText(LocaleController.getString(R.string.PrivacyWarningSessionCell));
-                android.graphics.drawable.Drawable warnIcon = getResources().getDrawable(R.drawable.msg_warning).mutate();
+                android.graphics.drawable.Drawable warnIcon = getResources().getDrawable(R.drawable.warning_sign).mutate();
                 warnIcon.setColorFilter(new android.graphics.PorterDuffColorFilter(Theme.getColor(Theme.key_color_yellow), android.graphics.PorterDuff.Mode.SRC_IN));
                 int sz = dp(16);
                 warnIcon.setBounds(0, 0, sz, sz);
