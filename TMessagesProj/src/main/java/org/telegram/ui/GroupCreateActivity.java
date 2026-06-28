@@ -146,6 +146,10 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
     private boolean searching;
     private final int chatAddType;
     private final boolean allowPremium;
+    // Leemen: optional cap on how many chats can be selected (the Protected Space free limit). When the
+    // user tries to pick beyond it, run leemenOnLimitExceeded (the paywall) instead of selecting. -1 = no cap.
+    private int leemenMaxSelectable = -1;
+    private Runnable leemenOnLimitExceeded;
     private final boolean allowMiniApps;
     private GroupCreateSpan selectedPremium;
     private GroupCreateSpan selectedMiniApps;
@@ -815,6 +819,14 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
                 if (selectedSpan != null) {
                     spansContainer.removeSpan(selectedSpan);
                 } else {
+                    // Leemen: free tier caps hidden chats — open the paywall on the first over-limit pick
+                    // instead of letting the user select more and bouncing them after "Done".
+                    if (leemenMaxSelectable >= 0 && selectedContacts.size() >= leemenMaxSelectable) {
+                        if (leemenOnLimitExceeded != null) {
+                            leemenOnLimitExceeded.run();
+                        }
+                        return;
+                    }
                     if (maxCount != 0 && selectedContacts.size() == maxCount) {
                         return;
                     }
@@ -1381,6 +1393,14 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
 
     public void setDelegate(GroupCreateActivityDelegate groupCreateActivityDelegate) {
         delegate = groupCreateActivityDelegate;
+    }
+
+    /** Leemen: cap the number of selectable chats (the Protected Space free limit). When the user tries to
+     *  pick one more than {@code maxSelectable}, {@code onExceeded} runs (the paywall) and the pick is ignored. */
+    public GroupCreateActivity setLeemenSelectLimit(int maxSelectable, Runnable onExceeded) {
+        this.leemenMaxSelectable = maxSelectable;
+        this.leemenOnLimitExceeded = onExceeded;
+        return this;
     }
 
     public void setDelegate2(ContactsAddActivityDelegate contactsAddActivityDelegate) {

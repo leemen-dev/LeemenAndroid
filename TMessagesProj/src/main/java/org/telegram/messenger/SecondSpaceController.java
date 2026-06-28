@@ -1585,6 +1585,13 @@ public class SecondSpaceController extends BaseController implements Notificatio
         return hasLeemenPremium() || dialogIds.size() + n <= MAX_HIDDEN_CHATS_FREE;
     }
 
+    /** How many more chats a non-premium user may hide for free right now (0 once at/over the limit).
+     *  Used to cap selection in the chat picker so the paywall fires on the first over-limit pick.
+     *  Returns {@link Integer#MAX_VALUE} for premium (no cap). */
+    public int freeChatSlotsLeft() {
+        return hasLeemenPremium() ? Integer.MAX_VALUE : Math.max(0, MAX_HIDDEN_CHATS_FREE - dialogIds.size());
+    }
+
     /** Premium-aware: holds more hidden chats than allowed and has no active subscription. */
     public boolean isOverChatLimit() {
         return !hasLeemenPremium() && dialogIds.size() > MAX_HIDDEN_CHATS_FREE;

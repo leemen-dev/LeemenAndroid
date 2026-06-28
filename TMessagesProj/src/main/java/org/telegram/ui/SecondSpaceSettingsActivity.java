@@ -297,6 +297,13 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         args.putBoolean("isAlwaysShare", true);
         args.putInt("chatAddType", 2); // FILTER — accepts users + chats + channels
         GroupCreateActivity fragment = new GroupCreateActivity(args);
+        // Free tier caps hidden chats: open the paywall the moment the user tries to pick beyond the free
+        // allowance, instead of bouncing them after "Done". The delegate below still backstops the count.
+        SecondSpaceController psc = SecondSpaceController.getInstance(currentAccount);
+        if (!psc.hasLeemenPremium()) {
+            fragment.setLeemenSelectLimit(psc.freeChatSlotsLeft(),
+                    () -> LeemenPremiumActivity.showUpgradeDialog(SecondSpaceSettingsActivity.this));
+        }
         fragment.setDelegate((premium, miniapps, ids) -> {
             SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
             // addToCurrentSpace targets whichever space is currently active (real or fake),
