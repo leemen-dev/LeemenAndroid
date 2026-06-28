@@ -835,10 +835,19 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                 }
                 case VIEW_ADD: {
                     ManageChatTextCell actionCell = (ManageChatTextCell) holder.itemView;
-                    actionCell.setColors(Theme.key_windowBackgroundWhiteBlueIcon, Theme.key_windowBackgroundWhiteBlueButton);
                     if (position == addHiddenAccountRow) {
-                        actionCell.setText(LocaleController.getString(R.string.HiddenAccountsAddAccount), null, R.drawable.msg_contact_add, false);
+                        // Hiding a whole account is a Leemen Premium feature. Free users still see the row,
+                        // but it's grayed out with a lock; the tap opens the paywall (see openAccountPicker()).
+                        boolean locked = !SecondSpaceController.getInstance(currentAccount).hasLeemenPremium();
+                        if (locked) {
+                            actionCell.setColors(Theme.key_windowBackgroundWhiteGrayIcon, Theme.key_windowBackgroundWhiteGrayText);
+                            actionCell.setText(LocaleController.getString(R.string.HiddenAccountsAddAccount), null, R.drawable.msg_premium_lock2, false);
+                        } else {
+                            actionCell.setColors(Theme.key_windowBackgroundWhiteBlueIcon, Theme.key_windowBackgroundWhiteBlueButton);
+                            actionCell.setText(LocaleController.getString(R.string.HiddenAccountsAddAccount), null, R.drawable.msg_contact_add, false);
+                        }
                     } else {
+                        actionCell.setColors(Theme.key_windowBackgroundWhiteBlueIcon, Theme.key_windowBackgroundWhiteBlueButton);
                         actionCell.setText(LocaleController.getString(R.string.PrivateSpaceAddChat), null, R.drawable.msg_contact_add, false);
                     }
                     break;
