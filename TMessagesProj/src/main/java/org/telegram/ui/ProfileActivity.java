@@ -668,6 +668,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int addToGroupInfoRow;
     private int premiumRow;
     private int leemenPremiumRow;
+    private int leemenPremiumSectionRow;
     private int starsRow;
     private int tonRow;
     private int businessRow;
@@ -10280,6 +10281,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         notificationRow = -1;
         languageRow = -1;
         leemenPremiumRow = -1;
+        leemenPremiumSectionRow = -1;
         premiumRow = -1;
         starsRow = -1;
         tonRow = -1;
@@ -10458,7 +10460,6 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 devicesRow = rowCount++;
                 languageRow = rowCount++;
                 devicesSectionRow = rowCount++;
-                leemenPremiumRow = rowCount++; // Leemen Premium — always shown, above Telegram Premium
                 if (!getMessagesController().premiumFeaturesBlocked()) {
                     premiumRow = rowCount++;
                 }
@@ -10475,7 +10476,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (!getMessagesController().premiumPurchaseBlocked()) {
                     premiumGiftingRow = rowCount++;
                 }
-                if (leemenPremiumRow >= 0 || premiumRow >= 0 || starsRow >= 0 || tonRow >= 0 || businessRow >= 0 || premiumGiftingRow >= 0) {
+                if (premiumRow >= 0 || starsRow >= 0 || tonRow >= 0 || businessRow >= 0 || premiumGiftingRow >= 0) {
                     premiumSectionsRow = rowCount++;
                 }
                 helpHeaderRow = rowCount++;
@@ -10494,6 +10495,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (BuildVars.DEBUG_VERSION) {
                     switchBackendRow = rowCount++;
                 }
+                // Leemen Premium — its own row at the very bottom of Settings (styled like Telegram Premium).
+                leemenPremiumSectionRow = rowCount++;
+                leemenPremiumRow = rowCount++;
                 versionRow = rowCount++;
             } else {
                 String username = UserObject.getPublicUsername(user);
@@ -13619,7 +13623,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     } else if (position == addToGroupButtonRow) {
                         textCell.setTextAndIcon(LocaleController.getString(R.string.AddToGroupOrChannel), R.drawable.msg_groups_create, false);
                     } else if (position == leemenPremiumRow) {
-                        textCell.setTextAndIcon(LocaleController.getString(R.string.LeemenPremium), new AnimatedEmojiDrawable.WrapSizeDrawable(PremiumGradient.getInstance().premiumStarMenuDrawable, dp(24), dp(24)), true);
+                        textCell.setTextAndIcon(LocaleController.getString(R.string.LeemenPremium), new AnimatedEmojiDrawable.WrapSizeDrawable(PremiumGradient.getInstance().premiumStarMenuDrawable, dp(24), dp(24)), false);
                         textCell.setImageLeft(23);
                     } else if (position == premiumRow) {
                         textCell.setTextAndIcon(LocaleController.getString(R.string.TelegramPremium), new AnimatedEmojiDrawable.WrapSizeDrawable(PremiumGradient.getInstance().premiumStarMenuDrawable, dp(24), dp(24)), true);
@@ -14092,7 +14096,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             } else if (position == lastSectionRow || position == membersSectionRow ||
                     position == secretSettingsSectionRow || position == settingsSectionRow || position == devicesSectionRow ||
                     position == helpSectionCell || position == setAvatarSectionRow || position == passwordSuggestionSectionRow ||
-                    position == phoneSuggestionSectionRow || position == premiumSectionsRow || position == reportDividerRow ||
+                    position == phoneSuggestionSectionRow || position == premiumSectionsRow || position == leemenPremiumSectionRow || position == reportDividerRow ||
                     position == channelDividerRow || position == graceSuggestionSectionRow || position == balanceDividerRow ||
                     position == botPermissionsDivider || position == channelBalanceSectionRow || position == unofficialSecurityRiskDividerRow
             ) {
