@@ -211,12 +211,6 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         addFeature(features, R.drawable.msg_limit_accounts,
                 LocaleController.getString(R.string.LeemenPremiumFeatAccountTitle),
                 LocaleController.getString(R.string.LeemenPremiumFeatAccountDesc));
-        addFeature(features, R.drawable.menu_devices,
-                LocaleController.getString(R.string.LeemenPremiumFeat2Title),
-                LocaleController.getString(R.string.LeemenPremiumFeat2Desc));
-        addFeature(features, R.drawable.msg_premium_liststar,
-                LocaleController.getString(R.string.LeemenPremiumFeat3Title),
-                LocaleController.getString(R.string.LeemenPremiumFeat3Desc));
         content.addView(features, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 10, 0, 0));
 
         root.addView(scrollView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP, 0, 0, 0, 76));

@@ -315,7 +315,7 @@
     <string name="LeemenAnalyticsConsentLater">Не сейчас</string>
     <string name="LeemenPremium">Leemen Premium</string>
     <string name="LeemenPremiumScreenSubtitle">Безлимит чатов в защищённом пространстве</string>
-    <string name="LeemenPremiumFeatureUnlimited">Прячьте сколько угодно чатов, а не только один.</string>
+    <string name="LeemenPremiumFeatureUnlimited">Безлимит скрытых чатов</string>
     <string name="LeemenPremiumPlanMonthly">Месяц</string>
     <string name="LeemenPremiumPlanYearly">Год</string>
     <string name="LeemenPremiumPriceMonthly">$10 / мес</string>
@@ -327,13 +327,13 @@
     <string name="LeemenPremiumActivated">Leemen Premium активирован</string>
     <string name="LeemenPremiumPurchaseError">Не удалось завершить покупку</string>
     <string name="LeemenPremiumStatusUnlimited">Безлимит чатов</string>
-    <string name="LeemenPremiumFeat1Desc">Прячьте сколько угодно чатов.</string>
+    <string name="LeemenPremiumFeat1Desc">Прячьте в защищённое пространство любое число чатов, групп и каналов — не только первый бесплатный. Скрытые чаты пропадают из списка, поиска, уведомлений и виджетов.</string>
     <string name="LeemenPremiumFeat2Title">Синхронизация устройств</string>
     <string name="LeemenPremiumFeat2Desc">Защищённое пространство, зашифровано, на всех устройствах.</string>
     <string name="LeemenPremiumFeat3Title">Приоритет и новые функции</string>
     <string name="LeemenPremiumFeat3Desc">Ранний доступ к будущим приватным функциям.</string>
     <string name="LeemenPremiumFeatAccountTitle">Скрыть целый аккаунт</string>
-    <string name="LeemenPremiumFeatAccountDesc">Скрывайте аккаунт целиком, а не только чаты — он исчезает из переключателя аккаунтов, пока вы не откроете «Приватное пространство».</string>
+    <string name="LeemenPremiumFeatAccountDesc">Скрывайте аккаунт целиком, а не только чаты — он исчезает из переключателя аккаунтов, его уведомления и счётчики отключаются, пока вы не откроете «Защищённое пространство».</string>
     <string name="LeemenPromoRow">Активировать промокод</string>
     <string name="LeemenPromoTitle">Промокод</string>
     <string name="LeemenPromoHint">Введите код</string>

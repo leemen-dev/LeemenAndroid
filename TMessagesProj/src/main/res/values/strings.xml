@@ -2495,7 +2495,7 @@
     <string name="LeemenAnalyticsConsentLater">Not now</string>
     <string name="LeemenPremium">Leemen Premium</string>
     <string name="LeemenPremiumScreenSubtitle">Unlimited chats in your Protected Space</string>
-    <string name="LeemenPremiumFeatureUnlimited">Hide as many chats as you want, not just one.</string>
+    <string name="LeemenPremiumFeatureUnlimited">Unlimited hidden chats</string>
     <string name="LeemenPremiumPlanMonthly">Monthly</string>
     <string name="LeemenPremiumPlanYearly">Yearly</string>
     <string name="LeemenPremiumPriceMonthly">$10 / month</string>
@@ -2507,13 +2507,13 @@
     <string name="LeemenPremiumActivated">Leemen Premium activated</string>
     <string name="LeemenPremiumPurchaseError">Couldn\'t complete the purchase</string>
     <string name="LeemenPremiumStatusUnlimited">Unlimited chats</string>
-    <string name="LeemenPremiumFeat1Desc">Hide as many chats as you want.</string>
+    <string name="LeemenPremiumFeat1Desc">Hide any number of chats, groups and channels in your Protected Space — not just the first free one. Hidden chats vanish from the list, search, notifications and widgets.</string>
     <string name="LeemenPremiumFeat2Title">Sync across devices</string>
     <string name="LeemenPremiumFeat2Desc">Your protected space, encrypted, on every device.</string>
     <string name="LeemenPremiumFeat3Title">Priority &amp; new perks</string>
     <string name="LeemenPremiumFeat3Desc">Early access to upcoming privacy features.</string>
     <string name="LeemenPremiumFeatAccountTitle">Hide a whole account</string>
-    <string name="LeemenPremiumFeatAccountDesc">Hide an entire account, not just chats — it disappears from the account switcher until you open Protected Space.</string>
+    <string name="LeemenPremiumFeatAccountDesc">Hide an entire account, not just chats — it disappears from the account switcher and its notifications and counters are silenced until you open your Protected Space.</string>
     <string name="LeemenPromoRow">Redeem promo code</string>
     <string name="LeemenPromoTitle">Promo code</string>
     <string name="LeemenPromoHint">Enter code</string>
