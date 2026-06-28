@@ -57,7 +57,8 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
         topPadding = .2f;
 
         LinearLayout linearLayout = customView = new LinearLayout(context);
-        linearLayout.setPadding(backgroundPaddingLeft + dp(6), 0, backgroundPaddingLeft + dp(6), 0);
+        // Bottom inset for the system nav bar so the Subscribe button isn't hidden under the nav buttons.
+        linearLayout.setPadding(backgroundPaddingLeft + dp(6), 0, backgroundPaddingLeft + dp(6), AndroidUtilities.navigationBarHeight);
         linearLayout.setOrientation(LinearLayout.VERTICAL);
 
         FrameLayout topView = new FrameLayout(context);
@@ -94,16 +95,6 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
                 LocaleController.getString(R.string.LeemenPremiumFeatAccountTitle),
                 LocaleController.getString(R.string.LeemenPremiumFeatAccountDesc));
         linearLayout.addView(fAccount, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 16, 0, 0));
-
-        FrameLayout f2 = new FeatureCell(context, R.drawable.menu_privacy,
-                LocaleController.getString(R.string.PrivateSpacePaywallFeature2Title),
-                LocaleController.getString(R.string.PrivateSpacePaywallFeature2Text));
-        linearLayout.addView(f2, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 16, 0, 0));
-
-        FrameLayout f3 = new FeatureCell(context, R.drawable.filled_views,
-                LocaleController.getString(R.string.PrivateSpacePaywallFeature3Title),
-                LocaleController.getString(R.string.PrivateSpacePaywallFeature3Text));
-        linearLayout.addView(f3, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 16, 0, 0));
 
         TextView button = new TextView(context);
         button.setLines(1);
