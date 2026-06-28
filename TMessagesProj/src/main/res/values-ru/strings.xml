@@ -443,7 +443,7 @@
     <string name="PrivacyWarningSessionCell">Здесь видны ваши скрытые чаты</string>
     <string name="PrivacyWarningCloudPasswordValue">Выкл. — скрытые чаты под угрозой</string>
     <string name="LeemenCloudPasswordWarningTitle">Скрытые чаты под угрозой</string>
-    <string name="LeemenCloudPasswordWarningMessage">Без облачного пароля любой, кто войдёт в этот аккаунт из обычного Telegram, увидит ваши скрытые чаты. Задайте облачный пароль (двухэтапную проверку), чтобы для входа требовался он.</string>
+    <string name="LeemenCloudPasswordWarningMessage">Скрытие чатов работает только в Leemen — в других клиентах Telegram эти чаты видны как обычные. Чтобы защитить их, задайте облачный пароль: без него никто не сможет войти в ваш аккаунт с другого устройства.</string>
     <string name="LeemenCloudPasswordWarningSet">Задать пароль</string>
     <string name="HiddenAccountsNoneToAdd">Нет других аккаунтов для добавления.</string>
     <string name="HiddenAccountsRemoveConfirm">Перестать скрывать этот аккаунт?</string>
