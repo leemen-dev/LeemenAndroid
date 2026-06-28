@@ -1,6 +1,7 @@
 package org.telegram.messenger.leemen;
 
 import android.net.Uri;
+import android.os.SystemClock;
 import android.text.TextUtils;
 
 import com.google.gson.JsonObject;
@@ -37,12 +38,19 @@ public final class LeemenIdentity {
     private static final Set<Integer> inFlight = new HashSet<>();
 
     // Post-login self-healing retry: the bind+key+sync chain can fail transiently right after a login (server
-    // still settling a just-deleted identity, username resolver not warm yet, key fetch hiccup). Without a
-    // retry the OFF-mode list stays fail-closed ("loading") until the next app launch re-runs bindAllActivated
-    // — which is exactly the "delete → relogin → only system chat until restart" symptom. Retry with backoff
-    // until the initial sync completes. The gate stays fail-closed throughout: nothing is revealed, we are only
-    // driving the legitimate bind to completion so no restart is needed.
-    private static final long[] RETRY_BACKOFF_MS = {2000, 4000, 8000, 16000, 30000};
+    // still settling a just-deleted identity, username resolver not warm yet, key fetch hiccup). Without it the
+    // OFF-mode list stays fail-closed ("only the system chat") until the next app launch re-runs
+    // bindAllActivated — the "delete → relogin → only system chat until restart" symptom.
+    //
+    // A delete → IMMEDIATE relogin races the backend's still-settling hard-delete cascade, which can take
+    // longer than a short fixed window to re-accept /auth. The retry therefore uses capped-exponential backoff
+    // and KEEPS retrying (up to a generous wall-clock ceiling) instead of giving up after a fixed attempt
+    // count — otherwise a >60s backend settle stranded the gate closed until a cold restart. It self-terminates
+    // the instant the sync lands (or the account is logged out / disabled). The gate stays fail-closed
+    // throughout: nothing is revealed, we only drive the legitimate bind to completion so no restart is needed.
+    private static final long RETRY_BASE_MS = 2000;
+    private static final long RETRY_MAX_MS = 60_000;            // backoff caps at 60s between attempts
+    private static final long RETRY_CEILING_MS = 30 * 60_000L;  // ...and stops after ~30 min of failures
     private static final Runnable[] retryRunnable = new Runnable[UserConfig.MAX_ACCOUNT_COUNT];
 
     /** Bind now and, if the initial sync doesn't complete, keep retrying with backoff (call at onAuthSuccess). */
@@ -50,11 +58,13 @@ public final class LeemenIdentity {
         if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return;
         cancelRetry(account);
         bindIfNeeded(account);
-        scheduleRetry(account, 0);
+        scheduleRetry(account, 0, SystemClock.elapsedRealtime());
     }
 
-    private static void scheduleRetry(final int account, final int attempt) {
-        if (attempt >= RETRY_BACKOFF_MS.length) return; // give up; next app launch/foreground retries via bindAllActivated
+    private static void scheduleRetry(final int account, final int attempt, final long startedAt) {
+        if (SystemClock.elapsedRealtime() - startedAt > RETRY_CEILING_MS) {
+            return; // gave up after the ceiling; a cold start / foreground rearmPendingSync() retries
+        }
         final Runnable r = () -> {
             retryRunnable[account] = null;
             if (!UserConfig.getInstance(account).isClientActivated()
@@ -65,10 +75,27 @@ public final class LeemenIdentity {
             if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: bind retry #" + (attempt + 1) + " account " + account);
             bindIfNeeded(account);   // idempotent: binds, or (if bound) re-fetches the key
             LeemenSync.syncAll();    // and (if bound+keyed) drives the sync that opens the gate
-            scheduleRetry(account, attempt + 1);
+            scheduleRetry(account, attempt + 1, startedAt);
         };
         retryRunnable[account] = r;
-        AndroidUtilities.runOnUIThread(r, RETRY_BACKOFF_MS[attempt]);
+        long delay = Math.min(RETRY_MAX_MS, RETRY_BASE_MS << Math.min(attempt, 5));
+        AndroidUtilities.runOnUIThread(r, delay);
+    }
+
+    /** Re-arm the post-login self-heal for any activated account whose initial sync hasn't landed yet.
+     *  Call when the app returns to the foreground: {@code onResume} only reconnects realtime, which itself
+     *  needs an existing bind, so an account left pending after the retry's ceiling (e.g. backgrounded while
+     *  a just-deleted backend was still settling) would otherwise stay fail-closed until a cold restart. */
+    public static void rearmPendingSync() {
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            try {
+                if (UserConfig.getInstance(a).isClientActivated()
+                        && !LeemenAccount.isDisabled(a)
+                        && !LeemenSync.hasInitialSyncCompleted(a)) {
+                    bindWithRetry(a);
+                }
+            } catch (Throwable ignore) {}
+        }
     }
 
     private static void cancelRetry(int account) {

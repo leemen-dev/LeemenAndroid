@@ -7125,6 +7125,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         // Leemen: app returned to foreground — reconnect the Realtime push immediately instead of waiting
         // out a backoff that may have climbed to 60s while backgrounded during a network drop.
         try { org.telegram.messenger.leemen.LeemenRealtime.reconnectAllNow(); } catch (Throwable ignore) {}
+        // ...and re-arm the post-login bind/sync for any account still fail-closed (e.g. a delete→relogin
+        // whose backend hadn't settled before the retry ceiling), so the OFF-mode list isn't stuck until
+        // a cold restart. No-op once the initial sync has landed.
+        try { org.telegram.messenger.leemen.LeemenIdentity.rearmPendingSync(); } catch (Throwable ignore) {}
         MessagesController.getInstance(currentAccount).sortDialogs(null);
         showLanguageAlert(false);
         Utilities.stageQueue.postRunnable(() -> {
