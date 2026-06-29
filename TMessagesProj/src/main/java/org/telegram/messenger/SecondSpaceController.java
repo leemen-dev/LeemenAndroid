@@ -217,7 +217,8 @@ public class SecondSpaceController extends BaseController implements Notificatio
         pinTimeoutMinutes = prefs.getInt(PREF_PIN_TIMEOUT_MIN, 0);
         pinLastVerifiedAt = prefs.getLong(PREF_PIN_LAST_OK_MS, 0L);
         switchPasswordHash = prefs.getString(PREF_SWITCH_PASSWORD_HASH, "");
-        allowScreenshots = prefs.getBoolean(PREF_ALLOW_SCREENSHOTS, false);
+        // DEBUG: default screenshots ON for development convenience. TODO: revert default to false before release.
+        allowScreenshots = prefs.getBoolean(PREF_ALLOW_SCREENSHOTS, true);
         leemenPremiumUntil = prefs.getLong(PREF_PREMIUM_UNTIL, 0L);
         loadHiddenAccounts(hiddenAccounts, prefs.getString(PREF_HIDDEN_ACCOUNTS, ""), num);
         // Hold the OFF-mode list until the INITIAL preview warmup settles — set SYNCHRONOUSLY here, before the
