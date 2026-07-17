@@ -25,7 +25,6 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
-import android.graphics.PorterDuffXfermode;
 import android.graphics.SurfaceTexture;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
@@ -45,6 +44,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -116,6 +116,8 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
     private String[] messages;
     private int currentViewPagerPage;
     private EGLThread eglThread;
+    private FrameLayout introHeroContainer; // Leemen: brand-blue disc + origami-L Lottie replacing the GL paper-plane hero (page 0)
+    private RLottieImageView introHeroLottie;
     private long currentDate;
     private boolean justEndDragging;
     private boolean dragging;
@@ -295,6 +297,29 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
             }
         });
 
+        // Leemen: origami-L fold-in on a brand-blue disc, replacing the native GL paper-plane hero.
+        // Added to frameLayout2 AFTER the TextureView so it draws on top, in the same 150dp centre.
+        // The page-0 GL hero textures are loaded transparent (see EGLThread.initGL), so only this
+        // overlay shows on page 0; it cross-fades out when swiping to page 1.
+        try {
+            introHeroContainer = new FrameLayout(context);
+            GradientDrawable introHeroDisc = new GradientDrawable();
+            introHeroDisc.setShape(GradientDrawable.OVAL);
+            introHeroDisc.setColor(0xFF30A4DE); // brand blue — same as the removed GL circle; intentionally not theme-colored (app-icon parity)
+            introHeroContainer.setBackground(introHeroDisc);
+
+            introHeroLottie = new RLottieImageView(context);
+            introHeroLottie.setAutoRepeat(false);                        // play once, hold last frame — MUST precede setAnimation
+            introHeroLottie.setAnimation(R.raw.leemen_splash, 120, 120); // dp buffer; L renders ~81dp (54%) inside the 150dp disc
+            introHeroLottie.setScaleType(ImageView.ScaleType.CENTER);
+            introHeroContainer.addView(introHeroLottie, LayoutHelper.createFrame(120, 120, Gravity.CENTER));
+
+            frameLayout2.addView(introHeroContainer, LayoutHelper.createFrame(ICON_HEIGHT_DP, ICON_HEIGHT_DP, Gravity.CENTER));
+            introHeroLottie.playAnimation();
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+
         viewPager = new ViewPager(context);
         viewPager.setAdapter(new IntroAdapter());
         viewPager.setPageMargin(0);
@@ -304,6 +329,12 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
             @Override
             public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
                 bottomPages.setPageOffset(position, positionOffset);
+
+                if (introHeroContainer != null) {
+                    float heroAlpha = position == 0 ? 1f - positionOffset : 0f; // 1 on page 0, fades to 0 across the 0→1 swipe
+                    introHeroContainer.setAlpha(heroAlpha);
+                    introHeroContainer.setVisibility(heroAlpha <= 0.001f ? View.INVISIBLE : View.VISIBLE);
+                }
 
                 float width = viewPager.getMeasuredWidth();
                 if (width == 0) {
@@ -316,6 +347,17 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
             @Override
             public void onPageSelected(int i) {
                 currentViewPagerPage = i;
+                if (introHeroLottie != null) {
+                    if (i == 0) { // replay the fold-in each time we land on page 0
+                        introHeroContainer.setAlpha(1f);
+                        introHeroContainer.setVisibility(View.VISIBLE);
+                        introHeroLottie.setProgress(0f);
+                        introHeroLottie.playAnimation();
+                    } else { // prime back to the fold-in's first frame so the next return starts clean, not on the held final frame
+                        introHeroLottie.stopAnimation();
+                        introHeroLottie.setProgress(0f);
+                    }
+                }
             }
 
             @Override
@@ -455,6 +497,15 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
             }
             justCreated = false;
         }
+        if (introHeroContainer != null) { // start/hold the fold-in for the initial page (onPageSelected won't fire if already on page 0)
+            boolean onHero = viewPager.getCurrentItem() == 0;
+            introHeroContainer.setAlpha(onHero ? 1f : 0f);
+            introHeroContainer.setVisibility(onHero ? View.VISIBLE : View.INVISIBLE);
+            if (onHero && introHeroLottie != null) {
+                introHeroLottie.setProgress(0f);
+                introHeroLottie.playAnimation();
+            }
+        }
         if (!AndroidUtilities.isTablet()) {
             Activity activity = getParentActivity();
             if (activity != null) {
@@ -484,6 +535,9 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
     public void onFragmentDestroy() {
         super.onFragmentDestroy();
         destroyed = true;
+        if (introHeroLottie != null) {
+            introHeroLottie.stopAnimation();
+        }
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.suggestedLangpack);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.configLoaded);
         MessagesController.getGlobalMainSettings().edit().putLong("intro_crashed_time", 0).apply();
@@ -672,14 +726,9 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
         private long lastDrawFrame;
 
         private final GenericProvider<Void, Bitmap> telegramMaskProvider = v -> {
-            int size = dp(ICON_HEIGHT_DP);
-            Bitmap bm = Bitmap.createBitmap(dp(ICON_WIDTH_DP), size, Bitmap.Config.ARGB_8888);
-            Canvas c = new Canvas(bm);
-            c.drawColor(Theme.getColor(Theme.key_windowBackgroundWhite));
-            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.CLEAR));
-            c.drawCircle(bm.getWidth() / 2f, bm.getHeight() / 2f, size / 2f, paint);
-            return bm;
+            // Leemen: the page-0 hero is now the Lottie overlay (see createView). Feed a fully
+            // transparent mask so the native paper-plane fly-in/fly-out composites to nothing.
+            return Bitmap.createBitmap(dp(ICON_WIDTH_DP), dp(ICON_HEIGHT_DP), Bitmap.Config.ARGB_8888);
         };
 
         public EGLThread(SurfaceTexture surface) {
@@ -804,16 +853,11 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
             loadTexture(R.drawable.intro_powerful_star, 18);
             loadTexture(R.drawable.intro_private_door, 19);
             loadTexture(R.drawable.intro_private_screw, 20);
-            loadTexture(R.drawable.intro_tg_plane, 21);
-            loadTexture(v -> {
-                Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                paint.setColor(0xFF30A4DE); // Leemen brand blue (mid of the Default icon_background_sa gradient #289AD1→#38AEEB) so the intro logo reads as the Leemen app icon: white "L" on brand blue. Not theme-colored.
-                int size = dp(ICON_HEIGHT_DP);
-                Bitmap bm = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-                Canvas c = new Canvas(bm);
-                c.drawCircle(size / 2f, size / 2f, size / 2f, paint);
-                return bm;
-            }, 22);
+            // Leemen: page-0 hero (plane glyph + blue circle) is drawn by the Lottie overlay now
+            // (see createView). Load both transparent so the native GL hero is invisible on page 0.
+            // Pages 1-5 use different textures and are untouched.
+            loadTexture(v -> Bitmap.createBitmap(dp(ICON_HEIGHT_DP), dp(ICON_HEIGHT_DP), Bitmap.Config.ARGB_8888), 21);
+            loadTexture(v -> Bitmap.createBitmap(dp(ICON_HEIGHT_DP), dp(ICON_HEIGHT_DP), Bitmap.Config.ARGB_8888), 22);
             loadTexture(telegramMaskProvider, 23);
 
             updateTelegramTextures();
