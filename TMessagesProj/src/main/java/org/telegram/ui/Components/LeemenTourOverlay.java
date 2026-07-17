@@ -101,6 +101,20 @@ public class LeemenTourOverlay extends FrameLayout {
         AndroidUtilities.runOnUIThread(positionBubble);
     }
 
+    /** Reposition the spotlight (and its bubble) to follow a scrolling target — no animation, no re-fade. */
+    public void moveHole(RectF target) {
+        if (!hasHole) {
+            return;
+        }
+        if (holeAnimator != null) {
+            holeAnimator.cancel();
+            holeAnimator = null;
+        }
+        currentHole.set(target);
+        invalidate();
+        positionBubble(false);
+    }
+
     private void animateHoleTo(RectF target, float radius) {
         if (holeAnimator != null) {
             holeAnimator.cancel();
@@ -125,6 +139,10 @@ public class LeemenTourOverlay extends FrameLayout {
     }
 
     private void positionBubble() {
+        positionBubble(true);
+    }
+
+    private void positionBubble(boolean fadeIn) {
         if (getWidth() == 0 || getHeight() == 0) {
             AndroidUtilities.runOnUIThread(positionBubble, 16);
             return;
@@ -161,7 +179,12 @@ public class LeemenTourOverlay extends FrameLayout {
         float arrowCx = targetCenterX() - left;
         bubble.setArrow(below ? Bubble.ARROW_TOP : Bubble.ARROW_BOTTOM, arrowCx);
 
-        bubble.animate().alpha(1f).setDuration(160).start();
+        if (fadeIn) {
+            bubble.animate().alpha(1f).setDuration(160).start();
+        } else {
+            bubble.animate().cancel();
+            bubble.setAlpha(1f);
+        }
     }
 
     private float targetCenterX() { return currentTarget().centerX(); }

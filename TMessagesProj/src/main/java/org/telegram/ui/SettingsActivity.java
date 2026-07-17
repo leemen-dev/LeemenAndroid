@@ -107,6 +107,7 @@ import org.telegram.ui.Components.ImageUpdater;
 import org.telegram.ui.Components.InstantCameraView;
 import org.telegram.ui.Components.ItemOptions;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.LeemenTourOverlay;
 import org.telegram.ui.Components.LinkSpanDrawable;
 import org.telegram.ui.Components.Paint.PersistColorPalette;
 import org.telegram.ui.Components.Premium.boosts.UserSelectorBottomSheet;
@@ -153,6 +154,8 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
     private SizeNotifierFrameLayout contentView;
     private UniversalRecyclerView listView;
+    private LeemenTourOverlay psRowOverlay;            // onboarding: tour-style spotlight on the PS-settings row
+    private RecyclerView.OnScrollListener psRowScrollListener;
     private View actionBarBackground;
 
     private ActionBarMenuItem searchItem, otherItem;
@@ -495,6 +498,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
     public void onFragmentDestroy() {
         super.onFragmentDestroy();
 
+        dismissPsRowOverlay();
         getNotificationCenter().removeObserver(this, NotificationCenter.updateInterfaces);
         getNotificationCenter().removeObserver(this, NotificationCenter.starBalanceUpdated);
         getNotificationCenter().removeObserver(this, NotificationCenter.newSuggestionsAvailable);
@@ -641,10 +645,91 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             return;
         }
         final int target = position;
-        listView.highlightRow(() -> {
-            listView.layoutManager.scrollToPositionWithOffset(target, AndroidUtilities.dp(80));
-            return target;
-        });
+        // Park the row in view, then spotlight it with a tour-style step (same look as the PS-settings tour).
+        listView.layoutManager.scrollToPositionWithOffset(target, AndroidUtilities.dp(120));
+        listView.post(() -> spotlightPrivateSpaceRow(target, 0));
+    }
+
+    /** Points the tour-style spotlight at the "Private Space Settings" row; retries while it's laid out. */
+    private void spotlightPrivateSpaceRow(int position, int attempt) {
+        if (getParentActivity() == null || !(fragmentView instanceof FrameLayout)) {
+            return;
+        }
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        if (!ssc.isActive() || ssc.isOnboardingDone()) {
+            dismissPsRowOverlay();
+            return;
+        }
+        RectF target = psRowTargetRect(position);
+        if (target == null) {
+            if (attempt < 8) {
+                AndroidUtilities.runOnUIThread(() -> spotlightPrivateSpaceRow(position, attempt + 1), 16);
+            }
+            return;
+        }
+        if (psRowOverlay == null) {
+            psRowOverlay = new LeemenTourOverlay(getParentActivity());
+            ((FrameLayout) fragmentView).addView(psRowOverlay,
+                    LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+            // Keep the spotlight glued to the row while the list scrolls (drop it if the row leaves view).
+            psRowScrollListener = new RecyclerView.OnScrollListener() {
+                @Override
+                public void onScrolled(RecyclerView rv, int dx, int dy) {
+                    if (psRowOverlay == null) {
+                        return;
+                    }
+                    RectF t = psRowTargetRect(position);
+                    if (t == null) {
+                        dismissPsRowOverlay();
+                    } else {
+                        psRowOverlay.moveHole(t);
+                    }
+                }
+            };
+            listView.addOnScrollListener(psRowScrollListener);
+        }
+        psRowOverlay.setStep(target, AndroidUtilities.dp(10),
+                LocaleController.getString(R.string.LeemenOnboardingSettingsHint),
+                null,
+                LocaleController.getString(R.string.Open),
+                v -> openPrivateSpaceSettings());
+    }
+
+    /** Bounds of the PS-settings row in the overlay's coordinates, or null if it isn't on-screen. */
+    private RectF psRowTargetRect(int position) {
+        if (listView == null || !(fragmentView instanceof FrameLayout)) {
+            return null;
+        }
+        RecyclerView.ViewHolder holder = listView.findViewHolderForAdapterPosition(position);
+        if (holder == null) {
+            return null;
+        }
+        View item = holder.itemView;
+        int[] o = new int[2];
+        int[] r = new int[2];
+        fragmentView.getLocationInWindow(o);
+        item.getLocationInWindow(r);
+        float left = r[0] - o[0] + AndroidUtilities.dp(8);
+        float top = r[1] - o[1] + AndroidUtilities.dp(2);
+        return new RectF(left, top,
+                left + item.getWidth() - AndroidUtilities.dp(16),
+                top + item.getHeight() - AndroidUtilities.dp(4));
+    }
+
+    private void openPrivateSpaceSettings() {
+        dismissPsRowOverlay();
+        presentFragment(new SecondSpaceSettingsActivity());
+    }
+
+    private void dismissPsRowOverlay() {
+        if (psRowScrollListener != null && listView != null) {
+            listView.removeOnScrollListener(psRowScrollListener);
+        }
+        psRowScrollListener = null;
+        if (psRowOverlay != null) {
+            AndroidUtilities.removeFromParent(psRowOverlay);
+        }
+        psRowOverlay = null;
     }
 
     private ArrayList<Integer> accountNumbers = new ArrayList<>();
