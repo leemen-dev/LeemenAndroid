@@ -104,6 +104,8 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     private static final int TOUR_STEPS = 4;
     private boolean onboardingTour;
     private int tourStep;
+    private int tourTargetRow = -1;        // row the current step spotlights (tappable through the hole)
+    private boolean tourAdvanceOnResume;   // set when the user taps the highlighted control that opens a sub-screen
     private LeemenTourOverlay tourOverlay;
 
     @Override
@@ -156,9 +158,17 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         fragmentView = frameLayout;
 
         listView = new RecyclerListView(context);
-        listView.setLayoutManager(new LinearLayoutManager(context));
+        listView.setLayoutManager(new LinearLayoutManager(context) {
+            @Override
+            public boolean canScrollVertically() {
+                // Lock user scrolling while the guided tour is up (programmatic scrollToPosition still works),
+                // so tapping the spotlighted row can't drag the list out from under the spotlight.
+                return tourOverlay == null && super.canScrollVertically();
+            }
+        });
         listView.setAdapter(adapter = new ListAdapter(context));
         listView.setOnItemClickListener((view, position) -> {
+            final boolean tourTap = tourOverlay != null && position == tourTargetRow;
             if (position == premiumRow) {
                 presentFragment(new LeemenPremiumActivity());
             } else if (position == addChatRow) {
@@ -186,6 +196,15 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             } else if (position >= chatsStartRow && position < chatsEndRow) {
                 long dialogId = hiddenIds.get(position - chatsStartRow);
                 confirmRemove(dialogId);
+            }
+            if (tourTap) {
+                // The user did the highlighted step directly. The entry-button switch is an inline toggle
+                // (advance once it settles); the others open a sub-screen (advance when the user returns).
+                if (position == switchRow) {
+                    AndroidUtilities.runOnUIThread(this::advanceTour, 350);
+                } else {
+                    tourAdvanceOnResume = true;
+                }
             }
         });
         listView.setOnItemLongClickListener((view, position) -> {
@@ -242,6 +261,7 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             case 3: row = switchRow; textRes = R.string.LeemenTourHideButton; break;
             default: finishTour(); return;
         }
+        tourTargetRow = row;
         final boolean last = tourStep >= TOUR_STEPS - 1;
         final CharSequence text = LocaleController.getString(textRes);
         final CharSequence counter = LocaleController.formatString(R.string.LeemenTourStep, tourStep + 1, TOUR_STEPS);
@@ -276,14 +296,23 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         RectF target = new RectF(left, top,
                 left + item.getWidth() - AndroidUtilities.dp(16),
                 top + item.getHeight() - AndroidUtilities.dp(4));
-        tourOverlay.setStep(target, AndroidUtilities.dp(10), text, counter, btn, v -> {
-            tourStep++;
-            showTourStep();
-        });
+        tourOverlay.setStep(target, AndroidUtilities.dp(10), text, counter, btn, v -> advanceTour());
+    }
+
+    /** Moves the tour to the next step (from the "Next" button, or after the highlighted control's action). */
+    private void advanceTour() {
+        if (tourOverlay == null) {
+            return;
+        }
+        tourAdvanceOnResume = false;
+        tourStep++;
+        showTourStep();
     }
 
     private void finishTour() {
         onboardingTour = false;
+        tourTargetRow = -1;
+        tourAdvanceOnResume = false;
         if (tourOverlay != null && tourOverlay.getParent() instanceof ViewGroup) {
             ((ViewGroup) tourOverlay.getParent()).removeView(tourOverlay);
         }
@@ -984,5 +1013,11 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         super.onResume();
         // reloadHiddenIds invokes updateRows + notifyDataSetChanged — also refreshes sequence/PIN labels.
         reloadHiddenIds();
+        if (tourAdvanceOnResume && tourOverlay != null) {
+            // The user returned from the highlighted step's sub-screen (added chats / set PIN / configured
+            // entry). Advance to the next step; posted so the reloadHiddenIds relayout settles first.
+            tourAdvanceOnResume = false;
+            AndroidUtilities.runOnUIThread(this::advanceTour);
+        }
     }
 }

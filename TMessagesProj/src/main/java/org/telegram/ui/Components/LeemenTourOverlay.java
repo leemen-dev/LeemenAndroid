@@ -11,6 +11,7 @@ import android.graphics.PorterDuffXfermode;
 import android.graphics.RectF;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -58,6 +59,19 @@ public class LeemenTourOverlay extends FrameLayout {
         bubble = new Bubble(context);
         addView(bubble, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT,
                 Gravity.TOP | Gravity.LEFT));
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        // Let a tap that lands inside the spotlight reach the highlighted control underneath, so the user
+        // can perform the step's action directly (not only via the bubble's button). The scrim still
+        // swallows everything else, and the bubble's button keeps working (it sits outside the hole).
+        if (ev.getActionMasked() == MotionEvent.ACTION_DOWN && hasHole
+                && (holeAnimator == null || !holeAnimator.isRunning())
+                && currentHole.contains(ev.getX(), ev.getY())) {
+            return false;
+        }
+        return super.dispatchTouchEvent(ev);
     }
 
     /**
@@ -117,8 +131,10 @@ public class LeemenTourOverlay extends FrameLayout {
         }
         int sideMargin = AndroidUtilities.dp(16);
         int maxW = getWidth() - 2 * sideMargin;
+        // Wrap to content (capped at maxW) so the bubble is snug and centered on the target, instead of a
+        // full-width card that strands the button in the far corner.
         bubble.measure(
-                MeasureSpec.makeMeasureSpec(maxW, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(maxW, MeasureSpec.AT_MOST),
                 MeasureSpec.makeMeasureSpec(getHeight(), MeasureSpec.AT_MOST));
         int bw = bubble.getMeasuredWidth();
         int bh = bubble.getMeasuredHeight();
@@ -129,16 +145,20 @@ public class LeemenTourOverlay extends FrameLayout {
         boolean below = belowY + bh <= getHeight() - AndroidUtilities.dp(16) || aboveY < AndroidUtilities.dp(16);
         float y = below ? belowY : aboveY;
 
+        // Center horizontally on the target, clamped to the screen's side margins.
+        float left = targetCenterX() - bw / 2f;
+        left = Math.max(sideMargin, Math.min(getWidth() - sideMargin - bw, left));
+
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) bubble.getLayoutParams();
         lp.width = bw;
         lp.height = bh;
-        lp.leftMargin = sideMargin;
+        lp.leftMargin = (int) left;
         lp.topMargin = 0;
         bubble.setLayoutParams(lp);
         bubble.setTranslationX(0);
         bubble.setTranslationY(y);
 
-        float arrowCx = targetCenterX() - sideMargin;
+        float arrowCx = targetCenterX() - left;
         bubble.setArrow(below ? Bubble.ARROW_TOP : Bubble.ARROW_BOTTOM, arrowCx);
 
         bubble.animate().alpha(1f).setDuration(160).start();
@@ -197,6 +217,7 @@ public class LeemenTourOverlay extends FrameLayout {
         Bubble(Context context) {
             super(context);
             setOrientation(VERTICAL);
+            setMinimumWidth(AndroidUtilities.dp(240)); // keep the counter + button footer comfortable
             setWillNotDraw(false);
             bgPaint.setColor(Theme.getColor(Theme.key_dialogBackground));
             applyPadding();
