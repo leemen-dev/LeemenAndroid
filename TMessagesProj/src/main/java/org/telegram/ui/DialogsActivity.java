@@ -8693,8 +8693,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         finishPreviewFragment();
                     } else if (!ssc.canAddChats(1)) {
                         // Free tier allows one hidden chat — offer the subscription instead of hiding.
+                        // Defer past the preview-close animation: showDialog() silently no-ops while a
+                        // fragment transition is in progress, so calling it inline showed nothing.
                         finishPreviewFragment();
-                        showPrivateSpacePaywall();
+                        AndroidUtilities.runOnUIThread(DialogsActivity.this::showPrivateSpacePaywall, 300);
                     } else {
                         boolean firstHide = privateSpaceOnboardingActive;
                         ssc.addToSecondSpace(dialogId);
