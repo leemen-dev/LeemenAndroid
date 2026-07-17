@@ -758,7 +758,11 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
                     if (messages.size() > totalCount) {
                         totalCount = messages.size();
                     }
-                    endReached = messages.size() >= totalCount;
+                    // Leemen: res.count still counts the hidden Protected-Space messages dropped above, so
+                    // messages.size() can never reach it. Use a short raw page (< req.limit, 20) as a
+                    // filter-immune end signal (as DialogsSearchAdapter does) — otherwise the loading footer
+                    // never clears and loadMore() re-fires a search on every scroll-to-bottom.
+                    endReached = messages.size() >= totalCount || n < 20;
 
                     if (messages.isEmpty()) {
                         if (currentSearchFilter != null) {
