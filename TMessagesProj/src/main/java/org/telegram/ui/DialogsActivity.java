@@ -3246,8 +3246,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             passcodeItem = menu.addItem(1, R.drawable.outline_header_lock_24);
             passcodeItem.setContentDescription(getString(R.string.AccDescrPasscodeLock));
 
-            privacyWarningItem = menu.addItem(privacy_warning_id, R.drawable.msg_warning);
-            privacyWarningItem.setIconColor(getThemedColor(Theme.key_color_yellow));
+            privacyWarningItem = menu.addItem(privacy_warning_id, R.drawable.warning_sign);
+            privacyWarningItem.setIconColor(0xFFF5A623); // amber warning triangle — matches the cloud-password warning icon
             privacyWarningItem.setContentDescription(getString(R.string.PrivacyWarningButtonAccDescr));
             privacyWarningItem.setVisibility(View.GONE);
 
