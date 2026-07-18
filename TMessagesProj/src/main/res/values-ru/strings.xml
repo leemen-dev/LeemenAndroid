@@ -323,6 +323,7 @@
     <string name="LeemenPremiumYearlyBadge">−20%</string>
     <string name="LeemenPremiumDiscountBadge">−%1$d%%</string>
     <string name="LeemenPremiumSubscribe">Оформить подписку</string>
+    <string name="LeemenPremiumSubscribeFor">Оформить · %1$s</string>
     <string name="LeemenPremiumActiveUntil">Активна до %1$s</string>
     <string name="LeemenPremiumActivated">Leemen Premium активирован</string>
     <string name="LeemenPremiumPurchaseError">Не удалось завершить покупку</string>

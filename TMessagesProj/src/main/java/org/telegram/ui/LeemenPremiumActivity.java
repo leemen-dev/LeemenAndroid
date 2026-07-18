@@ -3,17 +3,9 @@ package org.telegram.ui;
 import static org.telegram.messenger.AndroidUtilities.dp;
 
 import android.content.Context;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.LinearGradient;
-import android.graphics.Paint;
-import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
-import android.graphics.RectF;
-import android.graphics.Shader;
 import android.graphics.drawable.GradientDrawable;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -40,6 +32,9 @@ import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.Premium.GLIcon.GLIconRenderer;
+import org.telegram.ui.Components.Premium.GLIcon.GLIconTextureView;
+import org.telegram.ui.Components.Premium.GLIcon.Icon3D;
 import org.telegram.ui.Components.Premium.PremiumButtonView;
 import org.telegram.ui.Components.Premium.StarParticlesView;
 import org.telegram.ui.Components.RadioButton;
@@ -48,9 +43,9 @@ import java.util.Date;
 import java.util.HashMap;
 
 /**
- * Leemen Premium subscription screen — styled to read like Telegram Premium: a dark starry hero with a
- * premium-gradient star carrying the Leemen "L", an annual/monthly selector with a Play-derived discount
- * badge + struck-through "12× monthly" price, premium feature rows, and a gradient Subscribe button.
+ * Leemen Premium subscription screen — styled to read like Telegram Premium: a dark starry hero with the
+ * Telegram-Premium 3D GLIcon star, an annual/monthly selector with a Play-derived discount badge +
+ * struck-through "12× monthly" price, premium feature rows, and a gradient Subscribe button.
  *
  * The screen is always dark (a premium "space" surface) regardless of the app theme. Prices, the discount
  * percentage, and the strike-through amount are pulled from Google Play ({@link LeemenBilling#queryProduct})
@@ -73,6 +68,9 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
     private PlanRow monthlyRow;
     private PlanRow yearlyRow;
     private PremiumButtonView subscribeButton;
+    private GLIconTextureView starIcon;
+    private String yearlyPriceText;
+    private String monthlyPriceText;
     private TextView statusView;
     /** Non-null when /me shows an active paid subscription on a DIFFERENT platform — the buy button +
      *  plan cards are then hidden (one subscription across platforms, CONTRACT §7/§10). */
@@ -139,9 +137,12 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         heroContent.setGravity(Gravity.CENTER_HORIZONTAL);
         heroContent.setPadding(dp(24), dp(18), dp(24), dp(22));
 
-        Bitmap lBitmap = BitmapFactory.decodeResource(context.getResources(), R.mipmap.icon_foreground);
-        StarLogoView starLogo = new StarLogoView(context, lBitmap, premiumColors());
-        heroContent.addView(starLogo, LayoutHelper.createLinear(116, 116, Gravity.CENTER_HORIZONTAL, 0, 6, 0, 14));
+        // The Telegram-Premium 3D star: same GLIcon renderer + premium gradient, gently idles and tilts to touch.
+        hero.setClipChildren(false);
+        heroContent.setClipChildren(false);
+        starIcon = new GLIconTextureView(context, GLIconRenderer.FRAGMENT_STYLE, Icon3D.TYPE_STAR);
+        starIcon.setStarParticlesView(stars);
+        heroContent.addView(starIcon, LayoutHelper.createLinear(160, 160, Gravity.CENTER_HORIZONTAL, 0, 0, 0, 6));
 
         TextView title = new TextView(context);
         title.setText(LocaleController.getString(R.string.LeemenPremium));
@@ -172,6 +173,8 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         content.addView(statusView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 4, 10, 4, 2));
 
         // --- plan selector (rounded card) ---
+        yearlyPriceText = LocaleController.getString(R.string.LeemenPremiumPriceYearly);
+        monthlyPriceText = LocaleController.getString(R.string.LeemenPremiumPriceMonthly);
         LinearLayout plans = new LinearLayout(context);
         plans.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable plansBg = new GradientDrawable();
@@ -256,10 +259,13 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
             String yearly = LeemenBilling.formattedPrice(details, LeemenConfig.PLAY_BASE_PLAN_YEARLY);
             if (monthly != null) {
                 monthlyRow.setPrice(monthly);
+                monthlyPriceText = monthly;
             }
             if (yearly != null) {
                 yearlyRow.setPrice(yearly);
+                yearlyPriceText = yearly;
             }
+            applySubscribeButton();
             // Discount + strike-through from real Play amounts: yearly vs 12× monthly, same currency.
             long monthlyMicros = LeemenBilling.priceMicros(details, LeemenConfig.PLAY_BASE_PLAN_MONTHLY);
             long yearlyMicros = LeemenBilling.priceMicros(details, LeemenConfig.PLAY_BASE_PLAN_YEARLY);
@@ -309,6 +315,24 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
     }
 
     @Override
+    public void onResume() {
+        super.onResume();
+        if (starIcon != null) {
+            starIcon.setPaused(false);
+            starIcon.setDialogVisible(false);
+        }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (starIcon != null) {
+            starIcon.setPaused(true);
+            starIcon.setDialogVisible(true);
+        }
+    }
+
+    @Override
     public void didReceivedNotification(int id, int account, Object... args) {
         if (id == NotificationCenter.secondSpaceModeChanged) {
             updateState();
@@ -346,7 +370,14 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         d.setTextColor(TEXT2);
         d.setLineSpacing(dp(1), 1.0f);
         texts.addView(d, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 1, 0, 0));
-        row.addView(texts, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
+        row.addView(texts, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
+
+        ImageView chevron = new ImageView(context);
+        chevron.setImageResource(R.drawable.msg_arrowright);
+        chevron.setScaleType(ImageView.ScaleType.CENTER);
+        chevron.setColorFilter(new PorterDuffColorFilter(TEXT2, PorterDuff.Mode.SRC_IN));
+        row.addView(chevron, LayoutHelper.createLinear(24, 24, Gravity.CENTER_VERTICAL, 8, 0, 0, 0));
+
         container.addView(row, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
     }
 
@@ -358,6 +389,23 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         if (yearlyRow != null) {
             yearlyRow.setChecked(months == 12);
         }
+        applySubscribeButton();
+    }
+
+    /** Subscribe button label carries the selected plan's price (Telegram-style), or "Renew" when active. */
+    private void applySubscribeButton() {
+        if (subscribeButton == null) {
+            return;
+        }
+        if (SecondSpaceController.getInstance(currentAccount).hasLeemenPremium()) {
+            subscribeButton.setButton(LocaleController.getString(R.string.LeemenPremiumRenew), v -> onSubscribeClick());
+            return;
+        }
+        String price = selectedMonths == 12 ? yearlyPriceText : monthlyPriceText;
+        CharSequence label = price != null
+                ? LocaleController.formatString(R.string.LeemenPremiumSubscribeFor, price)
+                : LocaleController.getString(R.string.LeemenPremiumSubscribe);
+        subscribeButton.setButton(label, v -> onSubscribeClick());
     }
 
     private void onSubscribeClick() {
@@ -407,71 +455,10 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
                     .format(new Date(ssc.getLeemenPremiumUntil()));
             statusView.setVisibility(View.VISIBLE);
             statusView.setText(LocaleController.formatString(R.string.LeemenPremiumActiveUntil, date));
-            subscribeButton.setButton(LocaleController.getString(R.string.LeemenPremiumRenew), v -> onSubscribeClick());
+            applySubscribeButton();
         } else {
             statusView.setVisibility(View.GONE);
-            subscribeButton.setButton(LocaleController.getString(R.string.LeemenPremiumSubscribe), v -> onSubscribeClick());
-        }
-    }
-
-    /** A premium-gradient five-point star carrying the white Leemen "L" silhouette in its centre. */
-    private static class StarLogoView extends View {
-        // The "L" glyph occupies this fraction of icon_foreground's height (content is centred in the bitmap).
-        private static final float L_CONTENT_FRACTION = 106f / 324f;
-
-        private final Path starPath = new Path();
-        private final Paint starPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Paint lPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-        private final RectF lDst = new RectF();
-        private final Bitmap lBitmap;
-        private final int[] colors;
-
-        StarLogoView(Context context, Bitmap lBitmap, int[] colors) {
-            super(context);
-            this.lBitmap = lBitmap;
-            this.colors = colors;
-            lPaint.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN));
-        }
-
-        @Override
-        protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-            super.onSizeChanged(w, h, oldw, oldh);
-            buildStar(w, h);
-            starPaint.setShader(new LinearGradient(0, 0, w, h, colors, null, Shader.TileMode.CLAMP));
-        }
-
-        private void buildStar(int w, int h) {
-            starPath.reset();
-            float cx = w / 2f, cy = h / 2f;
-            float rOuter = Math.min(w, h) / 2f * 0.96f;
-            float rInner = rOuter * 0.45f;
-            for (int i = 0; i < 10; i++) {
-                float r = (i % 2 == 0) ? rOuter : rInner;
-                double a = -Math.PI / 2 + i * Math.PI / 5;
-                float x = cx + (float) (r * Math.cos(a));
-                float y = cy + (float) (r * Math.sin(a));
-                if (i == 0) {
-                    starPath.moveTo(x, y);
-                } else {
-                    starPath.lineTo(x, y);
-                }
-            }
-            starPath.close();
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            canvas.drawPath(starPath, starPaint);
-            if (lBitmap != null && lBitmap.getHeight() > 0) {
-                float starH = Math.min(getWidth(), getHeight());
-                float lH = starH * 0.40f;
-                float destH = lH / L_CONTENT_FRACTION;
-                float destW = destH * lBitmap.getWidth() / (float) lBitmap.getHeight();
-                float cx = getWidth() / 2f;
-                float cy = getHeight() / 2f - starH * 0.04f; // nudge up to sit in the star's optical centre
-                lDst.set(cx - destW / 2f, cy - destH / 2f, cx + destW / 2f, cy + destH / 2f);
-                canvas.drawBitmap(lBitmap, null, lDst, lPaint);
-            }
+            applySubscribeButton();
         }
     }
 
