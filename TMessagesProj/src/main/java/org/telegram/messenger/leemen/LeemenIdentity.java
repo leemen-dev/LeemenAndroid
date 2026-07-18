@@ -161,6 +161,14 @@ public final class LeemenIdentity {
     }
 
     private static void requestInitData(int account, long botId) {
+        requestInitData(account, botId, false);
+    }
+
+    /** Fetch a FRESH, single-use initData via headless requestWebView, then POST it. CONTRACT §2: the backend
+     *  accepts each initData exactly once and only within 1h of its auth_date — so every call obtains a
+     *  brand-new signed string; a string is never cached or reused. {@code retried} caps the replay/expired
+     *  self-retry at exactly one. */
+    private static void requestInitData(int account, long botId, boolean retried) {
         MessagesController mc = MessagesController.getInstance(account);
         TLRPC.TL_messages_requestWebView req = new TLRPC.TL_messages_requestWebView();
         req.peer = mc.getInputPeer(botId);
@@ -183,7 +191,7 @@ public final class LeemenIdentity {
                 clearInFlight(account);
                 return;
             }
-            postAuth(account, initData);
+            postAuth(account, botId, initData, retried);
         }));
     }
 
@@ -209,7 +217,7 @@ public final class LeemenIdentity {
         return null;
     }
 
-    private static void postAuth(int account, String initData) {
+    private static void postAuth(int account, long botId, String initData, boolean retried) {
         JsonObject body = new JsonObject();
         body.addProperty("initData", initData);
         LeemenRestClient.post(LeemenConfig.EP_AUTH_TELEGRAM, null, body, (resp, code, errCode, errMsg) -> {
@@ -232,12 +240,25 @@ public final class LeemenIdentity {
                         FileLog.d("Leemen: bound account " + account
                                 + " mode=" + privacy + " created=" + (resp.has("created") ? resp.get("created") : "?"));
                     }
-                } else if (BuildVars.LOGS_ENABLED) {
+                    clearInFlight(account);
+                    return;
+                }
+                // CONTRACT §2: initData is FRESH + SINGLE-USE (accepted once, within 1h of auth_date). On a
+                // replayed/expired string, obtain a BRAND-NEW initData and retry EXACTLY once — never reuse or
+                // loop on the same string.
+                if (!retried
+                        && ((code == 401 && "init_data_replayed".equals(errCode))
+                            || (code == 400 && "init_data_expired".equals(errCode)))) {
+                    if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: /auth/telegram " + errCode + " — refetch fresh initData, retry once");
+                    requestInitData(account, botId, true); // keeps the in-flight guard; single retry with fresh initData
+                    return;
+                }
+                if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("Leemen: /auth/telegram failed code=" + code + " err=" + errCode + " " + errMsg);
                 }
+                clearInFlight(account);
             } catch (Throwable e) {
                 FileLog.e(e);
-            } finally {
                 clearInFlight(account);
             }
         });

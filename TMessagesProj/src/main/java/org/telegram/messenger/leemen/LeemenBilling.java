@@ -361,7 +361,7 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
 
     /** One-subscription-across-platforms gate (CONTRACT §7/§10): inspect {@code /me.entitlements} for an
      *  active paid subscription whose {@code source} is a DIFFERENT billing platform — anything other than
-     *  Google Play (this platform) or a {@code promo} grant (not a store sub). The caller must NOT start a
+     *  Google Play (this platform) or a {@code promo}/{@code manual} grant (not a store sub). The caller must NOT start a
      *  Play purchase while one exists. Callback on the UI thread; {@code null} = clear to purchase. Fails
      *  OPEN (null) on any error — the server additionally rejects a redundant Play purchase. */
     public static void checkOtherPlatformSubscription(final int account, final OtherPlatformCallback cb) {
@@ -384,8 +384,8 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
                         JsonObject e = arr.get(i).getAsJsonObject();
                         String source = e.has("source") && !e.get("source").isJsonNull()
                                 ? e.get("source").getAsString() : null;
-                        if (source == null || "play".equals(source) || "promo".equals(source)) {
-                            continue; // this platform, or a non-store grant
+                        if (source == null || "play".equals(source) || "promo".equals(source) || "manual".equals(source)) {
+                            continue; // this platform, or a non-store grant (promo / operator "manual" comp, CONTRACT §7) — not another billing platform
                         }
                         boolean active;
                         if (!e.has("expires_at") || e.get("expires_at").isJsonNull()) {
