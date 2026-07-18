@@ -399,7 +399,7 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
             return;
         }
         String price = selectedMonths == 12 ? yearlyPriceText : monthlyPriceText;
-        CharSequence label = price != null
+        String label = price != null
                 ? LocaleController.formatString(R.string.LeemenPremiumSubscribeFor, price)
                 : LocaleController.getString(R.string.LeemenPremiumSubscribe);
         subscribeButton.setButton(label, v -> onSubscribeClick());
