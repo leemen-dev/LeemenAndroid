@@ -2494,7 +2494,7 @@
     <string name="LeemenAnalyticsConsentEnable">Enable</string>
     <string name="LeemenAnalyticsConsentLater">Not now</string>
     <string name="LeemenPremium">Leemen Premium</string>
-    <string name="LeemenPremiumScreenSubtitle">Unlimited chats in your Protected Space</string>
+    <string name="LeemenPremiumScreenSubtitle">Full access to your protected space</string>
     <string name="LeemenPremiumFeatureUnlimited">Unlimited hidden chats</string>
     <string name="LeemenPremiumPlanMonthly">Monthly</string>
     <string name="LeemenPremiumPlanYearly">Yearly</string>

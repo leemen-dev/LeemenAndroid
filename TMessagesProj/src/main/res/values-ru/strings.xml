@@ -314,7 +314,7 @@
     <string name="LeemenAnalyticsConsentEnable">Включить</string>
     <string name="LeemenAnalyticsConsentLater">Не сейчас</string>
     <string name="LeemenPremium">Leemen Premium</string>
-    <string name="LeemenPremiumScreenSubtitle">Безлимит чатов в защищённом пространстве</string>
+    <string name="LeemenPremiumScreenSubtitle">Полный доступ к защищённому пространству</string>
     <string name="LeemenPremiumFeatureUnlimited">Безлимит скрытых чатов</string>
     <string name="LeemenPremiumPlanMonthly">Месяц</string>
     <string name="LeemenPremiumPlanYearly">Год</string>
