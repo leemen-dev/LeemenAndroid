@@ -218,8 +218,10 @@ public class LeemenPrivacyModeActivity extends BaseFragment {
         b.setView(ll);
         b.setPositiveButton(LocaleController.getString(R.string.LeemenUnlockAction), null);
         b.setNeutralButton(LocaleController.getString(R.string.LeemenUseRecovery), null);
-        b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         AlertDialog dialog = b.create();
+        // Non-skippable: decryption is mandatory on a new device — passphrase, recovery, or reset. No cancel.
+        dialog.setCancelable(false);
+        dialog.setCanceledOnTouchOutside(false);
         dialog.setOnDismissListener(d -> promptShowing = false);
         promptShowing = true;
         dialog.show();
@@ -266,10 +268,17 @@ public class LeemenPrivacyModeActivity extends BaseFragment {
         b.setMessage(LocaleController.getString(R.string.LeemenEnterRecoveryInfo));
         b.setView(ll);
         b.setPositiveButton(LocaleController.getString(R.string.LeemenUnlockAction), null);
-        b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        b.setNegativeButton(LocaleController.getString(R.string.Back), null);
         AlertDialog dialog = b.create();
+        // Non-skippable: "Back" returns to the passphrase prompt, not out of the decryption gate.
+        dialog.setCancelable(false);
+        dialog.setCanceledOnTouchOutside(false);
         dialog.show();
         reset.setOnClickListener(v -> { dialog.dismiss(); confirmReset(activity, account); });
+        View back = dialog.getButton(DialogInterface.BUTTON_NEGATIVE);
+        if (back != null) {
+            back.setOnClickListener(v -> { dialog.dismiss(); promptForUnwrap(activity, account); });
+        }
         View pos = dialog.getButton(DialogInterface.BUTTON_POSITIVE);
         if (pos != null) {
             pos.setOnClickListener(v -> {
@@ -297,8 +306,11 @@ public class LeemenPrivacyModeActivity extends BaseFragment {
                 toast(activity, LocaleController.getString(ok ? R.string.LeemenResetDone : R.string.LeemenMaxError));
             });
         });
-        b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        b.setNegativeButton(LocaleController.getString(R.string.Cancel), (d, w) -> promptForRecovery(activity, account));
         AlertDialog alert = b.create();
+        // Non-skippable: cancelling the wipe returns to the recovery prompt, not out of the decryption gate.
+        alert.setCancelable(false);
+        alert.setCanceledOnTouchOutside(false);
         alert.show();
         alert.redPositive();
     }

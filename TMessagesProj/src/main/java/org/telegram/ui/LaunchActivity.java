@@ -1560,7 +1560,8 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         });
     }
 
-    /** One-time, non-blocking KZ→EU cross-border disclosure (single OK). AlertDialog handles system-bar insets. */
+    /** One-time, MANDATORY KZ→EU cross-border disclosure — the user must acknowledge (OK); it can't be
+     *  skipped via Back or tapping outside. AlertDialog handles system-bar insets. */
     private void showLeemenKzNotice(Runnable after) {
         if (isFinishing()) {
             if (after != null) after.run();
@@ -1571,6 +1572,8 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         b.setMessage(LocaleController.getString(R.string.LeemenTermsKzDisclosure));
         b.setPositiveButton(LocaleController.getString(R.string.OK), null);
         AlertDialog dialog = b.create();
+        dialog.setCancelable(false);              // non-skippable: only OK dismisses it
+        dialog.setCanceledOnTouchOutside(false);
         if (after != null) {
             dialog.setOnDismissListener(d -> after.run());
         }
