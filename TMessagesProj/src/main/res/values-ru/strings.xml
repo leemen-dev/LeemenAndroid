@@ -299,7 +299,7 @@
     <string name="PrivateSpacePaywallFeature3Text">Доступ к защищённому пространству — по PIN или секретному жесту.</string>
     <string name="PrivateSpacePaywallButton">Оформить подписку</string>
     <string name="PrivateSpacePaywallLater">Не сейчас</string>
-    <string name="PrivateSpacePaywallActivated">Подписка активирована. Прячьте сколько угодно чатов!</string>
+    <string name="PrivateSpacePaywallActivated">Подписка активирована. Скрывайте чаты без лимита!</string>
     <string name="LeemenTermsTitle">Условия и политика конфиденциальности</string>
     <string name="LeemenTermsBody">Добро пожаловать в Leemen. Чтобы продолжить, ознакомьтесь с Условиями использования и Политикой конфиденциальности и примите их — там описано, как работает Leemen и как защищены ваши данные.</string>
     <string name="LeemenTermsKzDisclosure">Leemen хранит и обрабатывает ваши данные на защищённых серверах в Европейском союзе. Продолжая, вы подтверждаете передачу своих персональных данных из Казахстана в ЕС — как описано в Политике конфиденциальности.</string>
@@ -315,7 +315,7 @@
     <string name="LeemenAnalyticsConsentLater">Не сейчас</string>
     <string name="LeemenPremium">Leemen Premium</string>
     <string name="LeemenPremiumScreenSubtitle">Полный доступ к защищённому пространству</string>
-    <string name="LeemenPremiumFeatureUnlimited">Безлимит скрытых чатов</string>
+    <string name="LeemenPremiumFeatureUnlimited">Без лимита на чаты</string>
     <string name="LeemenPremiumPlanMonthly">Месяц</string>
     <string name="LeemenPremiumPlanYearly">Год</string>
     <string name="LeemenPremiumPriceMonthly">$10 / мес</string>
@@ -431,7 +431,7 @@
     <string name="PrivateSpacePinTooShort">PIN должен содержать минимум %1$d цифр.</string>
     <string name="PrivateSpacePinRemoveConfirm">Удалить PIN? Защищённое пространство перестанет требовать пароль.</string>
     <string name="HiddenAccountsListTitle">Скрытые аккаунты</string>
-    <string name="HiddenAccountsListInfo">Эти аккаунты не будут видны в переключателе пока защищённое пространство выключено. Их уведомления и счётчик отключаются. Они снова появятся когда вы войдёте в защищённое пространство.</string>
+    <string name="HiddenAccountsListInfo">Эти аккаунты не будут видны в переключателе, пока защищённое пространство выключено. Их уведомления и счётчики отключаются. Они снова появятся, когда вы войдёте в защищённое пространство.</string>
     <string name="HiddenAccountsAddAccount">Добавить аккаунт</string>
     <string name="HiddenAccountsAddNew">Войти в новый аккаунт</string>
     <string name="PrivateSpaceLogoutHiddenAccountsWarning">Скрытые аккаунты тоже выйдут.</string>
@@ -456,10 +456,10 @@
     <string name="HiddenAccountEnterPasswordTitle">Введите пароль</string>
     <string name="HiddenAccountWrongPassword">Неверный пароль. Попробуйте ещё раз.</string>
     <string name="PrivateSpaceExposureHide">Скрыть снаружи</string>
-    <string name="PrivateSpaceEyeHint">Иконка глаза отмечает сообщения, видимые вне защищённого пространства. Выделите сообщение чтобы снова скрыть.</string>
+    <string name="PrivateSpaceEyeHint">Иконка глаза отмечает сообщения, видимые вне защищённого пространства. Выделите сообщение, чтобы снова скрыть.</string>
     <string name="PrivateSpaceToolbarHint">Эти кнопки показывают выбранные сообщения вне защищённого пространства или прячут их обратно.</string>
     <string name="PrivateSpaceSequenceDiscardTitle">Отменить изменения?</string>
-    <string name="PrivateSpaceSequenceDiscardMessage">Отредактированная последовательность не сохранится. Нажмите галочку чтобы применить.</string>
+    <string name="PrivateSpaceSequenceDiscardMessage">Отредактированная последовательность не сохранится. Нажмите галочку, чтобы применить.</string>
     <string name="PrivateSpacePinInSearch">PIN в поле поиска</string>
     <string name="PrivateSpacePinInSearchInfo">Если включено, ввод PIN в строку поиска чатов открывает защищённое пространство.</string>
     <string name="PrivateSpacePinTimeoutTitle">Запоминать PIN</string>
@@ -485,7 +485,9 @@
 
     <!-- Entry button -->
     <string name="PrivateSpaceShowEntryButton">Показывать кнопку входа в настройках приватности</string>
-    <string name="PrivateSpaceShowEntryButtonInfo">Если выключено, войти в защищённое пространство можно долгим нажатием на вкладку «Чаты» внизу.</string>
+    <string name="PrivateSpaceShowEntryButtonInfo">Если выключено, войти в защищённое пространство можно настроенной комбинацией нажатий на нижних вкладках или вводом PIN в поиске.</string>
+    <string name="PrivateSpaceAllowScreenshots">Разрешить скриншоты</string>
+    <string name="PrivateSpaceAllowScreenshotsInfo">Когда выключено, скриншоты и запись экрана заблокированы, пока открыто защищённое пространство.</string>
     <string name="PrivateSpaceShowEntryButtonBlocked">Сначала настройте способ входа — иначе вы потеряете доступ.</string>
     <string name="PrivateSpaceShowEntryButtonBlockedNoShortcut">Сначала настройте комбинацию нажатий или включите ввод PIN в поиске — иначе вы потеряете доступ к защищённому пространству.</string>
     <string name="PrivateSpaceShowEntryButtonBlockedUntested">Хотя бы один раз войдите в защищённое пространство своим способом. После подтверждения, что он работает, кнопку можно скрыть.</string>

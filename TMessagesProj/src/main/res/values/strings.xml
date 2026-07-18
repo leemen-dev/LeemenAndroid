@@ -2443,7 +2443,7 @@
     <string name="PrivateSpaceExposureConfirmBody_other">Make %1$d selected messages visible outside Protected Space?</string>
     <string name="PrivateSpaceSettings">Protected Space Settings</string>
     <string name="PrivateSpaceShowEntryButton">Show entry button in Privacy settings</string>
-    <string name="PrivateSpaceShowEntryButtonInfo">When off, enter Protected Space by long-pressing the Chats tab at the bottom.</string>
+    <string name="PrivateSpaceShowEntryButtonInfo">When off, enter Protected Space with your configured tap sequence on the bottom tabs, or by entering your PIN in search.</string>
     <string name="PrivateSpaceAllowScreenshots">Allow screenshots</string>
     <string name="PrivateSpaceAllowScreenshotsInfo">When off, screenshots and screen recording are blocked while Protected Space is open.</string>
     <string name="PrivateSpaceShowEntryButtonBlocked">Set up an enter shortcut before hiding this button — otherwise you will lose access.</string>
@@ -2495,7 +2495,7 @@
     <string name="LeemenAnalyticsConsentLater">Not now</string>
     <string name="LeemenPremium">Leemen Premium</string>
     <string name="LeemenPremiumScreenSubtitle">Full access to your protected space</string>
-    <string name="LeemenPremiumFeatureUnlimited">Unlimited hidden chats</string>
+    <string name="LeemenPremiumFeatureUnlimited">Unlimited chats</string>
     <string name="LeemenPremiumPlanMonthly">Monthly</string>
     <string name="LeemenPremiumPlanYearly">Yearly</string>
     <string name="LeemenPremiumPriceMonthly">$10 / month</string>
