@@ -2123,6 +2123,11 @@ public class SecondSpaceController extends BaseController implements Notificatio
      *  {@link #isAccountHiddenByAny} would match reused slot indices. This is NOT a full PS wipe —
      *  account-level state (PIN, hidden chats, premium) is deliberately preserved. */
     public void clearLocalAccountHideStateForLogout() {
+        // Leaving the account also leaves the private space: drop back to cover mode so a logout→relogin
+        // in the same process can't land straight back inside MODE_REAL (activeMode is in-memory and would
+        // otherwise survive the logout). Also wipes any draft authored inside the space (deniability).
+        // No-op when already in MODE_OFF.
+        setActiveMode(MODE_OFF);
         if (!hiddenAccounts.isEmpty()) {
             hiddenAccounts.clear();
             persistHiddenAccounts();
