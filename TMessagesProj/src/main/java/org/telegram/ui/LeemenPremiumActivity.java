@@ -392,13 +392,10 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         applySubscribeButton();
     }
 
-    /** Subscribe button label carries the selected plan's price (Telegram-style), or "Renew" when active. */
+    /** Subscribe button label carries the selected plan's price (Telegram-style). Only shown when NOT
+     *  subscribed — an active subscription hides the button entirely (see updateState). */
     private void applySubscribeButton() {
         if (subscribeButton == null) {
-            return;
-        }
-        if (SecondSpaceController.getInstance(currentAccount).hasLeemenPremium()) {
-            subscribeButton.setButton(LocaleController.getString(R.string.LeemenPremiumRenew), v -> onSubscribeClick());
             return;
         }
         String price = selectedMonths == 12 ? yearlyPriceText : monthlyPriceText;
@@ -433,33 +430,33 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         if (subscribeButton == null) {
             return;
         }
-        if (otherPlatformSource != null) {
-            // Active paid subscription on another platform — just show it's active, hide the buy button
-            // (one subscription across platforms, CONTRACT §7/§10).
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        boolean activeOtherPlatform = otherPlatformSource != null; // one subscription across platforms (CONTRACT §7/§10)
+        boolean activeHere = ssc.hasLeemenPremium();
+        if (activeOtherPlatform || activeHere) {
+            // Already subscribed — show the status, hide the buy button + plan selector (nothing to buy).
             statusView.setVisibility(View.VISIBLE);
-            statusView.setText(LocaleController.getString(R.string.LeemenPremiumSubscriptionActive));
+            if (activeOtherPlatform) {
+                statusView.setText(LocaleController.getString(R.string.LeemenPremiumSubscriptionActive));
+            } else {
+                String date = android.text.format.DateFormat
+                        .getDateFormat(ApplicationLoader.applicationContext)
+                        .format(new Date(ssc.getLeemenPremiumUntil()));
+                statusView.setText(LocaleController.formatString(R.string.LeemenPremiumActiveUntil, date));
+            }
             subscribeButton.setVisibility(View.GONE);
             if (plansContainer != null) {
                 plansContainer.setVisibility(View.GONE);
             }
             return;
         }
+        // Not subscribed — show the plan selector + Subscribe button.
+        statusView.setVisibility(View.GONE);
         subscribeButton.setVisibility(View.VISIBLE);
         if (plansContainer != null) {
             plansContainer.setVisibility(View.VISIBLE);
         }
-        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        if (ssc.hasLeemenPremium()) {
-            String date = android.text.format.DateFormat
-                    .getDateFormat(ApplicationLoader.applicationContext)
-                    .format(new Date(ssc.getLeemenPremiumUntil()));
-            statusView.setVisibility(View.VISIBLE);
-            statusView.setText(LocaleController.formatString(R.string.LeemenPremiumActiveUntil, date));
-            applySubscribeButton();
-        } else {
-            statusView.setVisibility(View.GONE);
-            applySubscribeButton();
-        }
+        applySubscribeButton();
     }
 
     /** One selectable plan: radio + name (+ optional discount badge) on the left, struck-through full price
