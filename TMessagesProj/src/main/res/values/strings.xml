@@ -2469,9 +2469,9 @@
     <string name="LeemenTourNext">Next</string>
     <string name="LeemenTourDone">Done</string>
     <string name="LeemenTourStep">Step %1$d of %2$d</string>
-    <string name="PrivateSpacePaywallTitle">Unlimited hidden chats</string>
-    <string name="PrivateSpacePaywallSubtitle">You hid your first chat for free. Subscribe to hide as many chats as you want.</string>
-    <string name="PrivateSpacePaywallFeature1Title">Hide as many as you want</string>
+    <string name="PrivateSpacePaywallTitle">Unlimited protected space</string>
+    <string name="PrivateSpacePaywallSubtitle">You hid your first chat for free. Subscribe to use your protected space without limits.</string>
+    <string name="PrivateSpacePaywallFeature1Title">Unlimited chats</string>
     <string name="PrivateSpacePaywallFeature1Text">Move any number of chats into Protected Space, not just the first one.</string>
     <string name="PrivateSpacePaywallFeature2Title">Stays fully private</string>
     <string name="PrivateSpacePaywallFeature2Text">Hidden chats stay out of your chat list, search, notifications and widgets.</string>

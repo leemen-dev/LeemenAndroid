@@ -289,9 +289,9 @@
     <string name="LeemenTourNext">Далее</string>
     <string name="LeemenTourDone">Готово</string>
     <string name="LeemenTourStep">Шаг %1$d из %2$d</string>
-    <string name="PrivateSpacePaywallTitle">Безлимит скрытых чатов</string>
-    <string name="PrivateSpacePaywallSubtitle">Первый чат вы скрыли бесплатно. Оформите подписку, чтобы прятать сколько угодно чатов.</string>
-    <string name="PrivateSpacePaywallFeature1Title">Прячьте сколько угодно</string>
+    <string name="PrivateSpacePaywallTitle">Неограниченное защищённое пространство</string>
+    <string name="PrivateSpacePaywallSubtitle">Первый чат вы скрыли бесплатно. Оформите подписку, чтобы пользоваться защищённым пространством без лимитов.</string>
+    <string name="PrivateSpacePaywallFeature1Title">Без лимита на чаты</string>
     <string name="PrivateSpacePaywallFeature1Text">Переносите в защищённое пространство любое число чатов, а не только первый.</string>
     <string name="PrivateSpacePaywallFeature2Title">Полная приватность</string>
     <string name="PrivateSpacePaywallFeature2Text">Скрытые чаты не видны в списке, поиске, уведомлениях и виджетах.</string>
