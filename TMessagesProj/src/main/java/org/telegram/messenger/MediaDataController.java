@@ -3766,6 +3766,13 @@ public class MediaDataController extends BaseController {
     }
 
     public int getSearchCount() {
+        // Protected Space: for a hidden chat in cover (OFF) mode the server-reported total (res.count, held in
+        // messagesSearchCount[]) counts hidden matches the user must never see. Report only the exposed/pending
+        // matches that survived filtering into searchResultMessages, so "N of M" reflects the visible set.
+        // No-op for normal chats and MODE_REAL (isHiddenFromCurrentView returns false).
+        if (lastDialogId != 0 && SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(lastDialogId)) {
+            return searchResultMessages.size();
+        }
         if (searchServerResultMessages.isEmpty()) {
             return Math.max(Math.max(messagesSearchCount[0] + messagesSearchCount[1], messagesLocalSearchCount), searchServerResultMessages.size());
         }
@@ -4037,12 +4044,23 @@ public class MediaDataController extends BaseController {
                                 getNotificationCenter().postNotificationName(NotificationCenter.chatSearchResultsLoading, guid);
                             }
                             boolean added = false;
+                            SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
                             int N = Math.min(res.messages.size(), req.limit - 1);
                             for (int a = 0; a < N; a++) {
-                                added = true;
                                 MessageObject messageObject = messageObjects.get(a);
+                                int msgId = messageObject.getId();
+                                // Protected Space: a hidden chat in cover (OFF) mode must behave in in-chat search
+                                // as if only exposed/pending messages exist. Drop hidden, non-exposed matches so they
+                                // never enter results/count/navigation (and never flash on scroll-to before the load
+                                // filter runs). No-op for normal chats and MODE_REAL (isHiddenFromCurrentView false).
+                                if (ssc.isHiddenFromCurrentView(queryWithDialogFinal)
+                                        && !ssc.isMessageExposed(queryWithDialogFinal, msgId)
+                                        && !ssc.isMessagePending(queryWithDialogFinal, msgId)) {
+                                    continue;
+                                }
+                                added = true;
                                 searchServerResultMessages.add(messageObject);
-                                searchServerResultMessagesMap[queryWithDialogFinal == dialogId ? 0 : 1].put(messageObject.getId(), messageObject);
+                                searchServerResultMessagesMap[queryWithDialogFinal == dialogId ? 0 : 1].put(msgId, messageObject);
                             }
                             updateSearchResults();
                             messagesSearchEndReached[queryWithDialogFinal == dialogId ? 0 : 1] = res.messages.size() < req.limit;

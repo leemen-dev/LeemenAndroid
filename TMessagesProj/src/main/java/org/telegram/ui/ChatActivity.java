@@ -23799,7 +23799,14 @@ public class ChatActivity extends BaseFragment implements
                     } else if (messageId != 0) {
                         final boolean wasFiltered = chatAdapter.isFiltered;
                         setFilterMessages(false);
-                        if (!wasFiltered) {
+                        // Protected Space defensive guard: never scroll to / highlight a hidden non-exposed message
+                        // even if one ever leaks into results (primary filtering is in MediaDataController). Also
+                        // covers the merge-dialog edge (a migrated peer's id keyed on the open hidden dialog_id).
+                        SecondSpaceController sscSearch = SecondSpaceController.getInstance(currentAccount);
+                        boolean hiddenTarget = sscSearch.isHiddenFromCurrentView(dialog_id)
+                                && !sscSearch.isMessageExposed(dialog_id, messageId)
+                                && !sscSearch.isMessagePending(dialog_id, messageId);
+                        if (!wasFiltered && !hiddenTarget) {
                             scrollToMessageId(messageId, 0, true, did == dialog_id ? 0 : 1, true, 0);
                         } else {
                             updateVisibleRows();
