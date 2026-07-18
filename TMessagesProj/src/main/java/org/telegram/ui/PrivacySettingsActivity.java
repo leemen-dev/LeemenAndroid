@@ -862,26 +862,54 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
      *  Settings entry: PIN prompt when required, otherwise direct, then jump to the chat list. */
     private void enterPrivateSpace() {
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        Runnable afterEnter = () -> {
-            if (getParentLayout() != null) {
-                for (org.telegram.ui.ActionBar.BaseFragment f : getParentLayout().getFragmentStack()) {
-                    if (f instanceof MainTabsActivity) {
-                        ((MainTabsActivity) f).switchToChatsTab();
-                        break;
-                    }
-                }
-            }
-            finishFragment();
-        };
         boolean hasPin = ssc.hasRealPassword();
         if (hasPin && !ssc.isPinPromptSkippable()) {
-            presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_ENTER).setOnSuccess(afterEnter));
+            presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_ENTER).setOnSuccess(this::gotoPrivateSpaceChats));
         } else if (hasPin) {
             ssc.setActiveMode(SecondSpaceController.MODE_REAL);
-            afterEnter.run();
+            gotoPrivateSpaceChats();
         } else {
             ssc.setActive(true);
-            afterEnter.run();
+            gotoPrivateSpaceChats();
+        }
+    }
+
+    /** After entering the space, reveal the chat list reliably: switch MainTabs to the Chats tab and drop
+     *  every screen above it (this Privacy screen + the passcode screen, if any) WITHOUT chaining pop
+     *  animations — a second finishFragment() during the first's transition gets dropped, which was
+     *  leaving the user stuck in settings. Fragments below the top are removed immediately (no animation);
+     *  the top is popped (or the passcode screen finishes itself) to reveal MainTabs. */
+    private void gotoPrivateSpaceChats() {
+        org.telegram.ui.ActionBar.INavigationLayout layout = getParentLayout();
+        if (layout == null) {
+            finishFragment();
+            return;
+        }
+        MainTabsActivity tabs = null;
+        for (org.telegram.ui.ActionBar.BaseFragment f : layout.getFragmentStack()) {
+            if (f instanceof MainTabsActivity) {
+                tabs = (MainTabsActivity) f;
+                break;
+            }
+        }
+        if (tabs == null) {
+            finishFragment();
+            return;
+        }
+        tabs.switchToChatsTab(false);
+        java.util.List<org.telegram.ui.ActionBar.BaseFragment> stack = layout.getFragmentStack();
+        org.telegram.ui.ActionBar.BaseFragment top = stack.isEmpty() ? null : stack.get(stack.size() - 1);
+        java.util.List<org.telegram.ui.ActionBar.BaseFragment> middle = new java.util.ArrayList<>();
+        boolean past = false;
+        for (org.telegram.ui.ActionBar.BaseFragment f : stack) {
+            if (f == tabs) { past = true; continue; }
+            if (past && f != top) middle.add(f);
+        }
+        for (org.telegram.ui.ActionBar.BaseFragment f : middle) {
+            layout.removeFragmentFromStack(f, true); // immediate → no animation, nothing to race
+        }
+        if (top == this) {
+            finishFragment(); // this Privacy screen is on top (no passcode) → pop it to reveal the chats
         }
     }
 
