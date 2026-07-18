@@ -1085,8 +1085,9 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                     MessagesController.getInstance(currentAccount).putEncryptedChat(chat, true);
                 }
 
-                // Leemen: never surface a hidden Protected-Space peer in local name search (OFF mode).
-                if (dialogId != 0 && hiddenSsc.isHiddenFromCurrentView(dialogId)) {
+                // Leemen: hidden Protected-Space chats ARE findable by name (isHiddenFromNameSearch) —
+                // only their message content stays hidden. See SecondSpaceController.isHiddenFromNameSearch.
+                if (dialogId != 0 && hiddenSsc.isHiddenFromNameSearch(dialogId)) {
                     result.remove(a);
                     names.remove(a);
                     a--;

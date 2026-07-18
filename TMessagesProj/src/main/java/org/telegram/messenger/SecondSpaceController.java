@@ -916,6 +916,18 @@ public class SecondSpaceController extends BaseController implements Notificatio
         }
     }
 
+    /** Name/peer search visibility — distinct from {@link #isHiddenFromCurrentView}, which governs the chat
+     *  LIST and MESSAGE search. Per the product decision a hidden Protected-Space chat IS findable BY NAME:
+     *  you can type the contact's name and reach it; only its message CONTENT stays hidden (message-search
+     *  still filters via isHiddenFromCurrentView, and an opened hidden chat shows only exposed messages —
+     *  see ChatActivity's safe anchor). Proactive surfaces (top-peer hints, recent searches) keep using
+     *  isHiddenFromCurrentView, so a hidden chat only appears once actively searched, not just on opening
+     *  search. Returns false: typed name search never hides a chat. Named/greppable so the policy can be
+     *  tightened in one place. */
+    public boolean isHiddenFromNameSearch(long dialogId) {
+        return false;
+    }
+
     /** Visible in the CURRENT OFF-mode list? Use this for list/preview filtering instead of open-coding
      *  {@code !isHiddenFromCurrentView || hasExposedMessages || hasPendingOffModeWork} — those OR clauses must
      *  obey the fail-closed gate too, or the most sensitive row (an exposed chat) would be the ONE left visible

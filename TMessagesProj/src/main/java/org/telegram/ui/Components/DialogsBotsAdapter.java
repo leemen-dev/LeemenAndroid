@@ -310,7 +310,7 @@ public class DialogsBotsAdapter extends UniversalAdapter {
                         if (!(peer instanceof TLRPC.TL_peerUser)) continue;
                         TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(peer.user_id);
                         if (user == null || !user.bot) continue;
-                        if (SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(user.id)) continue; // Leemen: hide bot chats in the Protected Space
+                        if (SecondSpaceController.getInstance(currentAccount).isHiddenFromNameSearch(user.id)) continue; // Leemen: bots are findable by name; only their content is hidden
                         if (userIds.contains(user.id))
                             continue;
                         userIds.add(user.id);
@@ -349,7 +349,7 @@ public class DialogsBotsAdapter extends UniversalAdapter {
                         if (!(peer instanceof TLRPC.TL_peerUser)) continue;
                         TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(peer.user_id);
                         if (user == null || !user.bot) continue;
-                        if (SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(user.id)) continue; // Leemen: hide bot chats in the Protected Space
+                        if (SecondSpaceController.getInstance(currentAccount).isHiddenFromNameSearch(user.id)) continue; // Leemen: bots are findable by name; only their content is hidden
                         if (userIds.contains(user.id))
                             continue;
                         userIds.add(user.id);
