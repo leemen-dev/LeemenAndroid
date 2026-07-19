@@ -317,6 +317,66 @@
             </set>
         </aapt:attr>
     </target>
+    <!-- Keep facet 2's shared edge locked to facet 1 throughout the fold. The path remains
+         a three-point triangle; only its two shared vertices receive geometric correction. -->
+    <target android:name="facet2_p">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:duration="367"
+                android:valueType="pathType"
+                android:interpolator="@android:anim/linear_interpolator">
+                <propertyValuesHolder
+                    android:propertyName="pathData"
+                    android:valueType="pathType">
+                    <keyframe android:fraction="0.000000" android:value="M 132.099,345.145 L 208.424,-33.370 L 281.986,168.791 Z"/>
+                    <keyframe android:fraction="0.022727" android:value="M 132.099,345.145 L 201.173,-21.805 L 273.640,177.347 Z"/>
+                    <keyframe android:fraction="0.045455" android:value="M 132.099,345.145 L 194.614,-11.344 L 266.090,185.085 Z"/>
+                    <keyframe android:fraction="0.068182" android:value="M 132.099,345.145 L 188.653,-1.837 L 259.229,192.119 Z"/>
+                    <keyframe android:fraction="0.090909" android:value="M 132.099,345.145 L 183.211,6.842 L 252.965,198.539 Z"/>
+                    <keyframe android:fraction="0.113636" android:value="M 132.099,345.145 L 178.224,14.795 L 247.225,204.423 Z"/>
+                    <keyframe android:fraction="0.136364" android:value="M 132.099,345.145 L 173.616,22.062 L 241.614,208.934 Z"/>
+                    <keyframe android:fraction="0.159091" android:value="M 132.099,345.145 L 169.341,28.718 L 236.090,212.158 Z"/>
+                    <keyframe android:fraction="0.181818" android:value="M 132.099,345.145 L 165.383,34.880 L 230.977,215.143 Z"/>
+                    <keyframe android:fraction="0.204545" android:value="M 132.099,345.145 L 161.709,40.601 L 226.229,217.915 Z"/>
+                    <keyframe android:fraction="0.227273" android:value="M 132.099,345.145 L 158.289,45.927 L 221.810,220.495 Z"/>
+                    <keyframe android:fraction="0.250000" android:value="M 132.099,345.145 L 155.096,50.897 L 217.685,222.903 Z"/>
+                    <keyframe android:fraction="0.272727" android:value="M 132.099,345.145 L 152.082,55.478 L 213.360,223.881 Z"/>
+                    <keyframe android:fraction="0.295455" android:value="M 132.099,345.145 L 149.256,59.772 L 209.305,224.799 Z"/>
+                    <keyframe android:fraction="0.318182" android:value="M 132.099,345.145 L 146.996,63.233 L 206.159,225.827 Z"/>
+                    <keyframe android:fraction="0.340909" android:value="M 132.099,345.145 L 145.259,65.926 L 203.864,226.985 Z"/>
+                    <keyframe android:fraction="0.363636" android:value="M 132.099,345.145 L 143.592,68.511 L 201.661,228.097 Z"/>
+                    <keyframe android:fraction="0.386364" android:value="M 132.099,345.145 L 141.979,70.967 L 199.375,228.702 Z"/>
+                    <keyframe android:fraction="0.409091" android:value="M 132.099,345.145 L 140.419,73.306 L 197.023,228.864 Z"/>
+                    <keyframe android:fraction="0.431818" android:value="M 132.099,345.145 L 138.919,75.556 L 194.761,229.021 Z"/>
+                    <keyframe android:fraction="0.454545" android:value="M 132.099,345.145 L 138.026,76.924 L 193.529,229.457 Z"/>
+                    <keyframe android:fraction="0.477273" android:value="M 132.099,345.145 L 137.153,78.260 L 192.325,229.884 Z"/>
+                    <keyframe android:fraction="0.500000" android:value="M 132.099,345.145 L 136.300,79.566 L 191.149,230.301 Z"/>
+                    <keyframe android:fraction="0.522727" android:value="M 132.099,345.145 L 135.453,80.811 L 189.784,230.126 Z"/>
+                    <keyframe android:fraction="0.545455" android:value="M 132.099,345.145 L 134.624,82.029 L 188.450,229.954 Z"/>
+                    <keyframe android:fraction="0.568182" android:value="M 132.099,345.145 L 134.018,82.926 L 187.498,229.899 Z"/>
+                    <keyframe android:fraction="0.590909" android:value="M 132.099,345.145 L 133.609,83.541 L 186.883,229.949 Z"/>
+                    <keyframe android:fraction="0.613636" android:value="M 132.099,345.145 L 133.204,84.148 L 186.275,229.998 Z"/>
+                    <keyframe android:fraction="0.636364" android:value="M 132.099,345.145 L 132.800,84.741 L 185.613,229.880 Z"/>
+                    <keyframe android:fraction="0.659091" android:value="M 132.099,345.145 L 132.397,85.318 L 184.892,229.584 Z"/>
+                    <keyframe android:fraction="0.681818" android:value="M 132.099,345.145 L 131.999,85.888 L 184.179,229.290 Z"/>
+                    <keyframe android:fraction="0.704545" android:value="M 132.099,345.145 L 131.867,86.073 L 183.929,229.147 Z"/>
+                    <keyframe android:fraction="0.727273" android:value="M 132.099,345.145 L 131.737,86.257 L 183.679,229.004 Z"/>
+                    <keyframe android:fraction="0.750000" android:value="M 132.099,345.145 L 131.607,86.440 L 183.431,228.862 Z"/>
+                    <keyframe android:fraction="0.772727" android:value="M 132.099,345.145 L 131.474,86.615 L 183.136,228.593 Z"/>
+                    <keyframe android:fraction="0.795455" android:value="M 132.099,345.145 L 131.341,86.790 L 182.842,228.324 Z"/>
+                    <keyframe android:fraction="0.818182" android:value="M 132.099,345.145 L 131.286,86.852 L 182.682,228.098 Z"/>
+                    <keyframe android:fraction="0.840909" android:value="M 132.099,345.145 L 131.314,86.793 L 182.666,227.919 Z"/>
+                    <keyframe android:fraction="0.863636" android:value="M 132.099,345.145 L 131.342,86.734 L 182.650,227.739 Z"/>
+                    <keyframe android:fraction="0.886364" android:value="M 132.099,345.145 L 131.371,86.678 L 182.650,227.603 Z"/>
+                    <keyframe android:fraction="0.909091" android:value="M 132.099,345.145 L 131.401,86.624 L 182.665,227.508 Z"/>
+                    <keyframe android:fraction="0.931818" android:value="M 132.099,345.145 L 131.431,86.569 L 182.681,227.413 Z"/>
+                    <keyframe android:fraction="0.954545" android:value="M 132.099,345.145 L 131.523,86.428 L 182.801,227.351 Z"/>
+                    <keyframe android:fraction="0.977273" android:value="M 132.099,345.145 L 131.614,86.287 L 182.921,227.288 Z"/>
+                    <keyframe android:fraction="1.000000" android:value="M 132.099,345.145 L 131.808,86.000 L 183.216,227.279 Z"/>
+                </propertyValuesHolder>
+            </objectAnimator>
+        </aapt:attr>
+    </target>
     <target android:name="facet3_g">
         <aapt:attr name="android:animation">
             <set>
