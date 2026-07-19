@@ -297,8 +297,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     private SizeNotifierFrameLayout backgroundTablet;
     public FrameLayout frameLayout;
     private static boolean leemenSplashShown;
-    private static final float LEEMEN_SPLASH_SPEED = 2.45f;
-    private static final int LEEMEN_SPLASH_END_FRAME = 28;
     private FireworksOverlay fireworksOverlay;
     private BottomSheetTabsOverlay bottomSheetTabsOverlay;
     public DrawerLayoutContainer drawerLayoutContainer;
@@ -675,10 +673,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 FileLog.e(e);
             }
         }
-        // Play the canonical Lottie on every Android version. Android 12+ only keeps a graphite OS splash
-        // background until this view is ready: its AnimatedVectorDrawable renderer can dismiss on an
-        // intermediate frame and leave independently transformed facets visibly separated.
-        if (!leemenSplashShown && savedInstanceState == null) {
+        // Android 12+ owns the complete splash lifecycle (start, duration and early dismissal). Older
+        // versions keep the legacy in-app Lottie fallback.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+                && !leemenSplashShown && savedInstanceState == null) {
             leemenSplashShown = true;
             showLeemenSplash();
         }
@@ -1137,13 +1135,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             cover.setBackgroundColor(0xFF1C1C24);
             RLottieImageView img = new RLottieImageView(this);
             img.setAutoRepeat(false);
-            img.setAnimation(R.raw.leemen_splash, 260, 260);
-            // Frames 28..39 are only a final-frame hold. The first 28 frames at 2.45x match the former
-            // AVD fold timing (~367ms) without changing the canonical Lottie geometry.
-            img.getAnimatedDrawable().multiplySpeed(LEEMEN_SPLASH_SPEED);
-            img.getAnimatedDrawable().setCustomEndFrame(LEEMEN_SPLASH_END_FRAME);
+            img.setAnimation(R.raw.leemen_splash, 160, 160);
             img.setScaleType(ImageView.ScaleType.CENTER);
-            cover.addView(img, LayoutHelper.createFrame(260, 260, Gravity.CENTER));
+            cover.addView(img, LayoutHelper.createFrame(160, 160, Gravity.CENTER));
             frameLayout.addView(cover, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
             final Runnable remove = () -> {
                 if (cover.getParent() != null) {

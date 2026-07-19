@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ splash. The OS owns presentation and early dismissal. Facets use the canonical
+     Lottie final coordinates, but move as one connected mesh so shared edges cannot separate. -->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector
+            android:width="512dp"
+            android:height="512dp"
+            android:viewportWidth="512"
+            android:viewportHeight="512">
+            <group
+                android:pivotX="256"
+                android:pivotY="256"
+                android:scaleX="0.9035"
+                android:scaleY="0.9035">
+                <group
+                    android:name="logo_motion"
+                    android:pivotX="256"
+                    android:pivotY="256"
+                    android:scaleX="0.92"
+                    android:scaleY="0.92">
+                    <!-- Reverse JSON order: Lottie paints its first layer on top. -->
+                    <path android:name="facet9" android:pathData="M 340.927,425.418 L 210.919,426.000 L 259.839,370.972 Z" android:fillColor="#D3D6D9" android:fillAlpha="0" android:strokeColor="#D3D6D9" android:strokeWidth="1.5" android:strokeAlpha="0"/>
+                    <path android:name="facet8" android:pathData="M 210.919,426.000 L 132.099,345.145 L 259.839,370.972 Z" android:fillColor="#EBEFEF" android:fillAlpha="0" android:strokeColor="#EBEFEF" android:strokeWidth="1.5" android:strokeAlpha="0"/>
+                    <path android:name="facet7" android:pathData="M 380.192,329.439 L 340.927,425.418 L 259.839,370.972 Z" android:fillColor="#EBEFEF" android:fillAlpha="0" android:strokeColor="#EBEFEF" android:strokeWidth="1.5" android:strokeAlpha="0"/>
+                    <path android:name="facet6" android:pathData="M 132.099,345.145 L 235.059,328.857 L 259.839,370.972 Z" android:fillColor="#EBEFEF" android:fillAlpha="0" android:strokeColor="#EBEFEF" android:strokeWidth="1.5" android:strokeAlpha="0"/>
+                    <path android:name="facet5" android:pathData="M 235.059,328.857 L 380.192,329.439 L 259.839,370.972 Z" android:fillColor="#D2D6D9" android:fillAlpha="0" android:strokeColor="#D2D6D9" android:strokeWidth="1.5" android:strokeAlpha="0"/>
+                    <path android:name="facet4" android:pathData="M 235.059,328.857 L 132.099,345.145 L 183.216,227.279 Z" android:fillColor="#D4D8D9" android:fillAlpha="0" android:strokeColor="#D4D8D9" android:strokeWidth="1.5" android:strokeAlpha="0"/>
+                    <path android:name="facet3" android:pathData="M 233.896,149.114 L 235.059,328.857 L 183.216,227.279 Z" android:fillColor="#BCBFC1" android:fillAlpha="0" android:strokeColor="#BCBFC1" android:strokeWidth="1.5" android:strokeAlpha="0"/>
+                    <path android:name="facet2" android:pathData="M 132.099,345.145 L 131.808,86.000 L 183.216,227.279 Z" android:fillColor="#EBEFEF" android:fillAlpha="0" android:strokeColor="#EBEFEF" android:strokeWidth="1.5" android:strokeAlpha="0"/>
+                    <path android:name="facet1" android:pathData="M 131.808,86.000 L 233.896,149.114 L 183.216,227.279 Z" android:fillColor="#D5D8DA" android:fillAlpha="0" android:strokeColor="#D5D8DA" android:strokeWidth="1.5" android:strokeAlpha="0"/>
+                </group>
+            </group>
+        </vector>
+    </aapt:attr>
+
+    <target android:name="logo_motion">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator android:duration="367" android:propertyName="scaleX" android:valueType="floatType" android:interpolator="@android:anim/linear_interpolator">
+                    <propertyValuesHolder android:propertyName="scaleX">
+                        <keyframe android:fraction="0" android:value="0.92"/>
+                        <keyframe android:fraction="0.25" android:value="0.97"/>
+                        <keyframe android:fraction="0.5" android:value="1.004"/>
+                        <keyframe android:fraction="0.625" android:value="1.014"/>
+                        <keyframe android:fraction="0.75" android:value="1.0115"/>
+                        <keyframe android:fraction="0.875" android:value="1.0042"/>
+                        <keyframe android:fraction="1" android:value="1"/>
+                    </propertyValuesHolder>
+                </objectAnimator>
+                <objectAnimator android:duration="367" android:propertyName="scaleY" android:valueType="floatType" android:interpolator="@android:anim/linear_interpolator">
+                    <propertyValuesHolder android:propertyName="scaleY">
+                        <keyframe android:fraction="0" android:value="0.92"/>
+                        <keyframe android:fraction="0.25" android:value="0.97"/>
+                        <keyframe android:fraction="0.5" android:value="1.004"/>
+                        <keyframe android:fraction="0.625" android:value="1.014"/>
+                        <keyframe android:fraction="0.75" android:value="1.0115"/>
+                        <keyframe android:fraction="0.875" android:value="1.0042"/>
+                        <keyframe android:fraction="1" android:value="1"/>
+                    </propertyValuesHolder>
+                </objectAnimator>
+            </set>
+        </aapt:attr>
+    </target>
+
+    <target android:name="facet1"><aapt:attr name="android:animation"><objectAnimator android:duration="150" android:startOffset="0" android:valueType="floatType" android:interpolator="@android:anim/linear_interpolator"><propertyValuesHolder android:propertyName="fillAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder><propertyValuesHolder android:propertyName="strokeAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder></objectAnimator></aapt:attr></target>
+    <target android:name="facet2"><aapt:attr name="android:animation"><objectAnimator android:duration="150" android:startOffset="27" android:valueType="floatType" android:interpolator="@android:anim/linear_interpolator"><propertyValuesHolder android:propertyName="fillAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder><propertyValuesHolder android:propertyName="strokeAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder></objectAnimator></aapt:attr></target>
+    <target android:name="facet3"><aapt:attr name="android:animation"><objectAnimator android:duration="150" android:startOffset="54" android:valueType="floatType" android:interpolator="@android:anim/linear_interpolator"><propertyValuesHolder android:propertyName="fillAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder><propertyValuesHolder android:propertyName="strokeAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder></objectAnimator></aapt:attr></target>
+    <target android:name="facet4"><aapt:attr name="android:animation"><objectAnimator android:duration="150" android:startOffset="82" android:valueType="floatType" android:interpolator="@android:anim/linear_interpolator"><propertyValuesHolder android:propertyName="fillAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder><propertyValuesHolder android:propertyName="strokeAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder></objectAnimator></aapt:attr></target>
+    <target android:name="facet5"><aapt:attr name="android:animation"><objectAnimator android:duration="150" android:startOffset="109" android:valueType="floatType" android:interpolator="@android:anim/linear_interpolator"><propertyValuesHolder android:propertyName="fillAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder><propertyValuesHolder android:propertyName="strokeAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder></objectAnimator></aapt:attr></target>
+    <target android:name="facet6"><aapt:attr name="android:animation"><objectAnimator android:duration="150" android:startOffset="136" android:valueType="floatType" android:interpolator="@android:anim/linear_interpolator"><propertyValuesHolder android:propertyName="fillAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder><propertyValuesHolder android:propertyName="strokeAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder></objectAnimator></aapt:attr></target>
+    <target android:name="facet7"><aapt:attr name="android:animation"><objectAnimator android:duration="150" android:startOffset="163" android:valueType="floatType" android:interpolator="@android:anim/linear_interpolator"><propertyValuesHolder android:propertyName="fillAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder><propertyValuesHolder android:propertyName="strokeAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder></objectAnimator></aapt:attr></target>
+    <target android:name="facet8"><aapt:attr name="android:animation"><objectAnimator android:duration="150" android:startOffset="190" android:valueType="floatType" android:interpolator="@android:anim/linear_interpolator"><propertyValuesHolder android:propertyName="fillAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder><propertyValuesHolder android:propertyName="strokeAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder></objectAnimator></aapt:attr></target>
+    <target android:name="facet9"><aapt:attr name="android:animation"><objectAnimator android:duration="150" android:startOffset="217" android:valueType="floatType" android:interpolator="@android:anim/linear_interpolator"><propertyValuesHolder android:propertyName="fillAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder><propertyValuesHolder android:propertyName="strokeAlpha"><keyframe android:fraction="0" android:value="0"/><keyframe android:fraction="0.125" android:value="0.325"/><keyframe android:fraction="0.25" android:value="0.65"/><keyframe android:fraction="0.375" android:value="0.975"/><keyframe android:fraction="0.5" android:value="1"/><keyframe android:fraction="1" android:value="1"/></propertyValuesHolder></objectAnimator></aapt:attr></target>
+</animated-vector>
