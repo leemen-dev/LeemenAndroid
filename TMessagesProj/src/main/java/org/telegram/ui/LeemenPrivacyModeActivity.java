@@ -303,7 +303,7 @@ public class LeemenPrivacyModeActivity extends BaseFragment {
         field.setHintTextColor(Theme.getColor(Theme.key_dialogTextHint));
         ll.addView(field, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         TextView reset = new TextView(activity);
-        reset.setText(LocaleController.getString(R.string.LeemenResetLink));
+        reset.setText(LocaleController.getString(R.string.LeemenDeleteLostSecrets));
         reset.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
         reset.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         reset.setPadding(0, dp(16), 0, 0);
@@ -319,7 +319,13 @@ public class LeemenPrivacyModeActivity extends BaseFragment {
         dialog.setCancelable(false);
         dialog.setCanceledOnTouchOutside(false);
         dialog.show();
-        reset.setOnClickListener(v -> { dialog.dismiss(); confirmReset(activity, account); });
+        reset.setOnClickListener(v -> {
+            dialog.dismiss();
+            // Losing both secrets must never clear only the PS metadata: that would make its Telegram chats
+            // visible. Use the full PIN-gated account deletion + all-Leemen-session logout flow instead.
+            PrivacySettingsActivity.showLeemenDeleteDialog(activity, account,
+                    () -> promptForRecovery(activity, account));
+        });
         View back = dialog.getButton(DialogInterface.BUTTON_NEGATIVE);
         if (back != null) {
             back.setOnClickListener(v -> { dialog.dismiss(); promptForUnwrap(activity, account); });
@@ -337,27 +343,6 @@ public class LeemenPrivacyModeActivity extends BaseFragment {
                 });
             });
         }
-    }
-
-    private static void confirmReset(Activity activity, int account) {
-        if (activity == null) return;
-        AlertDialog.Builder b = new AlertDialog.Builder(activity);
-        b.setTitle(LocaleController.getString(R.string.LeemenResetTitle));
-        b.setMessage(LocaleController.getString(R.string.LeemenResetConfirm));
-        b.setPositiveButton(LocaleController.getString(R.string.LeemenReset), (d, w) -> {
-            AlertDialog progress = spinner(activity);
-            LeemenMaxPrivacy.reset(account, (ok, err) -> {
-                dismiss(progress);
-                toast(activity, LocaleController.getString(ok ? R.string.LeemenResetDone : R.string.LeemenMaxError));
-            });
-        });
-        b.setNegativeButton(LocaleController.getString(R.string.Cancel), (d, w) -> promptForRecovery(activity, account));
-        AlertDialog alert = b.create();
-        // Non-skippable: cancelling the wipe returns to the recovery prompt, not out of the decryption gate.
-        alert.setCancelable(false);
-        alert.setCanceledOnTouchOutside(false);
-        alert.show();
-        alert.redPositive();
     }
 
     // --- shared helpers ---

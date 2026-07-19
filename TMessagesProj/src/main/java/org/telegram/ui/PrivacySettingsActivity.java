@@ -12,6 +12,7 @@ import static org.telegram.messenger.AndroidUtilities.dp;
 import static org.telegram.messenger.LocaleController.formatPluralString;
 import static org.telegram.messenger.LocaleController.getString;
 
+import android.app.Activity;
 import android.content.Context;
 import android.text.InputType;
 import android.content.DialogInterface;
@@ -779,38 +780,52 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         if (f == null || f.getParentActivity() == null) {
             return;
         }
-        SecondSpaceController psc = SecondSpaceController.getInstance(f.getCurrentAccount());
+        showLeemenDeleteDialog(f.getParentActivity(), f.getCurrentAccount(), null);
+    }
+
+    /** Shared destructive flow used by Settings and the non-skippable lost-secret gate. */
+    public static void showLeemenDeleteDialog(Activity activity, int account, Runnable onCancel) {
+        if (activity == null || activity.isFinishing()) {
+            return;
+        }
+        SecondSpaceController psc = SecondSpaceController.getInstance(account);
         if (psc.hasPassword()) {
-            promptPinThenDeleteLeemenAccount(f, psc);
+            promptPinThenDeleteLeemenAccount(activity, account, psc, onCancel);
         } else {
-            confirmThenDeleteLeemenAccount(f);
+            confirmThenDeleteLeemenAccount(activity, account, onCancel);
         }
     }
 
-    private static void runLeemenAccountDeletion(BaseFragment f) {
-        if (f.getParentActivity() == null) {
+    private static void runLeemenAccountDeletion(Activity activity, int account) {
+        if (activity == null || activity.isFinishing()) {
             return;
         }
-        AlertDialog progress = new AlertDialog(f.getParentActivity(), AlertDialog.ALERT_TYPE_SPINNER);
+        AlertDialog progress = new AlertDialog(activity, AlertDialog.ALERT_TYPE_SPINNER);
         progress.setCanCancel(false);
         progress.show();
         // Variant B: server erasure → log out all Leemen clients → this device to a clean first-run.
-        org.telegram.messenger.leemen.LeemenAccount.deleteAndLogoutEverywhere(f.getCurrentAccount(), () -> {
+        org.telegram.messenger.leemen.LeemenAccount.deleteAndLogoutEverywhere(account, () -> {
             try { progress.dismiss(); } catch (Exception ignore) {}
         });
     }
 
-    private static void confirmThenDeleteLeemenAccount(BaseFragment f) {
-        if (f.getParentActivity() == null) {
-            return;
-        }
-        AlertDialog.Builder b = new AlertDialog.Builder(f.getParentActivity());
+    private static void confirmThenDeleteLeemenAccount(Activity activity, int account, Runnable onCancel) {
+        final boolean[] committed = {false};
+        AlertDialog.Builder b = new AlertDialog.Builder(activity);
         b.setTitle(LocaleController.getString(R.string.LeemenDeleteAccountTitle));
         b.setMessage(LocaleController.getString(R.string.LeemenDeleteAccountConfirmNeutral));
-        b.setPositiveButton(LocaleController.getString(R.string.Delete), (d, w) -> runLeemenAccountDeletion(f));
+        b.setPositiveButton(LocaleController.getString(R.string.Delete), (d, w) -> {
+            committed[0] = true;
+            runLeemenAccountDeletion(activity, account);
+        });
         b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         AlertDialog dialog = b.create();
-        f.showDialog(dialog);
+        dialog.setOnDismissListener(d -> {
+            if (!committed[0] && onCancel != null) {
+                onCancel.run();
+            }
+        });
+        dialog.show();
         TextView button = (TextView) dialog.getButton(DialogInterface.BUTTON_POSITIVE);
         if (button != null) {
             button.setTextColor(Theme.getColor(Theme.key_text_RedBold));
@@ -818,11 +833,9 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
     }
 
     /** Neutral passcode prompt (no mention of the private space — deniability) gating the destructive delete. */
-    private static void promptPinThenDeleteLeemenAccount(BaseFragment f, SecondSpaceController psc) {
-        if (f.getParentActivity() == null) {
-            return;
-        }
-        Context context = f.getParentActivity();
+    private static void promptPinThenDeleteLeemenAccount(Activity activity, int account,
+                                                         SecondSpaceController psc, Runnable onCancel) {
+        Context context = activity;
         final EditTextBoldCursor input = new EditTextBoldCursor(context);
         input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
         input.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 18);
@@ -837,20 +850,30 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         b.setTitle(LocaleController.getString(R.string.LeemenDeleteAccountTitle));
         b.setMessage(LocaleController.getString(R.string.LeemenDeleteAccountPinPrompt));
         b.setView(container);
-        b.setPositiveButton(LocaleController.getString(R.string.Delete), (d, w) -> {
-            CharSequence entered = input.getText();
-            if (psc.verifyPassword(entered != null ? entered.toString() : "")) {
-                runLeemenAccountDeletion(f);
-            } else if (f.getParentActivity() != null) {
-                Toast.makeText(f.getParentActivity(), LocaleController.getString(R.string.LeemenPasscodeWrong), Toast.LENGTH_SHORT).show();
-            }
-        });
+        b.setPositiveButton(LocaleController.getString(R.string.Delete), null);
         b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         AlertDialog dialog = b.create();
-        f.showDialog(dialog);
+        final boolean[] committed = {false};
+        dialog.setOnDismissListener(d -> {
+            if (!committed[0] && onCancel != null) {
+                onCancel.run();
+            }
+        });
+        dialog.show();
         TextView button = (TextView) dialog.getButton(DialogInterface.BUTTON_POSITIVE);
         if (button != null) {
             button.setTextColor(Theme.getColor(Theme.key_text_RedBold));
+            // Override the builder callback: a wrong PIN must keep the destructive gate on screen.
+            button.setOnClickListener(v -> {
+                CharSequence entered = input.getText();
+                if (psc.verifyPassword(entered != null ? entered.toString() : "")) {
+                    committed[0] = true;
+                    dialog.dismiss();
+                    runLeemenAccountDeletion(activity, account);
+                } else if (!activity.isFinishing()) {
+                    Toast.makeText(activity, LocaleController.getString(R.string.LeemenPasscodeWrong), Toast.LENGTH_SHORT).show();
+                }
+            });
         }
     }
 

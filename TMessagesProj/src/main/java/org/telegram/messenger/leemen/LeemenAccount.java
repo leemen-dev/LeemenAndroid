@@ -169,38 +169,6 @@ public final class LeemenAccount {
         prefs().edit().putBoolean("disabled_" + account, disabled).apply();
     }
 
-    /** Delete the Leemen account + all its data (GDPR): server DSR (best-effort) → local wipe → disable
-     *  auto-rebind. Does NOT touch the Telegram account. onDone runs on the UI thread when finished. */
-    public static void deleteAccountAndData(int account, Runnable onDone) {
-        // Disabled FIRST: blocks sync/realtime/device/heartbeat from racing the async server round-trip
-        // with the still-present token. The token itself stays until clear() so the DSR call can auth.
-        setDisabled(account, true);
-        requestServerDelete(account, () -> {
-            try {
-                LeemenRealtime.disconnect(account);
-                // Full sync teardown (in-memory CRDT cache + debounce/watchdog + persisted state) — a bare
-                // LeemenSyncState.clear would leave the cached working copy alive and a later re-bind
-                // could push the OLD hidden set into the fresh account.
-                LeemenSync.clearAccount(account);
-                org.telegram.messenger.SecondSpaceController.getInstance(account).wipeAllLocalData();
-                clear(account);            // token / sync_account_id / wrapped K_master (prefs)
-                // The AndroidKeyStore wrap-key alias is install-global (shared across accounts). Delete the
-                // raw TEE key only when no other account still has a wrapped K_master, else theirs breaks.
-                boolean anyKMasterLeft = false;
-                for (int a = 0; a < org.telegram.messenger.UserConfig.MAX_ACCOUNT_COUNT; a++) {
-                    if (hasKMaster(a)) { anyKMasterLeft = true; break; }
-                }
-                if (!anyKMasterLeft) {
-                    LeemenKeyStore.deleteWrapKey();
-                }
-                setDisabled(account, true); // don't silently re-create on next launch
-            } catch (Throwable e) {
-                org.telegram.messenger.FileLog.e(e);
-            }
-            if (onDone != null) onDone.run();
-        });
-    }
-
     /**
      * Full in-app account deletion (Variant B). Order is load-bearing: server erasure runs while the Leemen
      * token + Telegram session are still alive, then we log out every OTHER Leemen Telegram client, then this
@@ -208,10 +176,40 @@ public final class LeemenAccount {
      * thread just before this device logs out.
      */
     public static void deleteAndLogoutEverywhere(int account, Runnable onComplete) {
-        deleteAccountAndData(account, () -> terminateOtherAppSessions(account, () -> {
+        // Keep the local hide-list intact until every remote-session revoke has completed (or timed out).
+        // Clearing it earlier can briefly expose former private-space chats in the still logged-in UI.
+        setDisabled(account, true);
+        requestServerDelete(account, () -> terminateOtherAppSessions(account, () -> {
+            // The local wipe and current-session logout run back-to-back in the same UI turn, so the
+            // dialogsNeedReload emitted by wipeAllLocalData cannot render an unhidden chat list in between.
+            wipeLocalAccountData(account);
             if (onComplete != null) onComplete.run();
             org.telegram.messenger.MessagesController.getInstance(account).performLogout(1);
         }));
+    }
+
+    private static void wipeLocalAccountData(int account) {
+        try {
+            LeemenRealtime.disconnect(account);
+            // Full sync teardown (in-memory CRDT cache + debounce/watchdog + persisted state) — a bare
+            // LeemenSyncState.clear would leave the cached working copy alive and a later re-bind
+            // could push the OLD hidden set into the fresh account.
+            LeemenSync.clearAccount(account);
+            org.telegram.messenger.SecondSpaceController.getInstance(account).wipeAllLocalData();
+            clear(account);            // token / sync_account_id / wrapped K_master (prefs)
+            // The AndroidKeyStore wrap-key alias is install-global (shared across accounts). Delete the
+            // raw TEE key only when no other account still has a wrapped K_master, else theirs breaks.
+            boolean anyKMasterLeft = false;
+            for (int a = 0; a < org.telegram.messenger.UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                if (hasKMaster(a)) { anyKMasterLeft = true; break; }
+            }
+            if (!anyKMasterLeft) {
+                LeemenKeyStore.deleteWrapKey();
+            }
+            setDisabled(account, true); // don't silently re-create on next launch
+        } catch (Throwable e) {
+            org.telegram.messenger.FileLog.e(e);
+        }
     }
 
     /** Terminate every OTHER active Telegram session created by THIS app (api_id == APP_ID) — i.e. the user's
@@ -219,6 +217,15 @@ public final class LeemenAccount {
      *  intact. The current session is excluded by its `current` flag (its api_id is also APP_ID) and is logged
      *  out separately by performLogout. Best-effort + async; onComplete runs on the UI thread regardless. */
     private static void terminateOtherAppSessions(int account, Runnable onComplete) {
+        final java.util.concurrent.atomic.AtomicBoolean completed = new java.util.concurrent.atomic.AtomicBoolean();
+        final Runnable finish = () -> {
+            if (completed.compareAndSet(false, true) && onComplete != null) {
+                org.telegram.messenger.AndroidUtilities.runOnUIThread(onComplete);
+            }
+        };
+        // Session revocation is best-effort, but account deletion must never leave the user trapped on a
+        // spinner if Telegram does not answer. Continue to the atomic local-wipe/logout step after timeout.
+        org.telegram.messenger.AndroidUtilities.runOnUIThread(finish, 5000);
         org.telegram.tgnet.tl.TL_account.getAuthorizations req = new org.telegram.tgnet.tl.TL_account.getAuthorizations();
         org.telegram.tgnet.ConnectionsManager.getInstance(account).sendRequest(req, (response, error) ->
                 org.telegram.messenger.AndroidUtilities.runOnUIThread(() -> {
@@ -226,19 +233,34 @@ public final class LeemenAccount {
                         if (response instanceof org.telegram.tgnet.tl.TL_account.authorizations) {
                             java.util.ArrayList<org.telegram.tgnet.TLRPC.TL_authorization> list =
                                     ((org.telegram.tgnet.tl.TL_account.authorizations) response).authorizations;
+                            java.util.ArrayList<Long> hashes = new java.util.ArrayList<>();
                             for (int i = 0; i < list.size(); i++) {
                                 org.telegram.tgnet.TLRPC.TL_authorization auth = list.get(i);
                                 if ((auth.flags & 1) != 0) continue;                                  // current session
                                 if (auth.api_id != org.telegram.messenger.BuildVars.APP_ID) continue;  // only Leemen clients
-                                org.telegram.tgnet.tl.TL_account.resetAuthorization reset = new org.telegram.tgnet.tl.TL_account.resetAuthorization();
-                                reset.hash = auth.hash;
-                                org.telegram.tgnet.ConnectionsManager.getInstance(account).sendRequest(reset, (r2, e2) -> {});
+                                hashes.add(auth.hash);
                             }
+                            if (hashes.isEmpty()) {
+                                finish.run();
+                                return;
+                            }
+                            java.util.concurrent.atomic.AtomicInteger remaining =
+                                    new java.util.concurrent.atomic.AtomicInteger(hashes.size());
+                            for (int i = 0; i < hashes.size(); i++) {
+                                org.telegram.tgnet.tl.TL_account.resetAuthorization reset = new org.telegram.tgnet.tl.TL_account.resetAuthorization();
+                                reset.hash = hashes.get(i);
+                                org.telegram.tgnet.ConnectionsManager.getInstance(account).sendRequest(reset, (r2, e2) -> {
+                                    if (remaining.decrementAndGet() == 0) {
+                                        finish.run();
+                                    }
+                                });
+                            }
+                            return;
                         }
                     } catch (Throwable e) {
                         org.telegram.messenger.FileLog.e(e);
                     }
-                    if (onComplete != null) onComplete.run();
+                    finish.run();
                 }));
     }
 

@@ -387,6 +387,7 @@
     <string name="LeemenEnterRecoveryInfo">Введите вашу recovery-фразу из 12 слов.</string>
     <string name="LeemenRecoveryHint">12 слов через пробел</string>
     <string name="LeemenRecoveryInvalid">Неверная recovery-фраза</string>
+    <string name="LeemenDeleteLostSecrets">Потеряли обе фразы? Удалить аккаунт</string>
     <string name="LeemenResetLink">Потеряли всё? Сбросить</string>
     <string name="LeemenResetTitle">Сбросить зашифрованные данные</string>
     <string name="LeemenResetConfirm">Если вы потеряли и кодовую фразу, и recovery-фразу — можно сбросить. Это безвозвратно сотрёт синхронизированные данные и начнёт заново. Отменить нельзя.</string>
