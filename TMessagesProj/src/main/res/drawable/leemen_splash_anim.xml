@@ -7,8 +7,9 @@
      Android 12+ SplashScreen timing: the source's 27-frame stagger is uniformly compressed to 367ms.
      Each facet keeps its sampled 11-frame fold in a 150ms animator, offset by ~27ms from the previous
      facet. All keyframe fractions stay within 0..1 and the ninth facet settles before the 450ms exit.
-     The original per-facet transforms, alpha wave and compressed timing are preserved. Geometry-only
-     compensation overlaps internal edges while leaving the two top outer fills unstroked for a sharp tip.
+     The original per-facet transforms, alpha wave and compressed timing are preserved. A short preroll
+     keeps frame zero visible after the system has attached the splash, without changing its 450ms window.
+     Geometry-only compensation overlaps internal edges while leaving the top silhouette unstroked.
      Facets are declared in reverse JSON order: Lottie paints the first layer on top, while
      VectorDrawable paints the last path on top. -->
 <animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -84,7 +85,8 @@
             android:translateX="-17.479" android:translateY="-24.382"
             android:scaleX="0.6800" android:scaleY="0.6800">
             <path android:name="facet1_p" android:pathData="M 131.808,86.000 L 233.896,149.114 L 183.216,227.279 Z" android:fillColor="#D5D8DA" android:fillAlpha="0.000"/>
-            <path android:name="top_seam" android:pathData="M 131.808,86.000 L 183.216,227.279" android:strokeColor="#D5D8DA" android:strokeWidth="1.5" android:strokeAlpha="0.000" android:strokeLineCap="butt"/>
+            <!-- Start inside the silhouette: a butt cap at the outer vertex visibly cuts the sharp tip. -->
+            <path android:name="top_seam" android:pathData="M 132.835,88.826 L 183.216,227.279" android:strokeColor="#D5D8DA" android:strokeWidth="1.5" android:strokeAlpha="0.000" android:strokeLineCap="butt"/>
         </group>
             </group>
         </vector>
@@ -94,7 +96,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="0"
+                android:startOffset="50"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateX">
@@ -111,7 +113,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="0"
+                android:startOffset="50"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateY">
@@ -128,7 +130,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="0"
+                android:startOffset="50"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleX">
@@ -145,7 +147,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="0"
+                android:startOffset="50"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleY">
@@ -168,7 +170,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="0"
+                android:startOffset="50"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="fillAlpha">
@@ -201,7 +203,7 @@
         <aapt:attr name="android:animation">
             <objectAnimator
                 android:duration="150"
-                android:startOffset="0"
+                android:startOffset="50"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="strokeAlpha">
@@ -220,7 +222,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="27"
+                android:startOffset="77"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateX">
@@ -237,7 +239,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="27"
+                android:startOffset="77"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateY">
@@ -254,7 +256,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="27"
+                android:startOffset="77"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleX">
@@ -271,7 +273,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="27"
+                android:startOffset="77"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleY">
@@ -294,7 +296,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="27"
+                android:startOffset="77"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="fillAlpha">
@@ -328,7 +330,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="54"
+                android:startOffset="104"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateX">
@@ -345,7 +347,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="54"
+                android:startOffset="104"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateY">
@@ -362,7 +364,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="54"
+                android:startOffset="104"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleX">
@@ -379,7 +381,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="54"
+                android:startOffset="104"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleY">
@@ -402,7 +404,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="54"
+                android:startOffset="104"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="fillAlpha">
@@ -436,7 +438,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="82"
+                android:startOffset="132"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateX">
@@ -453,7 +455,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="82"
+                android:startOffset="132"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateY">
@@ -470,7 +472,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="82"
+                android:startOffset="132"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleX">
@@ -487,7 +489,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="82"
+                android:startOffset="132"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleY">
@@ -510,7 +512,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="82"
+                android:startOffset="132"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="fillAlpha">
@@ -544,7 +546,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="109"
+                android:startOffset="159"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateX">
@@ -561,7 +563,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="109"
+                android:startOffset="159"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateY">
@@ -578,7 +580,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="109"
+                android:startOffset="159"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleX">
@@ -595,7 +597,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="109"
+                android:startOffset="159"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleY">
@@ -618,7 +620,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="109"
+                android:startOffset="159"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="fillAlpha">
@@ -652,7 +654,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="136"
+                android:startOffset="186"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateX">
@@ -669,7 +671,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="136"
+                android:startOffset="186"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateY">
@@ -686,7 +688,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="136"
+                android:startOffset="186"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleX">
@@ -703,7 +705,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="136"
+                android:startOffset="186"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleY">
@@ -726,7 +728,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="136"
+                android:startOffset="186"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="fillAlpha">
@@ -760,7 +762,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="163"
+                android:startOffset="213"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateX">
@@ -777,7 +779,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="163"
+                android:startOffset="213"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateY">
@@ -794,7 +796,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="163"
+                android:startOffset="213"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleX">
@@ -811,7 +813,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="163"
+                android:startOffset="213"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleY">
@@ -834,7 +836,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="163"
+                android:startOffset="213"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="fillAlpha">
@@ -868,7 +870,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="190"
+                android:startOffset="240"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateX">
@@ -885,7 +887,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="190"
+                android:startOffset="240"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateY">
@@ -902,7 +904,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="190"
+                android:startOffset="240"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleX">
@@ -919,7 +921,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="190"
+                android:startOffset="240"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleY">
@@ -942,7 +944,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="190"
+                android:startOffset="240"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="fillAlpha">
@@ -976,7 +978,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="217"
+                android:startOffset="267"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateX">
@@ -993,7 +995,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="217"
+                android:startOffset="267"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="translateY">
@@ -1010,7 +1012,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="217"
+                android:startOffset="267"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleX">
@@ -1027,7 +1029,7 @@
             </objectAnimator>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="217"
+                android:startOffset="267"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="scaleY">
@@ -1050,7 +1052,7 @@
             <set>
             <objectAnimator
                 android:duration="150"
-                android:startOffset="217"
+                android:startOffset="267"
                 android:valueType="floatType"
                 android:interpolator="@android:anim/linear_interpolator">
                 <propertyValuesHolder android:propertyName="fillAlpha">
