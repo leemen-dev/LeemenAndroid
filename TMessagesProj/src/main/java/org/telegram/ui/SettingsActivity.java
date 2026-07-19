@@ -156,6 +156,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
     private UniversalRecyclerView listView;
     private LeemenTourOverlay psRowOverlay;            // onboarding: tour-style spotlight on the PS-settings row
     private RecyclerView.OnScrollListener psRowScrollListener;
+    private int psRowOverlayGeneration;
     private View actionBarBackground;
 
     private ActionBarMenuItem searchItem, otherItem;
@@ -522,6 +523,14 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             if (listView != null) {
                 listView.adapter.update(true);
             }
+            SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+            if (!ssc.isActive() || ssc.isOnboardingDone()) {
+                // SettingsActivity can stay alive when the bottom navigation exits the private space.
+                // Never leave its private-space-only onboarding overlay attached in the regular UI.
+                dismissPsRowOverlay();
+            } else {
+                schedulePrivateSpaceRowHighlight();
+            }
         }
     }
 
@@ -620,17 +629,30 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         super.onBecomeFullyVisible();
         // Onboarding: when this page becomes visible inside the private space, lead the eye to the
         // "Private Space Settings" row so the user learns where it lives. No-op once onboarding is done.
-        if (listView != null) {
-            listView.post(this::maybeHighlightPrivateSpaceRow);
-        }
+        schedulePrivateSpaceRowHighlight();
     }
 
-    private void maybeHighlightPrivateSpaceRow() {
+    private void schedulePrivateSpaceRowHighlight() {
+        // Recreate the spotlight for this visibility/mode generation so an older scroll listener or
+        // delayed layout retry cannot keep controlling it after a tab/mode transition.
+        dismissPsRowOverlay();
+        if (listView == null) {
+            return;
+        }
+        final int generation = psRowOverlayGeneration;
+        listView.post(() -> maybeHighlightPrivateSpaceRow(generation));
+    }
+
+    private void maybeHighlightPrivateSpaceRow(int generation) {
+        if (generation != psRowOverlayGeneration) {
+            return;
+        }
         if (listView == null || listView.adapter == null) {
             return;
         }
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
         if (!ssc.isActive() || ssc.isOnboardingDone()) {
+            dismissPsRowOverlay();
             return;
         }
         int position = -1;
@@ -647,11 +669,14 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         final int target = position;
         // Park the row in view, then spotlight it with a tour-style step (same look as the PS-settings tour).
         listView.layoutManager.scrollToPositionWithOffset(target, AndroidUtilities.dp(120));
-        listView.post(() -> spotlightPrivateSpaceRow(target, 0));
+        listView.post(() -> spotlightPrivateSpaceRow(target, 0, generation));
     }
 
     /** Points the tour-style spotlight at the "Private Space Settings" row; retries while it's laid out. */
-    private void spotlightPrivateSpaceRow(int position, int attempt) {
+    private void spotlightPrivateSpaceRow(int position, int attempt, int generation) {
+        if (generation != psRowOverlayGeneration) {
+            return;
+        }
         if (getParentActivity() == null || !(fragmentView instanceof FrameLayout)) {
             return;
         }
@@ -663,7 +688,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         RectF target = psRowTargetRect(position);
         if (target == null) {
             if (attempt < 8) {
-                AndroidUtilities.runOnUIThread(() -> spotlightPrivateSpaceRow(position, attempt + 1), 16);
+                AndroidUtilities.runOnUIThread(() -> spotlightPrivateSpaceRow(position, attempt + 1, generation), 16);
             }
             return;
         }
@@ -675,7 +700,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             psRowScrollListener = new RecyclerView.OnScrollListener() {
                 @Override
                 public void onScrolled(RecyclerView rv, int dx, int dy) {
-                    if (psRowOverlay == null) {
+                    if (generation != psRowOverlayGeneration || psRowOverlay == null) {
                         return;
                     }
                     RectF t = psRowTargetRect(position);
@@ -692,7 +717,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 LocaleController.getString(R.string.LeemenOnboardingSettingsHint),
                 null,
                 LocaleController.getString(R.string.Open),
-                v -> openPrivateSpaceSettings());
+                v -> openPrivateSpaceSettings(generation));
     }
 
     /** Bounds of the PS-settings row in the overlay's coordinates, or null if it isn't on-screen. */
@@ -716,12 +741,18 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 top + item.getHeight() - AndroidUtilities.dp(4));
     }
 
-    private void openPrivateSpaceSettings() {
+    private void openPrivateSpaceSettings(int generation) {
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        if (generation != psRowOverlayGeneration || !ssc.isActive() || ssc.isOnboardingDone()) {
+            dismissPsRowOverlay();
+            return;
+        }
         dismissPsRowOverlay();
         presentFragment(new SecondSpaceSettingsActivity());
     }
 
     private void dismissPsRowOverlay() {
+        psRowOverlayGeneration++;
         if (psRowScrollListener != null && listView != null) {
             listView.removeOnScrollListener(psRowScrollListener);
         }

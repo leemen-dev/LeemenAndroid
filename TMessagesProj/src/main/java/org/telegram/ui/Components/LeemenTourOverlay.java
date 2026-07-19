@@ -180,7 +180,9 @@ public class LeemenTourOverlay extends FrameLayout {
 
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) bubble.getLayoutParams();
         lp.width = bw;
-        lp.height = bh;
+        // Keep height content-driven after positioning. A fixed measured height can become stale after the
+        // arrow padding or a localized footer relayout and visibly crop the action label at the card edge.
+        lp.height = LayoutHelper.WRAP_CONTENT;
         lp.leftMargin = (int) left;
         lp.topMargin = 0;
         bubble.setLayoutParams(lp);
