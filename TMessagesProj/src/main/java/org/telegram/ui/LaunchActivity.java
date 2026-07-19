@@ -65,6 +65,7 @@ import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
+import android.view.animation.LinearInterpolator;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -297,9 +298,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     private SizeNotifierFrameLayout backgroundTablet;
     public FrameLayout frameLayout;
     private static boolean leemenSplashShown;
-    private static final float LEEMEN_SPLASH_SPEED = 2.45f;
-    private static final int LEEMEN_SPLASH_END_FRAME = 28;
-    private static final int LEEMEN_SPLASH_FADE_DURATION = 16;
+    private static final int LEEMEN_SPLASH_BUILD_DURATION = 367;
+    private static final int LEEMEN_SPLASH_TOTAL_DURATION = 450;
+    private static final int LEEMEN_SPLASH_END_FRAME = 27;
     private FireworksOverlay fireworksOverlay;
     private BottomSheetTabsOverlay bottomSheetTabsOverlay;
     public DrawerLayoutContainer drawerLayoutContainer;
@@ -1139,10 +1140,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             RLottieImageView img = new RLottieImageView(this);
             img.setAutoRepeat(false);
             img.setAnimation(R.raw.leemen_splash, 260, 260);
-            // Frames 28..39 only hold the completed logo. Play the actual fold at the same compact
-            // duration as the former system animation, using the exact renderer seen on IntroActivity.
-            img.getAnimatedDrawable().multiplySpeed(LEEMEN_SPLASH_SPEED);
-            img.getAnimatedDrawable().setCustomEndFrame(LEEMEN_SPLASH_END_FRAME);
             img.setScaleType(ImageView.ScaleType.CENTER);
             cover.addView(img, LayoutHelper.createFrame(260, 260, Gravity.CENTER));
             frameLayout.addView(cover, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
@@ -1151,10 +1148,38 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                     frameLayout.removeView(cover);
                 }
             };
-            img.setOnAnimationEndListener(() -> AndroidUtilities.runOnUIThread(() ->
-                    cover.animate().alpha(0f).setDuration(LEEMEN_SPLASH_FADE_DURATION).withEndAction(remove).start()));
-            img.playAnimation();
-            AndroidUtilities.runOnUIThread(remove, 2200); // failsafe if the end callback never fires
+            final RLottieDrawable splashDrawable = img.getAnimatedDrawable();
+            final long splashStartedAt = SystemClock.uptimeMillis();
+            ValueAnimator splashAnimator = ValueAnimator.ofInt(0, LEEMEN_SPLASH_END_FRAME);
+            splashAnimator.setDuration(LEEMEN_SPLASH_BUILD_DURATION);
+            splashAnimator.setInterpolator(new LinearInterpolator());
+            splashAnimator.addUpdateListener(animation ->
+                    splashDrawable.setCurrentFrame((Integer) animation.getAnimatedValue(), true));
+            splashAnimator.addListener(new AnimatorListenerAdapter() {
+                private boolean cancelled;
+
+                @Override
+                public void onAnimationCancel(Animator animation) {
+                    cancelled = true;
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    if (cancelled) {
+                        return;
+                    }
+                    // The old AVD built for 367ms, then held its completed frame until the Android
+                    // SplashScreen's 450ms deadline. Keep those two timings exactly.
+                    splashDrawable.setCurrentFrame(LEEMEN_SPLASH_END_FRAME, false);
+                    long elapsed = SystemClock.uptimeMillis() - splashStartedAt;
+                    AndroidUtilities.runOnUIThread(remove, Math.max(0, LEEMEN_SPLASH_TOTAL_DURATION - elapsed));
+                }
+            });
+            splashAnimator.start();
+            AndroidUtilities.runOnUIThread(() -> {
+                splashAnimator.cancel();
+                remove.run();
+            }, 2200); // failsafe if frame decoding or the animator never completes
         } catch (Exception e) {
             FileLog.e(e);
         }
