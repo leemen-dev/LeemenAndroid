@@ -297,6 +297,8 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     private SizeNotifierFrameLayout backgroundTablet;
     public FrameLayout frameLayout;
     private static boolean leemenSplashShown;
+    private static final float LEEMEN_SPLASH_SPEED = 2.45f;
+    private static final int LEEMEN_SPLASH_END_FRAME = 28;
     private FireworksOverlay fireworksOverlay;
     private BottomSheetTabsOverlay bottomSheetTabsOverlay;
     public DrawerLayoutContainer drawerLayoutContainer;
@@ -1136,6 +1138,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             RLottieImageView img = new RLottieImageView(this);
             img.setAutoRepeat(false);
             img.setAnimation(R.raw.leemen_splash, 260, 260);
+            // Frames 28..39 are only a final-frame hold. The first 28 frames at 2.45x match the former
+            // AVD fold timing (~367ms) without changing the canonical Lottie geometry.
+            img.getAnimatedDrawable().multiplySpeed(LEEMEN_SPLASH_SPEED);
+            img.getAnimatedDrawable().setCustomEndFrame(LEEMEN_SPLASH_END_FRAME);
             img.setScaleType(ImageView.ScaleType.CENTER);
             cover.addView(img, LayoutHelper.createFrame(260, 260, Gravity.CENTER));
             frameLayout.addView(cover, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
