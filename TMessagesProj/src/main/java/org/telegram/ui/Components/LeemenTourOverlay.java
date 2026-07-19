@@ -149,18 +149,29 @@ public class LeemenTourOverlay extends FrameLayout {
         }
         int sideMargin = AndroidUtilities.dp(16);
         int maxW = getWidth() - 2 * sideMargin;
-        // Wrap to content (capped at maxW) so the bubble is snug and centered on the target, instead of a
-        // full-width card that strands the button in the far corner.
+        // First measure the content without an arrow, then choose the side while reserving the arrow's
+        // height. setArrow changes vertical padding, so the final measure must happen after that choice;
+        // otherwise fixing LayoutParams to the first height clips the footer by exactly arrowH.
+        bubble.setArrow(Bubble.ARROW_NONE, 0);
+        bubble.measure(
+                MeasureSpec.makeMeasureSpec(maxW, MeasureSpec.AT_MOST),
+                MeasureSpec.makeMeasureSpec(getHeight(), MeasureSpec.AT_MOST));
+        int finalHeightEstimate = bubble.getMeasuredHeight() + bubble.getArrowHeight();
+
+        int gap = AndroidUtilities.dp(10);
+        float belowY = toTargetBottom() + gap;
+        float aboveY = toTargetTop() - gap - finalHeightEstimate;
+        boolean below = belowY + finalHeightEstimate <= getHeight() - AndroidUtilities.dp(16)
+                || aboveY < AndroidUtilities.dp(16);
+        int arrowEdge = below ? Bubble.ARROW_TOP : Bubble.ARROW_BOTTOM;
+        bubble.setArrow(arrowEdge, 0);
+        // Wrap to final content (capped at maxW) so localized text and the footer get their full height.
         bubble.measure(
                 MeasureSpec.makeMeasureSpec(maxW, MeasureSpec.AT_MOST),
                 MeasureSpec.makeMeasureSpec(getHeight(), MeasureSpec.AT_MOST));
         int bw = bubble.getMeasuredWidth();
         int bh = bubble.getMeasuredHeight();
-
-        int gap = AndroidUtilities.dp(10);
-        float belowY = toTargetBottom() + gap;
-        float aboveY = toTargetTop() - gap - bh;
-        boolean below = belowY + bh <= getHeight() - AndroidUtilities.dp(16) || aboveY < AndroidUtilities.dp(16);
+        aboveY = toTargetTop() - gap - bh;
         float y = below ? belowY : aboveY;
 
         // Center horizontally on the target, clamped to the screen's side margins.
@@ -177,7 +188,7 @@ public class LeemenTourOverlay extends FrameLayout {
         bubble.setTranslationY(y);
 
         float arrowCx = targetCenterX() - left;
-        bubble.setArrow(below ? Bubble.ARROW_TOP : Bubble.ARROW_BOTTOM, arrowCx);
+        bubble.setArrow(arrowEdge, arrowCx);
 
         if (fadeIn) {
             bubble.animate().alpha(1f).setDuration(160).start();
@@ -288,6 +299,10 @@ public class LeemenTourOverlay extends FrameLayout {
             arrowCenterX = centerX;
             applyPadding();
             invalidate();
+        }
+
+        int getArrowHeight() {
+            return arrowH;
         }
 
         private void applyPadding() {
