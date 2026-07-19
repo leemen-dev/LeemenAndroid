@@ -297,6 +297,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     private SizeNotifierFrameLayout backgroundTablet;
     public FrameLayout frameLayout;
     private static boolean leemenSplashShown;
+    private static final float LEEMEN_SPLASH_SPEED = 2.45f;
+    private static final int LEEMEN_SPLASH_END_FRAME = 28;
+    private static final int LEEMEN_SPLASH_FADE_DURATION = 16;
     private FireworksOverlay fireworksOverlay;
     private BottomSheetTabsOverlay bottomSheetTabsOverlay;
     public DrawerLayoutContainer drawerLayoutContainer;
@@ -673,10 +676,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 FileLog.e(e);
             }
         }
-        // Android 12+ owns the complete splash lifecycle (start, duration and early dismissal). Older
-        // versions keep the legacy in-app Lottie fallback.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S
-                && !leemenSplashShown && savedInstanceState == null) {
+        // The OS splash cannot render Lottie and its AnimatedVectorDrawable rasterization leaves
+        // visible seams between the origami facets. Keep the OS icon transparent on Android 12+
+        // and play the canonical Lottie as the first in-app frame on every Android version.
+        if (!leemenSplashShown && savedInstanceState == null) {
             leemenSplashShown = true;
             showLeemenSplash();
         }
@@ -1135,9 +1138,13 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             cover.setBackgroundColor(0xFF1C1C24);
             RLottieImageView img = new RLottieImageView(this);
             img.setAutoRepeat(false);
-            img.setAnimation(R.raw.leemen_splash, 160, 160);
+            img.setAnimation(R.raw.leemen_splash, 260, 260);
+            // Frames 28..39 only hold the completed logo. Play the actual fold at the same compact
+            // duration as the former system animation, using the exact renderer seen on IntroActivity.
+            img.getAnimatedDrawable().multiplySpeed(LEEMEN_SPLASH_SPEED);
+            img.getAnimatedDrawable().setCustomEndFrame(LEEMEN_SPLASH_END_FRAME);
             img.setScaleType(ImageView.ScaleType.CENTER);
-            cover.addView(img, LayoutHelper.createFrame(160, 160, Gravity.CENTER));
+            cover.addView(img, LayoutHelper.createFrame(260, 260, Gravity.CENTER));
             frameLayout.addView(cover, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
             final Runnable remove = () -> {
                 if (cover.getParent() != null) {
@@ -1145,7 +1152,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 }
             };
             img.setOnAnimationEndListener(() -> AndroidUtilities.runOnUIThread(() ->
-                    cover.animate().alpha(0f).setDuration(150).withEndAction(remove).start()));
+                    cover.animate().alpha(0f).setDuration(LEEMEN_SPLASH_FADE_DURATION).withEndAction(remove).start()));
             img.playAnimation();
             AndroidUtilities.runOnUIThread(remove, 2200); // failsafe if the end callback never fires
         } catch (Exception e) {
