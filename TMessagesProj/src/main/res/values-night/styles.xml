@@ -22,8 +22,7 @@
         <item name="android:colorPrimary">#232d3a</item>
         <item name="android:navigationBarColor">#000000</item>
         <item name="android:forceDarkAllowed">false</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/leemen_splash_anim</item>
-        <item name="android:windowSplashScreenAnimationDuration">@integer/splash_screen_duration</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/transparent</item>
         <item name="android:windowSplashScreenBackground">#1c1c24</item>
     </style>
 

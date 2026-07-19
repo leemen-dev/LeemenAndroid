@@ -673,11 +673,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 FileLog.e(e);
             }
         }
-        // Android 12+ plays the branded fold-in in the OS SplashScreen slot (windowSplashScreenAnimatedIcon =
-        // leemen_splash_anim, ~450ms — Telegram-style placement & timing). Only pre-12, where that slot does
-        // not exist, fall back to the in-app Lottie overlay so old devices still get the brand splash.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S
-                && !leemenSplashShown && savedInstanceState == null) {
+        // Play the canonical Lottie on every Android version. Android 12+ only keeps a graphite OS splash
+        // background until this view is ready: its AnimatedVectorDrawable renderer can dismiss on an
+        // intermediate frame and leave independently transformed facets visibly separated.
+        if (!leemenSplashShown && savedInstanceState == null) {
             leemenSplashShown = true;
             showLeemenSplash();
         }
@@ -1136,9 +1135,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             cover.setBackgroundColor(0xFF1C1C24);
             RLottieImageView img = new RLottieImageView(this);
             img.setAutoRepeat(false);
-            img.setAnimation(R.raw.leemen_splash, 160, 160);
+            img.setAnimation(R.raw.leemen_splash, 260, 260);
             img.setScaleType(ImageView.ScaleType.CENTER);
-            cover.addView(img, LayoutHelper.createFrame(160, 160, Gravity.CENTER));
+            cover.addView(img, LayoutHelper.createFrame(260, 260, Gravity.CENTER));
             frameLayout.addView(cover, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
             final Runnable remove = () -> {
                 if (cover.getParent() != null) {
