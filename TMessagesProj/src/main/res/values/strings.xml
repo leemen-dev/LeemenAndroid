@@ -327,7 +327,7 @@
     <string name="Underline">Underline</string>
     <string name="Regular">Regular</string>
     <string name="FormattedDate">Date</string>
-    <string name="ContactsPermissionAlert">**Leemen** needs access to your contacts so that you can connect with your friends across all your devices. Your contacts will be continuously synced with Leemen\'s heavily encrypted cloud servers.</string>
+    <string name="ContactsPermissionAlert">**Leemen** needs access to your contacts so that you can connect with your friends across all your devices. Contact synchronization is provided through Telegram\'s cloud service.</string>
     <string name="ContactsPermissionAlertNotNow">Not now</string>
     <string name="ContactsPermissionAlertContinue">Continue</string>
     <string name="NotificationsPermissionAlertTitle">Turn on notifications</string>
@@ -1205,9 +1205,9 @@
     <string name="SponsoredMessageSponsor">Advertiser Info</string>
     <string name="SponsoredMessageSponsorReportable">Sponsor Info</string>
     <string name="SponsoredMessageInfo">What are sponsored\nmessages?</string>
-    <string name="SponsoredMessageInfo2Description1">Unlike other apps, Leemen never uses your private data to target ads. [Learn more in the Privacy Policy](https://telegram.org/privacy#5-6-no-ads-based-on-user-data)</string>
-    <string name="SponsoredMessageInfo2Description2">Unlike other apps, Leemen doesn\'t track whether you tapped on a sponsored message and doesn\'t profile you based on your activity. We also prevent external links in sponsored messages to ensure that third parties can’t spy on our users. We believe that everyone has the right to privacy, and technological platforms should respect that.</string>
-    <string name="SponsoredMessageInfo2Description3">Leemen offers free and unlimited service to hundreds of millions of users, which involves significant server and traffic costs. In order to remain independent and stay true to its values, Leemen developed a paid tool to promote messages with user privacy in mind. We welcome responsible advertisers at:</string>
+    <string name="SponsoredMessageInfo2Description1">Unlike other apps, Telegram never uses your private data to target ads. [Learn more in the Privacy Policy](https://telegram.org/privacy#5-6-no-ads-based-on-user-data)</string>
+    <string name="SponsoredMessageInfo2Description2">Unlike other apps, Telegram doesn\'t track whether you tapped on a sponsored message and doesn\'t profile you based on your activity. Telegram also prevents external links in sponsored messages to limit third-party tracking.</string>
+    <string name="SponsoredMessageInfo2Description3">Sponsored messages and the advertising platform are operated by Telegram. Learn more at:</string>
     <string name="SponsoredMessageInfo2Description4">Ads should no longer be synonymous with abuse of user privacy. Let us redefine how a tech company should operate – together.</string>
     <string name="SponsoredMessageAlertLearnMore">LEARN MORE</string>
     <string name="SponsoredMessageAlertLearnMoreUrl">https://telegram.org</string>
@@ -1521,7 +1521,7 @@
     <string name="URL">URL</string>
     <string name="MapPreviewProvider">Map Preview Provider</string>
     <string name="MapPreviewProviderTitle">Map preview provider</string>
-    <string name="MapPreviewProviderTelegram">Leemen</string>
+    <string name="MapPreviewProviderTelegram">Telegram</string>
     <string name="MapPreviewProviderGoogle">Google</string>
     <string name="MapPreviewProviderYandex">Yandex</string>
     <string name="MapPreviewProviderNobody">No previews</string>
@@ -2349,14 +2349,14 @@
     <string name="PrivateSpacePinTitle">Password</string>
     <string name="PrivateSpacePinOff">Off</string>
     <string name="PrivateSpacePinOn">On</string>
-    <string name="PrivateSpacePinInfo">When set, you must enter the PIN every time you open Protected Space.</string>
+    <string name="PrivateSpacePinInfo">When set, the PIN protects entry to Protected Space. How long verification is remembered depends on your PIN timeout setting.</string>
     <string name="PrivateSpaceDecoySequenceTitle">Decoy tap sequence</string>
     <string name="PrivateSpaceDecoySequenceInfo">A separate tap sequence that opens an isolated decoy Protected Space. Anyone forced to unlock under duress can perform this sequence and see only the decoy space, with the real one fully hidden.</string>
     <string name="PrivateSpaceSequenceCollision">This sequence is already used by your other entry shortcut. Choose a different one.</string>
     <string name="PrivateSpacePinSetTitle">Set PIN (4–6 digits)</string>
     <string name="PrivateSpacePinEnterTitle">Enter PIN</string>
     <string name="PrivateSpacePinEnterSubtitle">Enter your Protected Space PIN to continue.</string>
-    <string name="PrivateSpacePinSetSubtitle">Choose a PIN of 4 to 6 digits. You\'ll need it every time you open Protected Space.</string>
+    <string name="PrivateSpacePinSetSubtitle">Choose a PIN of 4 to 6 digits. You can configure how long verification is remembered.</string>
     <string name="PrivateSpacePinConfirmTitle">Confirm PIN</string>
     <string name="PrivateSpacePinConfirmSubtitle">Type the PIN once more to confirm.</string>
     <string name="PrivateSpacePinRemoveTitle">Remove PIN</string>
@@ -2460,7 +2460,7 @@
     <string name="PrivateSpaceEmpty">No chats in Protected Space yet. Open settings to add them.</string>
     <string name="PrivateSpaceEmptyOpenSettings">Open settings</string>
     <string name="PrivateSpaceOnboardingHideHint">Long-press any chat and choose “Hide chat” to make it disappear from your normal chat list.</string>
-    <string name="PrivateSpaceOnboardingHidden">Chat hidden. It stays invisible outside Protected Space.</string>
+    <string name="PrivateSpaceOnboardingHidden">Chat hidden from lists, notifications, widgets and message search. You can still find it by explicitly typing its name.</string>
     <string name="LeemenOnboardingSettingsHint">Set up your protected space in Settings — add chats to hide, a PIN, and how you get in.</string>
     <string name="LeemenTourHideChats">Add the chats you want to hide here. They disappear from your normal list.</string>
     <string name="LeemenTourPin">Set a PIN so only you can open this space.</string>
@@ -2487,10 +2487,10 @@
     <string name="LeemenTermsLinkPrivacy">Read the Privacy Policy</string>
     <string name="LeemenTermsDeclineConfirm">You can\'t use Leemen without accepting the Terms of Service and Privacy Policy. Log out?</string>
     <string name="LeemenDataSection">Data</string>
-    <string name="LeemenAnalyticsSetting">Share anonymous usage data</string>
-    <string name="LeemenAnalyticsSettingInfo">Helps us improve Leemen. Never includes your chats or message content. Off by default.</string>
+    <string name="LeemenAnalyticsSetting">Share optional usage data</string>
+    <string name="LeemenAnalyticsSettingInfo">Helps us improve Leemen. Never includes chats or message content. After sign-in, it may be linked to your Leemen account for attribution and deletion requests. Off by default.</string>
     <string name="LeemenAnalyticsConsentTitle">Help improve Leemen</string>
-    <string name="LeemenAnalyticsConsentMessage">Share anonymous usage data and install source so we can improve Leemen. Your chats and message content are never included. You can change this anytime in Settings → Privacy.</string>
+    <string name="LeemenAnalyticsConsentMessage">Share limited usage data and install source so we can improve Leemen. Chats and message content are never included. After sign-in, this data may be linked to your Leemen account for attribution and deletion requests. You can change this anytime in Settings → Privacy.</string>
     <string name="LeemenAnalyticsConsentEnable">Enable</string>
     <string name="LeemenAnalyticsConsentLater">Not now</string>
     <string name="LeemenPremium">Leemen Premium</string>
@@ -2508,9 +2508,9 @@
     <string name="LeemenPremiumActivated">Leemen Premium activated</string>
     <string name="LeemenPremiumPurchaseError">Couldn\'t complete the purchase</string>
     <string name="LeemenPremiumStatusUnlimited">Unlimited chats</string>
-    <string name="LeemenPremiumFeat1Desc">Hide any number of chats, groups and channels in your Protected Space — not just the first free one. Hidden chats vanish from the list, search, notifications and widgets.</string>
+    <string name="LeemenPremiumFeat1Desc">Hide any number of chats, groups and channels in Protected Space — not just the first free one. They disappear from lists, proactive suggestions, message search, notifications and widgets, but remain findable by explicitly typing their name.</string>
     <string name="LeemenPremiumFeat2Title">Sync across devices</string>
-    <string name="LeemenPremiumFeat2Desc">Your protected space, encrypted, on every device.</string>
+    <string name="LeemenPremiumFeat2Desc">Encrypted synchronization of Protected Space metadata across your devices. Telegram continues to store and deliver the chats themselves.</string>
     <string name="LeemenPremiumFeat3Title">Priority &amp; new perks</string>
     <string name="LeemenPremiumFeat3Desc">Early access to upcoming privacy features.</string>
     <string name="LeemenPremiumFeatAccountTitle">Hide a whole account</string>
@@ -2526,7 +2526,7 @@
     <string name="NewAccountRedirectText">Leemen uses your Telegram account. Register your number in the official Telegram app first, then come back and log in here.</string>
     <string name="NewAccountRedirectButton">Open Telegram</string>
     <string name="DeleteLeemenAccount">Delete Leemen account</string>
-    <string name="DeleteLeemenAccountConfirm">This permanently deletes your Leemen account and all its data — hidden chats, settings and sync — and signs out every Leemen device. This device returns to the start screen and you\'ll sign in to Telegram again. Your Telegram account is not deleted.</string>
+    <string name="DeleteLeemenAccountConfirm">This requests permanent deletion of your Leemen account and immediately removes its local data from this device. Leemen will also attempt to sign out its other sessions. This device returns to the start screen and you\'ll sign in to Telegram again. Your Telegram account is not deleted.</string>
     <string name="LeemenDeleteAccountLabel">Delete account</string>
     <string name="LeemenDeleteAccountTitle">Delete account</string>
     <string name="LeemenDeleteAccountConfirmNeutral">This permanently deletes your account and all its data, and signs out every device. This device returns to the start screen. Your Telegram account is not deleted.</string>
@@ -2553,7 +2553,7 @@
     <string name="LeemenRecoveryTitle">Recovery phrase</string>
     <string name="LeemenRecoveryInfo">Write down these 12 words in order and keep them somewhere safe. They are the only way to recover your data if you forget your passphrase.</string>
     <string name="LeemenRecoverySaved">I\'ve written it down</string>
-    <string name="LeemenRecoveryCopied">Recovery phrase copied</string>
+    <string name="LeemenRecoveryCopied">Recovery phrase copied. Clipboard clears in 60 seconds.</string>
     <string name="LeemenCodeChanged">Passphrase changed</string>
     <string name="LeemenMaxDisabled">Maximum privacy disabled</string>
     <string name="LeemenMaxError">Something went wrong. Please try again.</string>
@@ -2811,7 +2811,7 @@
     <string name="SmartNotificationsInfo">%1$d / %2$s</string>
     <string name="SmartNotificationsDisabled">Disabled</string>
     <string name="SecretWebPage">Link Previews</string>
-    <string name="SecretWebPageInfo">Link previews will be generated on Leemen servers. We do not store data about the links you send.</string>
+    <string name="SecretWebPageInfo">Link previews will be generated on Telegram servers. Telegram states that it does not store data about the links you send.</string>
     <string name="SecretChat">Secret chats</string>
     <string name="DirectShare">Direct Share</string>
     <string name="DirectShareInfo">Show recent chats in Android share menu</string>
@@ -3887,7 +3887,7 @@
     <string name="InviteToGroupError">Sorry, you can\'t add this user to groups because of user\'s privacy settings.</string>
     <string name="InviteToChannelError">Sorry, you can\'t add this user to channels because of user\'s privacy settings.</string>
     <string name="CreateGroupError">Sorry, you can\'t create a group with these users because of their privacy settings.</string>
-    <string name="PrivacyCallsP2PHelp">Disabling peer-to-peer will relay all calls through Leemen servers to avoid revealing your IP address, but may slightly decrease audio quality.</string>
+    <string name="PrivacyCallsP2PHelp">Disabling peer-to-peer will relay calls through Telegram servers to avoid revealing your IP address, but may slightly decrease audio quality.</string>
     <string name="SyncContactsDelete">Delete Synced Contacts</string>
     <string name="SuggestContacts">Suggest Frequent Contacts</string>
     <string name="SuggestContactsInfo">Display people you message frequently at the top of the search section for quick access.</string>
@@ -3897,7 +3897,7 @@
     <string name="PrivacyExceptions">Exceptions</string>
     <string name="BlockedEmpty">None</string>
     <string name="SyncContactsDeleteTitle">Delete contacts</string>
-    <string name="SyncContactsDeleteText">This will remove your contacts from the Leemen servers.\n\nIf \'**Sync Contacts**\' is enabled, contacts will be re-synced.</string>
+    <string name="SyncContactsDeleteText">This will remove your contacts from Telegram servers.\n\nIf \'**Sync Contacts**\' is enabled, contacts will be re-synced.</string>
     <!--edit video view-->
     <string name="SendingVideo">Sending video...</string>
     <string name="ConvertingVideo">Converting video...</string>
@@ -4226,7 +4226,7 @@
     <string name="NoTopicsCreated">no created topics</string>
     <string name="NoMonoforumTopicsCreated">no received messages</string>
     <string name="BotCantJoinGroups">This bot can\'t join groups.</string>
-    <string name="SecretLinkPreviewAlert">Would you like to enable extended link previews in Secret Chats? Note that link previews are generated on Leemen servers.</string>
+    <string name="SecretLinkPreviewAlert">Would you like to enable extended link previews in Secret Chats? Note that link previews are generated on Telegram servers.</string>
     <string name="SecretChatContextBotAlert">Please note that inline bots are provided by third-party developers. For the bot to work, the symbols you type after the bot\'s username are sent to the respective developer.</string>
     <string name="EditMessageError">Sorry, you can\'t edit this message.</string>
     <string name="AllowReadCall">Please allow Leemen to receive calls so that we can automatically enter your code for you.</string>
@@ -5818,8 +5818,8 @@
     <string name="LimitReachedFileSizePremium">The document cant’t be sent, because it is larger than **%1$s**.</string>
     <string name="LimitReachedFileSizeLocked">The document cant’t be sent, because it is larger than **%1$s**. We are working to let you increase this limit in the future.</string>
     <string name="AboutPremiumTitle">About Telegram Premium</string>
-    <string name="AboutPremiumDescription">While the free version of Leemen already gives its users more than any other messaging application, **Telegram Premium** pushes its capabilities even further.</string>
-    <string name="AboutPremiumDescription2">**Telegram Premium** is a paid option, because most Premium Features require additional expenses from Leemen to third parties such as data center providers and server manufacturers. Contributions from **Telegram Premium** users allow us to cover such costs and also help Leemen stay free for everyone.</string>
+    <string name="AboutPremiumDescription">**Telegram Premium** is a Telegram subscription. Leemen displays the features and status provided by the Telegram service.</string>
+    <string name="AboutPremiumDescription2">Premium payments, infrastructure costs and Telegram Premium benefits are operated by Telegram, independently from Leemen Premium.</string>
     <string name="PremiumTierAnnualYears_one">%d-Year</string>
     <string name="PremiumTierAnnualYears_other">%d-Year</string>
     <string name="PremiumTierAnnual">Annual</string>

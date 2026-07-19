@@ -40,6 +40,7 @@ public final class LeemenConfig {
     public static final String EP_ATTRIBUTION     = "/attribution";
     public static final String EP_HEARTBEAT       = "/heartbeat";
     public static final String EP_CONSENT         = "/consent"; // consent ledger: {type,granted,version,locale}
+    public static final String EP_CLIENT_CONFIG   = "/client-config"; // public telemetry kill-switch policy
 
     // --- Google Play Billing (Leemen Premium subscription) ---
     // TODO(release): these MUST match the subscription product + base plan IDs created in Play Console.

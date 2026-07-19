@@ -121,6 +121,22 @@ public final class LeemenAccount {
         prefs().edit().putBoolean("consent_dirty_" + account, dirty).apply();
     }
 
+    /** Durable last-write-wins queue for the backend consent ledger. A stored false is a pending revoke. */
+    public static boolean hasPendingConsent(int account, String type) {
+        return prefs().contains("consent_pending_" + account + "_" + type);
+    }
+
+    public static boolean getPendingConsent(int account, String type) {
+        return prefs().getBoolean("consent_pending_" + account + "_" + type, false);
+    }
+
+    public static void setPendingConsent(int account, String type, Boolean granted) {
+        String key = "consent_pending_" + account + "_" + type;
+        SharedPreferences.Editor e = prefs().edit();
+        if (granted == null) e.remove(key); else e.putBoolean(key, granted);
+        e.apply();
+    }
+
     public static boolean hasBinding(int account) {
         return !TextUtils.isEmpty(getToken(account)) && !TextUtils.isEmpty(getSyncAccountId(account));
     }
@@ -276,6 +292,14 @@ public final class LeemenAccount {
                 .remove("terms_ver_" + account)
                 .remove("consent_dirty_" + account)
                 .remove("wrapver_" + account)
+                .remove("consent_pending_" + account + "_" + LeemenConsent.TYPE_TERMS)
+                .remove("consent_pending_" + account + "_" + LeemenConsent.TYPE_KZ_CROSS_BORDER)
+                .remove("consent_pending_" + account + "_" + LeemenConsent.TYPE_ANALYTICS)
+                .remove("consent_pending_" + account + "_" + LeemenConsent.TYPE_ATTRIBUTION)
                 .apply();
+        LeemenConsent.clearAccount(account);
+        // Run after the token removal: an old in-flight register callback now fails its token check, while
+        // this final removal also wins if that callback completed in the narrow window above.
+        LeemenDevice.clearAccount(account);
     }
 }

@@ -233,6 +233,12 @@ class ContactsRemoteViewsFactory implements RemoteViewsService.RemoteViewsFactor
         if (accountInstance == null || !accountInstance.getUserConfig().isClientActivated()) {
             return;
         }
+        // A widget lives outside the app: never reveal contacts belonging to an account hidden by another
+        // account's Private Space configuration. Mirrors the chats-widget guard.
+        if (SecondSpaceController.isAccountHiddenByAny(accountInstance.getCurrentAccount())) {
+            dialogs.clear();
+            return;
+        }
         ArrayList<TLRPC.User> users = new ArrayList<>();
         ArrayList<TLRPC.Chat> chats = new ArrayList<>();
         LongSparseArray<TLRPC.Message> messages = new LongSparseArray<>();

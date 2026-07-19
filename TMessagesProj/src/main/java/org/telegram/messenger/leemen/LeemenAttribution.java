@@ -17,8 +17,8 @@ import org.telegram.messenger.FileLog;
  * referrer, POST /v1/attribution { install_id, install_referrer }, then never touch it again. The raw
  * referrer is NEVER persisted on-device (only a "sent" flag); Play itself holds the value until we send,
  * so a failed POST simply retries on the next launch — no on-device referrer artifact (§6.5 deniability).
- * Gated on the analytics/attribution opt-in (OFF by default — see LeemenAnalytics.hasConsent()): the referrer
- * is captured only after the user explicitly enables telemetry.
+ * Gated on both the analytics/attribution opt-in and the backend kill-switch: the referrer is captured only
+ * after the user explicitly enables telemetry and a current remote policy allows it.
  */
 public final class LeemenAttribution {
 
@@ -29,7 +29,7 @@ public final class LeemenAttribution {
 
     public static void captureIfNeeded() {
         try {
-            if (!LeemenAnalytics.hasConsent()) return;
+            if (!LeemenAnalytics.isTelemetryEnabled()) return;
             SharedPreferences p = prefs();
             if (p.getBoolean("sent", false) || p.getBoolean("skip", false)) return; // first-touch, once ever
             if (inFlight) return;
@@ -72,7 +72,7 @@ public final class LeemenAttribution {
     }
 
     private static void post(String referrer) {
-        if (!LeemenAnalytics.hasConsent()) { inFlight = false; return; }
+        if (!LeemenAnalytics.isTelemetryEnabled()) { inFlight = false; return; }
         JsonObject body = new JsonObject();
         body.addProperty("install_id", LeemenAnalytics.installId());
         body.addProperty("install_referrer", referrer);

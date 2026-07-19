@@ -55,7 +55,9 @@ public final class LeemenDevice {
         body.addProperty("device_name", Build.MODEL == null ? "Android" : Build.MODEL);
         LeemenRestClient.post(LeemenConfig.EP_DEVICES_REGISTER, token, body, (resp, code, ec, em) -> {
             try {
-                if (resp != null && code >= 200 && code < 300 && resp.has("device_id") && !resp.get("device_id").isJsonNull()) {
+                if (token.equals(LeemenAccount.getToken(account))
+                        && resp != null && code >= 200 && code < 300
+                        && resp.has("device_id") && !resp.get("device_id").isJsonNull()) {
                     prefs().edit().putString("device_id_" + account, resp.get("device_id").getAsString()).apply();
                     if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: device registered account " + account);
                 } else if (BuildVars.LOGS_ENABLED) {
@@ -67,6 +69,12 @@ public final class LeemenDevice {
                 clearInFlight(account);
             }
         });
+    }
+
+    /** Drop slot-scoped registration so a different Telegram account reusing the slot registers itself. */
+    public static void clearAccount(int account) {
+        prefs().edit().remove("device_id_" + account).apply();
+        clearInFlight(account);
     }
 
     /** Device-global Ed25519 public key (b64). Generates + stores the keypair on first call (sk Keystore-wrapped). */

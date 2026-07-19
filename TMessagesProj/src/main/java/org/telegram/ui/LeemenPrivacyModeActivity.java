@@ -3,13 +3,20 @@ package org.telegram.ui;
 import static org.telegram.messenger.AndroidUtilities.dp;
 
 import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipDescription;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.graphics.Typeface;
+import android.os.Build;
+import android.os.PersistableBundle;
 import android.text.InputType;
+import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -39,6 +46,7 @@ import org.telegram.ui.Components.LayoutHelper;
 public class LeemenPrivacyModeActivity extends BaseFragment {
 
     private static final int MIN_PASSPHRASE = 8;
+    private static final long RECOVERY_CLIPBOARD_TTL_MS = 60_000L;
     private static boolean promptShowing; // guards the new-device unwrap dialog against stacking
     private LinearLayout container;
 
@@ -188,7 +196,7 @@ public class LeemenPrivacyModeActivity extends BaseFragment {
         copy.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
         copy.setPadding(0, dp(14), 0, 0);
         copy.setOnClickListener(v -> {
-            AndroidUtilities.addToClipboard(mnemonic);
+            copyRecoveryPhrase(act, mnemonic);
             toast(act, LocaleController.getString(R.string.LeemenRecoveryCopied));
         });
         ll.addView(copy, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
@@ -198,8 +206,45 @@ public class LeemenPrivacyModeActivity extends BaseFragment {
         b.setView(ll);
         b.setPositiveButton(LocaleController.getString(R.string.LeemenRecoverySaved), (d, w) -> { if (onDone != null) onDone.run(); });
         AlertDialog dialog = b.create();
+        // The upgrade is already committed. The user must explicitly confirm saving the one-time phrase;
+        // Back/outside dismissal would make the max-mode data unrecoverable.
+        dialog.setCancelable(false);
         dialog.setCanceledOnTouchOutside(false);
         showDialog(dialog);
+        if (dialog.getWindow() != null) {
+            // Recovery material remains protected even when the user intentionally allows screenshots in PS.
+            dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        }
+    }
+
+    private static void copyRecoveryPhrase(Activity activity, String mnemonic) {
+        try {
+            ClipboardManager clipboard = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard == null) return;
+            ClipData clip = ClipData.newPlainText("Leemen recovery phrase", mnemonic);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                PersistableBundle extras = new PersistableBundle();
+                extras.putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true);
+                clip.getDescription().setExtras(extras);
+            }
+            clipboard.setPrimaryClip(clip);
+            AndroidUtilities.runOnUIThread(() -> {
+                try {
+                    ClipData current = clipboard.getPrimaryClip();
+                    if (current == null || current.getItemCount() == 0
+                            || !TextUtils.equals(current.getItemAt(0).coerceToText(activity), mnemonic)) {
+                        return; // the user copied something else; never erase it
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        clipboard.clearPrimaryClip();
+                    } else {
+                        clipboard.setPrimaryClip(ClipData.newPlainText("", ""));
+                    }
+                } catch (Throwable ignore) {
+                }
+            }, RECOVERY_CLIPBOARD_TTL_MS);
+        } catch (Throwable ignore) {
+        }
     }
 
     // --- new-device unwrap prompt (triggered by leemenMaxKeyNeeded) ---

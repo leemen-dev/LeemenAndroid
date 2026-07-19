@@ -64,7 +64,10 @@ public class DialogsChannelsAdapter extends UniversalAdapter {
     public void updateMyChannels() {
         ArrayList<TLRPC.Chat> channels = new ArrayList<>();
         ArrayList<TLRPC.Dialog> dialogs = MessagesController.getInstance(currentAccount).getAllDialogs();
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
         for (TLRPC.Dialog d : dialogs) {
+            // Empty-query "My channels" is proactive discovery, not the deliberate typed-name exception.
+            if (ssc.isHiddenFromCurrentView(d.id)) continue;
             TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(-d.id);
             if (chat == null || !ChatObject.isChannelAndNotMegaGroup(chat) || !ChatObject.isPublic(chat) || ChatObject.isNotInChat(chat)) continue;
             channels.add(chat);

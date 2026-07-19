@@ -35,7 +35,7 @@ import java.util.Set;
  *   5. PUSH with CAS. Order respects tear-tolerance: membership REMOVES push filter-first-then-content;
  *      everything else pushes content-first-then-filter.
  *
- * Pushes are debounced (~5 s) and coalesced; a mutation mid-cycle sets a dirty bit and re-runs at the end.
+ * Pushes are debounced (~500 ms) and coalesced; a mutation mid-cycle sets a dirty bit and re-runs at the end.
  *
  * Deferred (intentional, v1): Tier-P platform settings and ps_pin are PRESERVED verbatim by the merge but
  * not yet reconciled/projected — ps_pin waits on the SHA-256→Argon2id PIN re-enrollment (§7.2); platform

@@ -280,7 +280,7 @@
     <string name="PrivateSpaceHide">Скрыть чат</string>
     <string name="PrivateSpaceUnhide">Показать чат</string>
     <string name="PrivateSpaceOnboardingHideHint">Зажмите любой чат и выберите «Скрыть чат», чтобы он пропал из обычного списка.</string>
-    <string name="PrivateSpaceOnboardingHidden">Чат скрыт. Вне защищённого пространства его не видно.</string>
+    <string name="PrivateSpaceOnboardingHidden">Чат скрыт из списков, уведомлений, виджетов и поиска по сообщениям. Его по-прежнему можно найти, явно введя имя.</string>
     <string name="LeemenOnboardingSettingsHint">Настройте своё пространство в Настройках — добавьте чаты для скрытия, PIN и способ входа.</string>
     <string name="LeemenTourHideChats">Добавляйте сюда чаты, которые хотите скрыть. Они исчезнут из обычного списка.</string>
     <string name="LeemenTourPin">Задайте PIN, чтобы пространство могли открыть только вы.</string>
@@ -307,10 +307,10 @@
     <string name="LeemenTermsLinkPrivacy">Читать Политику конфиденциальности</string>
     <string name="LeemenTermsDeclineConfirm">Без принятия Условий использования и Политики конфиденциальности пользоваться Leemen нельзя. Выйти из аккаунта?</string>
     <string name="LeemenDataSection">Данные</string>
-    <string name="LeemenAnalyticsSetting">Делиться анонимной статистикой</string>
-    <string name="LeemenAnalyticsSettingInfo">Помогает улучшать Leemen. Никогда не включает ваши чаты и содержимое сообщений. По умолчанию выключено.</string>
+    <string name="LeemenAnalyticsSetting">Делиться необязательными данными использования</string>
+    <string name="LeemenAnalyticsSettingInfo">Помогает улучшать Leemen. Не включает чаты и содержимое сообщений. После входа данные могут связываться с аккаунтом Leemen для атрибуции и выполнения запросов на удаление. По умолчанию выключено.</string>
     <string name="LeemenAnalyticsConsentTitle">Помогите улучшить Leemen</string>
-    <string name="LeemenAnalyticsConsentMessage">Делитесь анонимной статистикой использования и источником установки, чтобы мы могли улучшать Leemen. Ваши чаты и содержимое сообщений никогда не передаются. Изменить можно в любой момент: Настройки → Конфиденциальность.</string>
+    <string name="LeemenAnalyticsConsentMessage">Передавать ограниченные данные использования и источник установки, чтобы улучшать Leemen. Чаты и содержимое сообщений не передаются. После входа данные могут связываться с аккаунтом Leemen для атрибуции и выполнения запросов на удаление. Изменить можно в любой момент: Настройки → Конфиденциальность.</string>
     <string name="LeemenAnalyticsConsentEnable">Включить</string>
     <string name="LeemenAnalyticsConsentLater">Не сейчас</string>
     <string name="LeemenPremium">Leemen Premium</string>
@@ -328,9 +328,9 @@
     <string name="LeemenPremiumActivated">Leemen Premium активирован</string>
     <string name="LeemenPremiumPurchaseError">Не удалось завершить покупку</string>
     <string name="LeemenPremiumStatusUnlimited">Безлимит чатов</string>
-    <string name="LeemenPremiumFeat1Desc">Прячьте в защищённое пространство любое число чатов, групп и каналов — не только первый бесплатный. Скрытые чаты пропадают из списка, поиска, уведомлений и виджетов.</string>
+    <string name="LeemenPremiumFeat1Desc">Прячьте в защищённое пространство любое число чатов, групп и каналов — не только первый бесплатный. Они исчезают из списков, рекомендаций, поиска по сообщениям, уведомлений и виджетов, но остаются доступными при явном вводе имени.</string>
     <string name="LeemenPremiumFeat2Title">Синхронизация устройств</string>
-    <string name="LeemenPremiumFeat2Desc">Защищённое пространство, зашифровано, на всех устройствах.</string>
+    <string name="LeemenPremiumFeat2Desc">Зашифрованная синхронизация метаданных защищённого пространства между устройствами. Сами чаты по-прежнему хранит и доставляет Telegram.</string>
     <string name="LeemenPremiumFeat3Title">Приоритет и новые функции</string>
     <string name="LeemenPremiumFeat3Desc">Ранний доступ к будущим приватным функциям.</string>
     <string name="LeemenPremiumFeatAccountTitle">Скрыть целый аккаунт</string>
@@ -346,7 +346,7 @@
     <string name="NewAccountRedirectText">Leemen использует ваш аккаунт Telegram. Сначала зарегистрируйте номер в официальном приложении Telegram, затем вернитесь и войдите здесь.</string>
     <string name="NewAccountRedirectButton">Открыть Telegram</string>
     <string name="DeleteLeemenAccount">Удалить аккаунт Leemen</string>
-    <string name="DeleteLeemenAccountConfirm">Это безвозвратно удалит ваш аккаунт Leemen и все его данные — скрытые чаты, настройки и синхронизацию — и выйдет из всех устройств Leemen. Это устройство вернётся к начальному экрану, потребуется снова войти в Telegram. Аккаунт Telegram не удаляется.</string>
+    <string name="DeleteLeemenAccountConfirm">Будет отправлен запрос на безвозвратное удаление аккаунта Leemen, а локальные данные на этом устройстве удалятся сразу. Leemen также попытается завершить остальные свои сессии. Устройство вернётся к начальному экрану, потребуется снова войти в Telegram. Аккаунт Telegram не удаляется.</string>
     <string name="LeemenDeleteAccountLabel">Удалить аккаунт</string>
     <string name="LeemenDeleteAccountTitle">Удалить аккаунт</string>
     <string name="LeemenDeleteAccountConfirmNeutral">Это безвозвратно удалит ваш аккаунт и все данные и выйдет из всех устройств. Это устройство вернётся к начальному экрану. Аккаунт Telegram не удаляется.</string>
@@ -373,7 +373,7 @@
     <string name="LeemenRecoveryTitle">Recovery-фраза</string>
     <string name="LeemenRecoveryInfo">Запишите эти 12 слов по порядку и храните в надёжном месте. Это единственный способ восстановить данные, если забудете кодовую фразу.</string>
     <string name="LeemenRecoverySaved">Я записал(а)</string>
-    <string name="LeemenRecoveryCopied">Recovery-фраза скопирована</string>
+    <string name="LeemenRecoveryCopied">Recovery-фраза скопирована. Буфер обмена очистится через 60 секунд.</string>
     <string name="LeemenCodeChanged">Кодовая фраза изменена</string>
     <string name="LeemenMaxDisabled">Максимальная приватность отключена</string>
     <string name="LeemenMaxError">Что-то пошло не так. Попробуйте ещё раз.</string>
@@ -415,11 +415,11 @@
     <string name="PrivateSpacePinTitle">Пароль</string>
     <string name="PrivateSpacePinOff">Выкл.</string>
     <string name="PrivateSpacePinOn">Вкл.</string>
-    <string name="PrivateSpacePinInfo">Если задан, его нужно вводить каждый раз при входе в защищённое пространство.</string>
+    <string name="PrivateSpacePinInfo">PIN защищает вход в закрытое пространство. Время, в течение которого повторный ввод не требуется, задаётся настройкой тайм-аута.</string>
     <string name="PrivateSpacePinSetTitle">Задайте PIN (4–6 цифр)</string>
     <string name="PrivateSpacePinEnterTitle">Введите PIN</string>
     <string name="PrivateSpacePinEnterSubtitle">Введите PIN защищённого пространства, чтобы продолжить.</string>
-    <string name="PrivateSpacePinSetSubtitle">Выберите PIN из 4–6 цифр. Он будет требоваться при каждом входе в защищённое пространство.</string>
+    <string name="PrivateSpacePinSetSubtitle">Выберите PIN из 4–6 цифр. Время запоминания успешной проверки можно настроить.</string>
     <string name="PrivateSpacePinConfirmTitle">Подтвердите PIN</string>
     <string name="PrivateSpacePinConfirmSubtitle">Введите PIN ещё раз для подтверждения.</string>
     <string name="PrivateSpacePinRemoveTitle">Удалить PIN</string>

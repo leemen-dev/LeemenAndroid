@@ -5,6 +5,9 @@ import com.google.gson.JsonObject;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.FileLog;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Onboarding Terms/Privacy acceptance gate + consent ledger client.
  *
@@ -36,6 +39,11 @@ public final class LeemenConsent {
     public static final String TYPE_KZ_CROSS_BORDER = "kz_cross_border";
     public static final String TYPE_ANALYTICS = "analytics";
     public static final String TYPE_ATTRIBUTION = "attribution";
+    private static final String[] LEDGER_TYPES = {
+            TYPE_TERMS, TYPE_KZ_CROSS_BORDER, TYPE_ANALYTICS, TYPE_ATTRIBUTION
+    };
+    /** request key → token that owns the request; token identity prevents account-slot reuse races. */
+    private static final Map<String, String> inFlight = new HashMap<>();
 
     public interface Eval {
         /** @param needsPrompt show the Terms gate; @param kzDisclosure include the KZ→EU paragraph. */
@@ -115,20 +123,38 @@ public final class LeemenConsent {
         postConsent(account, type, granted);
     }
 
-    /** Re-send the terms consent if a prior grant failed to reach the backend (called at startup). */
+    /** Re-send every pending ledger mutation. The stored value is last-write-wins, including revocations. */
     public static void flushDirty(int account) {
-        if (!LeemenAccount.isConsentDirty(account)) return;
         if (!LeemenAccount.hasBinding(account)) return;
-        if (!CURRENT_TERMS_VERSION.equals(LeemenAccount.getAcceptedTermsVersion(account))) return;
-        postConsent(account, TYPE_TERMS, true);
+        // Migrate the original terms-only dirty bit to the generalized durable queue.
+        if (LeemenAccount.isConsentDirty(account)
+                && CURRENT_TERMS_VERSION.equals(LeemenAccount.getAcceptedTermsVersion(account))) {
+            LeemenAccount.setPendingConsent(account, TYPE_TERMS, true);
+            LeemenAccount.setConsentDirty(account, false);
+        }
+        for (String type : LEDGER_TYPES) {
+            if (LeemenAccount.hasPendingConsent(account, type)) {
+                sendPending(account, type);
+            }
+        }
     }
 
     private static void postConsent(final int account, final String type, final boolean granted) {
+        // Persist before IO so process death, offline starts and rapid grant→revoke changes are recoverable.
+        LeemenAccount.setPendingConsent(account, type, granted);
+        sendPending(account, type);
+    }
+
+    private static void sendPending(final int account, final String type) {
+        if (!LeemenAccount.hasPendingConsent(account, type)) return;
         final String token = LeemenAccount.getToken(account);
-        if (token == null) {
-            if (TYPE_TERMS.equals(type)) LeemenAccount.setConsentDirty(account, true);
-            return;
+        if (token == null) return;
+        final String requestKey = account + ":" + type;
+        synchronized (inFlight) {
+            if (inFlight.containsKey(requestKey)) return;
+            inFlight.put(requestKey, token);
         }
+        final boolean granted = LeemenAccount.getPendingConsent(account, type);
         JsonObject body = new JsonObject();
         body.addProperty("type", type);
         body.addProperty("granted", granted);
@@ -137,13 +163,31 @@ public final class LeemenConsent {
         // NB: no accepted_at — the server timestamps the legal record; the client clock is not trusted.
         LeemenRestClient.post(LeemenConfig.EP_CONSENT, token, body, (resp, code, ec, em) -> {
             boolean ok = resp != null && code >= 200 && code < 300 && boolField(resp, "ok");
-            if (TYPE_TERMS.equals(type)) {
-                LeemenAccount.setConsentDirty(account, !ok);
+            boolean tokenStillCurrent = token.equals(LeemenAccount.getToken(account));
+            boolean hasNewerValue = false;
+            if (tokenStillCurrent && LeemenAccount.hasPendingConsent(account, type)) {
+                hasNewerValue = LeemenAccount.getPendingConsent(account, type) != granted;
+                if (ok && !hasNewerValue) {
+                    LeemenAccount.setPendingConsent(account, type, null);
+                }
             }
+            synchronized (inFlight) {
+                if (token.equals(inFlight.get(requestKey))) inFlight.remove(requestKey);
+            }
+            // Serialize opposite mutations: a revoke queued behind a grant is sent only after the grant
+            // completes, so request reordering cannot resurrect the older server state.
+            if (tokenStillCurrent && hasNewerValue) sendPending(account, type);
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("Leemen: POST /consent type=" + type + " granted=" + granted + " code=" + code + " ok=" + ok + (ec != null ? " err=" + ec : ""));
             }
         });
+    }
+
+    /** Forget requests belonging to an account slot before that slot is reused by another Telegram account. */
+    static void clearAccount(int account) {
+        synchronized (inFlight) {
+            for (String type : LEDGER_TYPES) inFlight.remove(account + ":" + type);
+        }
     }
 
     private static boolean boolField(JsonObject o, String key) {

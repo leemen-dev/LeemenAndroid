@@ -71,7 +71,9 @@ public final class LeemenRestClient {
                 conn.setRequestMethod(method);
                 conn.setConnectTimeout(15000);
                 conn.setReadTimeout(20000);
+                conn.setUseCaches(false);
                 conn.setRequestProperty("Accept", "application/json");
+                conn.setRequestProperty("Cache-Control", "no-cache");
                 if (bearer != null) {
                     conn.setRequestProperty("Authorization", "Bearer " + bearer);
                 }

@@ -140,6 +140,9 @@ public class DialogsBotsAdapter extends UniversalAdapter {
                 for (int i = 0; i < top_peers.size(); ++i) {
                     TLRPC.TL_topPeer peer = top_peers.get(i);
                     long dialogId = DialogObject.getPeerDialogId(peer.peer);
+                    // Top web-app peers are proactive. Hidden bots become visible only after an explicit
+                    // typed-name search, never merely by opening the search surface.
+                    if (SecondSpaceController.getInstance(currentAccount).isHiddenFromCurrentView(dialogId)) continue;
                     TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(dialogId);
                     if (user == null || !user.bot) continue;
                     top_peers_bots.add(user);

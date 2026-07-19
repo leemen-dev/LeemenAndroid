@@ -728,7 +728,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         AndroidUtilities.runOnUIThread(() -> {
             try { org.telegram.messenger.leemen.LeemenSync.syncAll(); } catch (Throwable ignore) {}
         }, 200);
-        // The rest (bind backfill, device register, realtime, heartbeat, analytics, attribution) stays
+        // The rest (bind backfill, device register, realtime, telemetry policy) stays
         // deferred off the busy startup.
         AndroidUtilities.runOnUIThread(() -> {
             try {
@@ -737,10 +737,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 org.telegram.messenger.leemen.LeemenSync.syncAll(); // re-sync any account bind just activated
                 org.telegram.messenger.leemen.LeemenDevice.ensureRegisteredAll();
                 org.telegram.messenger.leemen.LeemenRealtime.connectAll();
-                org.telegram.messenger.leemen.LeemenHeartbeat.maybeSendAll();
                 org.telegram.messenger.leemen.LeemenBilling.reconcileAllEntitlements(); // pull entitlement state down (hold/expire/revoke)
-                org.telegram.messenger.leemen.LeemenAnalytics.onAppStart();
-                org.telegram.messenger.leemen.LeemenAttribution.captureIfNeeded();
+                // One public policy fetch unlocks analytics, heartbeat and attribution. Until its strict
+                // response validates, all three remain fail-closed regardless of local consent.
+                org.telegram.messenger.leemen.LeemenTelemetryPolicy.refresh();
                 // Terms/Privacy acceptance gate for already-bound accounts (fresh binds fire leemenBindCompleted).
                 maybeShowLeemenTerms(currentAccount);
                 org.telegram.messenger.leemen.LeemenConsent.flushDirty(currentAccount);

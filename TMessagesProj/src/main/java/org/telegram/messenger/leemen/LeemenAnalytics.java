@@ -25,11 +25,12 @@ import java.util.UUID;
  * Phase 6 — neutral product analytics. Server-primary, no third-party SDK. NEVER emits anything about
  * private space (§0 of the Analytics spec). Events are validated against a name+prop allowlist mirrored
  * byte-for-byte from the backend (unknown names/props are dropped client-side too) and sent batched to
- * POST /v1/events: anonymous before login, Bearer after (the server stitches install_id ↔ master_account).
+ * POST /v1/events: without an account token before login, Bearer after (the server can then associate
+ * install_id with the Leemen account, so this data is pseudonymous rather than anonymous).
  *
- * install_id is a stable per-install UUID (NOT cleared on logout); opt-out is a separate local control.
- * NOTE: a remote kill-switch (fail-closed cold-start) is specified but has no endpoint yet — tracked as a
- * TODO; until then only the funnel/neutral events below are ever sent and opt-out is honored.
+ * install_id is a stable per-install UUID (NOT cleared on logout); consent is a separate local control.
+ * A backend-owned remote kill-switch is an additional mandatory gate: every process starts fail-closed and
+ * telemetry stays off until LeemenTelemetryPolicy accepts a current /client-config response.
  */
 public final class LeemenAnalytics {
 
@@ -58,6 +59,8 @@ public final class LeemenAnalytics {
 
     private static final List<JsonObject> queue = new ArrayList<>();
     private static volatile String sessionId;
+    /** True from first-open enqueue until the server accepts it (or consent is revoked). */
+    private static boolean firstOpenPending;
     private static Runnable flushRunnable;
 
     // ===== public API =====
@@ -66,7 +69,7 @@ public final class LeemenAnalytics {
 
     public static void track(String name, Map<String, String> props) {
         try {
-            if (!hasConsent()) return;
+            if (!isTelemetryEnabled()) return;
             Set<String> allowedProps = ALLOW.get(name);
             if (allowedProps == null) {
                 if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: analytics drop unknown event '" + name + "'");
@@ -86,7 +89,10 @@ public final class LeemenAnalytics {
             ev.add("props", p);
             synchronized (queue) {
                 queue.add(ev);
-                while (queue.size() > QUEUE_CAP) queue.remove(0); // drop oldest
+                while (queue.size() > QUEUE_CAP) {
+                    JsonObject removed = queue.remove(0); // drop oldest
+                    if (isEventNamed(removed, "app_first_open")) firstOpenPending = false;
+                }
             }
             scheduleFlush();
         } catch (Throwable e) {
@@ -97,11 +103,22 @@ public final class LeemenAnalytics {
     /** Fire app_first_open exactly once per install. */
     public static void onAppStart() {
         try {
-            if (!hasConsent()) return;
+            if (!isTelemetryEnabled()) return;
             SharedPreferences pr = prefs();
             if (!pr.getBoolean("first_open_sent", false)) {
-                track("app_first_open");
-                pr.edit().putBoolean("first_open_sent", true).apply();
+                boolean enqueue;
+                synchronized (queue) {
+                    enqueue = !firstOpenPending;
+                    if (enqueue) firstOpenPending = true;
+                }
+                if (enqueue) {
+                    track("app_first_open");
+                    synchronized (queue) {
+                        // Defensive: track() catches its own construction errors.
+                        if (!containsEvent(queue, "app_first_open")) firstOpenPending = false;
+                    }
+                }
+                flush();
             } else {
                 flush(); // drain anything queued from a previous session
             }
@@ -117,13 +134,21 @@ public final class LeemenAnalytics {
         return prefs().getBoolean("consent", false);
     }
 
+    /** Local explicit consent AND the current backend kill-switch decision are both required. */
+    public static boolean isTelemetryEnabled() {
+        return hasConsent() && LeemenTelemetryPolicy.isEnabled();
+    }
+
     /** Flip the analytics/attribution opt-in. One switch covers both (same telemetry privacy bucket); the
      *  grant/revoke is mirrored to the backend consent ledger, and on grant we fire the deferred first-open
      *  event + capture the install referrer that were withheld while consent was off. */
     public static void setConsent(boolean granted) {
         prefs().edit().putBoolean("consent", granted).apply();
         if (!granted) {
-            synchronized (queue) { queue.clear(); }
+            synchronized (queue) {
+                queue.clear();
+                firstOpenPending = false;
+            }
         }
         int account = ledgerAccount();
         if (account >= 0) {
@@ -133,6 +158,18 @@ public final class LeemenAnalytics {
         if (granted) {
             onAppStart();
             LeemenAttribution.captureIfNeeded();
+        }
+    }
+
+    /** Drop unsent payloads immediately when the backend disables telemetry or policy resolution fails. */
+    static void onRemotePolicyDisabled() {
+        synchronized (queue) {
+            queue.clear();
+            firstOpenPending = false;
+        }
+        if (flushRunnable != null) {
+            org.telegram.messenger.AndroidUtilities.cancelRunOnUIThread(flushRunnable);
+            flushRunnable = null;
         }
     }
 
@@ -178,7 +215,7 @@ public final class LeemenAnalytics {
     }
 
     private static void flush() {
-        if (!hasConsent()) return;
+        if (!isTelemetryEnabled()) return;
         final List<JsonObject> batch = new ArrayList<>();
         synchronized (queue) {
             if (queue.isEmpty()) return;
@@ -198,19 +235,26 @@ public final class LeemenAnalytics {
         for (JsonObject e : batch) arr.add(e);
         body.add("events", arr);
 
-        String token = currentToken(); // Bearer if a bound account exists, else anonymous
+        String token = currentToken(); // Bearer if a bound account exists, otherwise no account token
         LeemenRestClient.post(LeemenConfig.EP_EVENTS, token, body, (resp, code, ec, em) -> {
             if (code >= 200 && code < 300) {
+                if (containsEvent(batch, "app_first_open")) {
+                    prefs().edit().putBoolean("first_open_sent", true).apply();
+                    synchronized (queue) { firstOpenPending = false; }
+                }
                 synchronized (queue) {
                     if (!queue.isEmpty()) scheduleFlush(); // more pending
                 }
-            } else if (hasConsent()) {
+            } else if (isTelemetryEnabled()) {
                 // transient failure: requeue (bounded); retried on the next event / app start
                 synchronized (queue) {
                     queue.addAll(0, batch);
                     while (queue.size() > QUEUE_CAP) queue.remove(queue.size() - 1);
+                    if (containsEvent(queue, "app_first_open")) firstOpenPending = true;
                 }
                 if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: /events flush failed code=" + code + " err=" + ec);
+            } else if (containsEvent(batch, "app_first_open")) {
+                synchronized (queue) { firstOpenPending = false; }
             }
         });
     }
@@ -227,7 +271,7 @@ public final class LeemenAnalytics {
                 if (LeemenAccount.hasBinding(a)) return LeemenAccount.getToken(a);
             }
         } catch (Throwable ignore) {}
-        return null; // anonymous
+        return null; // pre-auth: no account token; install_id remains a pseudonymous identifier
     }
 
     private static String sessionId() {
@@ -246,6 +290,21 @@ public final class LeemenAnalytics {
 
     private static SharedPreferences prefs() {
         return ApplicationLoader.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    }
+
+    private static boolean containsEvent(List<JsonObject> events, String name) {
+        for (int i = 0; i < events.size(); i++) {
+            if (isEventNamed(events.get(i), name)) return true;
+        }
+        return false;
+    }
+
+    private static boolean isEventNamed(JsonObject event, String name) {
+        try {
+            return event != null && event.has("name") && name.equals(event.get("name").getAsString());
+        } catch (Throwable ignore) {
+            return false;
+        }
     }
 
     private static Set<String> set(String... keys) {
