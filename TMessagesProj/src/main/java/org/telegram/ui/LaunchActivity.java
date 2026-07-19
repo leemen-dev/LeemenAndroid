@@ -677,10 +677,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 FileLog.e(e);
             }
         }
-        // The OS splash cannot render Lottie and its AnimatedVectorDrawable rasterization leaves
-        // visible seams between the origami facets. Keep the OS icon transparent on Android 12+
-        // and play the canonical Lottie as the first in-app frame on every Android version.
-        if (!leemenSplashShown && savedInstanceState == null) {
+        // Android 12+ starts the canonical fold animation in the system splash, before the app
+        // process has finished loading. Older versions keep the in-app Lottie fallback.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+                && !leemenSplashShown && savedInstanceState == null) {
             leemenSplashShown = true;
             showLeemenSplash();
         }
