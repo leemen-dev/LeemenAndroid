@@ -63,6 +63,7 @@ public class PrivateSpacePasscodeActivity extends BaseFragment {
     private TextView errorView;
     private EditText pinInput;
     private TextView submitButton;
+    private boolean openingTransitionFinished;
 
     private String firstStageEntry; // used in MODE_SET — captured after stage 1 to verify stage 2
 
@@ -176,11 +177,9 @@ public class PrivateSpacePasscodeActivity extends BaseFragment {
     @Override
     public void onResume() {
         super.onResume();
-        if (pinInput != null) {
-            pinInput.postDelayed(() -> {
-                pinInput.requestFocus();
-                AndroidUtilities.showKeyboard(pinInput);
-            }, 100);
+        AndroidUtilities.requestAdjustNothing(getParentActivity(), classGuid);
+        if (openingTransitionFinished) {
+            showKeyboard();
         }
     }
 
@@ -190,6 +189,28 @@ public class PrivateSpacePasscodeActivity extends BaseFragment {
         if (pinInput != null) {
             AndroidUtilities.hideKeyboard(pinInput);
         }
+        AndroidUtilities.removeAdjustResize(getParentActivity(), classGuid);
+    }
+
+    @Override
+    public void onTransitionAnimationEnd(boolean isOpen, boolean backward) {
+        super.onTransitionAnimationEnd(isOpen, backward);
+        if (isOpen) {
+            openingTransitionFinished = true;
+            showKeyboard();
+        }
+    }
+
+    private void showKeyboard() {
+        if (pinInput == null) {
+            return;
+        }
+        pinInput.post(() -> {
+            if (pinInput != null) {
+                pinInput.requestFocus();
+                AndroidUtilities.showKeyboard(pinInput);
+            }
+        });
     }
 
     private void applyModeTexts(boolean secondStage) {
