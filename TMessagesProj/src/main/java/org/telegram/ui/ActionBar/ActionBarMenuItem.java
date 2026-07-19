@@ -224,6 +224,7 @@ public class ActionBarMenuItem extends FrameLayout {
     private OnClickListener onClickListener;
 
     private boolean fixBackground;
+    private Integer iconColorOverride;
 
     public ActionBarMenuItem(Context context, ActionBarMenu menu, int backgroundColor, int iconColor) {
         this(context, menu, backgroundColor, iconColor, false);
@@ -376,6 +377,9 @@ public class ActionBarMenuItem extends FrameLayout {
     }
 
     public void setIconColor(int color) {
+        if (iconColorOverride != null) {
+            color = iconColorOverride;
+        }
         if (iconView != null) {
             iconView.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.MULTIPLY));
         }
@@ -385,6 +389,14 @@ public class ActionBarMenuItem extends FrameLayout {
         if (clearButton != null) {
             clearButton.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.MULTIPLY));
         }
+    }
+
+    public ActionBarMenuItem setIconColorOverride(Integer color) {
+        iconColorOverride = color;
+        if (color != null) {
+            setIconColor(color);
+        }
+        return this;
     }
 
     public void setSubMenuOpenSide(int side) {

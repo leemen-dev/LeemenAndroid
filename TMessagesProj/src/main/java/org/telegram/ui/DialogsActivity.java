@@ -491,6 +491,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private ActionBarMenuItem privacyWarningItem;
     private int privacyWarningCursor;
     private static final int privacy_warning_id = 1037;
+    private static final int PRIVACY_WARNING_ICON_COLOR = 0xFFF5A623;
     private ActionBarMenuItem downloadsItem;
     private DownloadProgressIcon downloadProgressIcon;
     private boolean downloadsItemVisible;
@@ -3248,7 +3249,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             passcodeItem.setContentDescription(getString(R.string.AccDescrPasscodeLock));
 
             privacyWarningItem = menu.addItem(privacy_warning_id, R.drawable.warning_sign);
-            privacyWarningItem.setIconColor(0xFFF5A623); // amber warning triangle — matches the cloud-password warning icon
+            // ActionBar recolors all menu items on theme/search updates; this warning must stay amber.
+            privacyWarningItem.setIconColorOverride(PRIVACY_WARNING_ICON_COLOR);
             privacyWarningItem.setContentDescription(getString(R.string.PrivacyWarningButtonAccDescr));
             privacyWarningItem.setVisibility(View.GONE);
 
