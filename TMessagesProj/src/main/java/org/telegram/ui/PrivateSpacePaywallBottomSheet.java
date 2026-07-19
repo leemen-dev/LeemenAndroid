@@ -44,6 +44,7 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
     private static final int ITEM_HORIZONTAL_PADDING = 27;
     private static final int ICON_SIZE = 24;
     private static final int ITEM_TEXT_PADDING = 68;
+    private static final int BOTTOM_ACTION_SPACING = 16;
 
     private final Theme.ResourcesProvider rp;
     private final LinearLayout customView;
@@ -54,11 +55,13 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
         super(context, fragment, false, false, false, fragment != null ? fragment.getResourceProvider() : null);
         this.rp = fragment != null ? fragment.getResourceProvider() : null;
         fixNavigationBar();
-        topPadding = .2f;
+        // Keep the secondary action comfortably above the navigation safe-area in the initial
+        // (not-yet-scrolled) sheet position. Two percent is about 16dp on a typical phone.
+        topPadding = .18f;
 
         LinearLayout linearLayout = customView = new LinearLayout(context);
-        // Bottom inset for the system nav bar so the Subscribe button isn't hidden under the nav buttons.
-        linearLayout.setPadding(backgroundPaddingLeft + dp(6), 0, backgroundPaddingLeft + dp(6), AndroidUtilities.navigationBarHeight);
+        // Keep an additional visual gap above the system inset when the sheet is scrolled to the end.
+        applyBottomInset(AndroidUtilities.navigationBarHeight);
         linearLayout.setOrientation(LinearLayout.VERTICAL);
 
         FrameLayout topView = new FrameLayout(context);
@@ -125,6 +128,20 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
         linearLayout.addView(later, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 44, 0, 8, 22, 16, 8));
 
         adapter.update(false);
+    }
+
+    @Override
+    protected void onInsetsChanged() {
+        super.onInsetsChanged();
+        applyBottomInset(getSystemBottomInset());
+    }
+
+    private void applyBottomInset(int bottomInset) {
+        if (customView == null) {
+            return;
+        }
+        customView.setPadding(backgroundPaddingLeft + dp(6), 0, backgroundPaddingLeft + dp(6),
+                Math.max(0, bottomInset) + dp(BOTTOM_ACTION_SPACING));
     }
 
     public static PrivateSpacePaywallBottomSheet show(BaseFragment fragment, Runnable onSubscribe) {
