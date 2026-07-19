@@ -8,7 +8,9 @@
      Each facet keeps its sampled 11-frame fold in a 150ms animator, offset by ~27ms from the previous
      facet. All keyframe fractions stay within 0..1 and the ninth facet settles before the 450ms exit.
      A 1.5-unit same-color stroke follows each facet's fill alpha to overlap VectorDrawable anti-alias
-     edges; the shared source vertices remain unchanged while background-colored hairline seams disappear. -->
+     edges; the shared source vertices remain unchanged while background-colored hairline seams disappear.
+     Facets are declared in reverse JSON order: Lottie paints the first layer on top, while
+     VectorDrawable paints the last path on top. -->
 <animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt">
     <aapt:attr name="android:drawable">
@@ -21,53 +23,11 @@
                 android:scaleX="0.9035" android:scaleY="0.9035"
                 android:translateX="0.000" android:translateY="0.000">
         <group
-            android:name="facet1_g"
-            android:pivotX="182.973" android:pivotY="154.131"
-            android:translateX="-17.479" android:translateY="-24.382"
+            android:name="facet9_g"
+            android:pivotX="270.562" android:pivotY="407.463"
+            android:translateX="2.871" android:translateY="29.862"
             android:scaleX="0.6800" android:scaleY="0.6800">
-            <path android:name="facet1_p" android:pathData="M 131.808,86.000 L 233.896,149.114 L 183.216,227.279 Z" android:fillColor="#D5D8DA" android:fillAlpha="0.000" android:strokeColor="#D5D8DA" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
-        </group>
-        <group
-            android:name="facet2_g"
-            android:pivotX="149.041" android:pivotY="219.474"
-            android:translateX="-28.390" android:translateY="-9.695"
-            android:scaleX="0.6800" android:scaleY="0.6800">
-            <path android:name="facet2_p" android:pathData="M 132.099,345.145 L 131.808,86.000 L 183.216,227.279 Z" android:fillColor="#EBEFEF" android:fillAlpha="0.000" android:strokeColor="#EBEFEF" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
-        </group>
-        <group
-            android:name="facet3_g"
-            android:pivotX="217.390" android:pivotY="235.083"
-            android:translateX="-26.378" android:translateY="-14.290"
-            android:scaleX="0.6800" android:scaleY="0.6800">
-            <path android:name="facet3_p" android:pathData="M 233.896,149.114 L 235.059,328.857 L 183.216,227.279 Z" android:fillColor="#BCBFC1" android:fillAlpha="0.000" android:strokeColor="#BCBFC1" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
-        </group>
-        <group
-            android:name="facet4_g"
-            android:pivotX="183.458" android:pivotY="300.427"
-            android:translateX="-25.583" android:translateY="15.668"
-            android:scaleX="0.6800" android:scaleY="0.6800">
-            <path android:name="facet4_p" android:pathData="M 235.059,328.857 L 132.099,345.145 L 183.216,227.279 Z" android:fillColor="#D4D8D9" android:fillAlpha="0.000" android:strokeColor="#D4D8D9" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
-        </group>
-        <group
-            android:name="facet5_g"
-            android:pivotX="291.697" android:pivotY="343.089"
-            android:translateX="11.378" android:translateY="27.759"
-            android:scaleX="0.6800" android:scaleY="0.6800">
-            <path android:name="facet5_p" android:pathData="M 235.059,328.857 L 380.192,329.439 L 259.839,370.972 Z" android:fillColor="#D2D6D9" android:fillAlpha="0.000" android:strokeColor="#D2D6D9" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
-        </group>
-        <group
-            android:name="facet6_g"
-            android:pivotX="208.999" android:pivotY="348.324"
-            android:translateX="-13.610" android:translateY="26.735"
-            android:scaleX="0.6800" android:scaleY="0.6800">
-            <path android:name="facet6_p" android:pathData="M 132.099,345.145 L 235.059,328.857 L 259.839,370.972 Z" android:fillColor="#EBEFEF" android:fillAlpha="0.000" android:strokeColor="#EBEFEF" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
-        </group>
-        <group
-            android:name="facet7_g"
-            android:pivotX="326.986" android:pivotY="375.276"
-            android:translateX="15.343" android:translateY="25.780"
-            android:scaleX="0.6800" android:scaleY="0.6800">
-            <path android:name="facet7_p" android:pathData="M 380.192,329.439 L 340.927,425.418 L 259.839,370.972 Z" android:fillColor="#EBEFEF" android:fillAlpha="0.000" android:strokeColor="#EBEFEF" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
+            <path android:name="facet9_p" android:pathData="M 340.927,425.418 L 210.919,426.000 L 259.839,370.972 Z" android:fillColor="#D3D6D9" android:fillAlpha="0.000" android:strokeColor="#D3D6D9" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
         </group>
         <group
             android:name="facet8_g"
@@ -77,11 +37,53 @@
             <path android:name="facet8_p" android:pathData="M 210.919,426.000 L 132.099,345.145 L 259.839,370.972 Z" android:fillColor="#EBEFEF" android:fillAlpha="0.000" android:strokeColor="#EBEFEF" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
         </group>
         <group
-            android:name="facet9_g"
-            android:pivotX="270.562" android:pivotY="407.463"
-            android:translateX="2.871" android:translateY="29.862"
+            android:name="facet7_g"
+            android:pivotX="326.986" android:pivotY="375.276"
+            android:translateX="15.343" android:translateY="25.780"
             android:scaleX="0.6800" android:scaleY="0.6800">
-            <path android:name="facet9_p" android:pathData="M 340.927,425.418 L 210.919,426.000 L 259.839,370.972 Z" android:fillColor="#D3D6D9" android:fillAlpha="0.000" android:strokeColor="#D3D6D9" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
+            <path android:name="facet7_p" android:pathData="M 380.192,329.439 L 340.927,425.418 L 259.839,370.972 Z" android:fillColor="#EBEFEF" android:fillAlpha="0.000" android:strokeColor="#EBEFEF" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
+        </group>
+        <group
+            android:name="facet6_g"
+            android:pivotX="208.999" android:pivotY="348.324"
+            android:translateX="-13.610" android:translateY="26.735"
+            android:scaleX="0.6800" android:scaleY="0.6800">
+            <path android:name="facet6_p" android:pathData="M 132.099,345.145 L 235.059,328.857 L 259.839,370.972 Z" android:fillColor="#EBEFEF" android:fillAlpha="0.000" android:strokeColor="#EBEFEF" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
+        </group>
+        <group
+            android:name="facet5_g"
+            android:pivotX="291.697" android:pivotY="343.089"
+            android:translateX="11.378" android:translateY="27.759"
+            android:scaleX="0.6800" android:scaleY="0.6800">
+            <path android:name="facet5_p" android:pathData="M 235.059,328.857 L 380.192,329.439 L 259.839,370.972 Z" android:fillColor="#D2D6D9" android:fillAlpha="0.000" android:strokeColor="#D2D6D9" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
+        </group>
+        <group
+            android:name="facet4_g"
+            android:pivotX="183.458" android:pivotY="300.427"
+            android:translateX="-25.583" android:translateY="15.668"
+            android:scaleX="0.6800" android:scaleY="0.6800">
+            <path android:name="facet4_p" android:pathData="M 235.059,328.857 L 132.099,345.145 L 183.216,227.279 Z" android:fillColor="#D4D8D9" android:fillAlpha="0.000" android:strokeColor="#D4D8D9" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
+        </group>
+        <group
+            android:name="facet3_g"
+            android:pivotX="217.390" android:pivotY="235.083"
+            android:translateX="-26.378" android:translateY="-14.290"
+            android:scaleX="0.6800" android:scaleY="0.6800">
+            <path android:name="facet3_p" android:pathData="M 233.896,149.114 L 235.059,328.857 L 183.216,227.279 Z" android:fillColor="#BCBFC1" android:fillAlpha="0.000" android:strokeColor="#BCBFC1" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
+        </group>
+        <group
+            android:name="facet2_g"
+            android:pivotX="149.041" android:pivotY="219.474"
+            android:translateX="-28.390" android:translateY="-9.695"
+            android:scaleX="0.6800" android:scaleY="0.6800">
+            <path android:name="facet2_p" android:pathData="M 132.099,345.145 L 131.808,86.000 L 183.216,227.279 Z" android:fillColor="#EBEFEF" android:fillAlpha="0.000" android:strokeColor="#EBEFEF" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
+        </group>
+        <group
+            android:name="facet1_g"
+            android:pivotX="182.973" android:pivotY="154.131"
+            android:translateX="-17.479" android:translateY="-24.382"
+            android:scaleX="0.6800" android:scaleY="0.6800">
+            <path android:name="facet1_p" android:pathData="M 131.808,86.000 L 233.896,149.114 L 183.216,227.279 Z" android:fillColor="#D5D8DA" android:fillAlpha="0.000" android:strokeColor="#D5D8DA" android:strokeWidth="1.5" android:strokeAlpha="0.000"/>
         </group>
             </group>
         </vector>
