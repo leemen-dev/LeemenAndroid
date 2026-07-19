@@ -553,9 +553,9 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
      *  revealed — this only gates the real-mode UI. Non-cancelable: the user must either renew or go to
      *  settings to reveal/manage; there is no dismiss-into-an-over-limit space. Revealing is non-destructive
      *  (chats/accounts simply become visible again) and never happens automatically. */
-    public static void showOverLimitDialog(BaseFragment fragment, int account) {
+    public static AlertDialog showOverLimitDialog(BaseFragment fragment, int account) {
         if (fragment == null || fragment.getParentActivity() == null) {
-            return;
+            return null;
         }
         AlertDialog.Builder b = new AlertDialog.Builder(fragment.getParentActivity());
         b.setTitle(LocaleController.getString(R.string.PrivateSpaceOverLimitTitle));
@@ -563,8 +563,14 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         b.setPositiveButton(LocaleController.getString(R.string.LeemenPremiumRenew), (d, w) -> fragment.presentFragment(new LeemenPremiumActivity("limit")));
         b.setNegativeButton(LocaleController.getString(R.string.PrivateSpaceOverLimitRemove), (d, w) -> fragment.presentFragment(new SecondSpaceSettingsActivity()));
         AlertDialog dialog = b.create();
+        if (fragment.showDialog(dialog) == null) {
+            return null;
+        }
+        // BaseFragment.showDialog() enables outside-touch cancellation before showing every dialog.
+        // Apply the subscription gate's stricter policy afterwards so Back, an outside tap and a swipe
+        // cannot dismiss it. The only exits are the explicit renewal and settings actions above.
         dialog.setCancelable(false);
         dialog.setCanceledOnTouchOutside(false);
-        fragment.showDialog(dialog);
+        return dialog;
     }
 }

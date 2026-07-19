@@ -3003,6 +3003,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     @Override
     public void onFragmentDestroy() {
         super.onFragmentDestroy();
+        clearPrivateSpaceOverLimitGate();
         if (searchString == null) {
             getNotificationCenter().removeObserver(this, NotificationCenter.dialogsNeedReload);
             getNotificationCenter().removeObserver(this, NotificationCenter.secondSpaceModeChanged);
@@ -6966,6 +6967,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     @Override
     public void onResume() {
         super.onResume();
+        // Renewal and limit management live on child fragments. When the user comes back without either
+        // renewing or revealing enough items, restore the blocking gate instead of leaving the already-open
+        // MODE_REAL list usable. A short delay lets the fragment transition settle before showDialog().
+        schedulePrivateSpaceOverLimitCheck();
         // Re-check the in-PS privacy warnings on resume (e.g. after returning from the set-2FA / sessions
         // screens), so the warning button clears once the user has fixed the condition.
         if (SecondSpaceController.getInstance(currentAccount).isRealActive()) {
@@ -10615,6 +10620,64 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     private boolean privateSpaceOnboardingActive;
     private org.telegram.ui.Stories.recorder.HintView2 privateSpaceOnboardingHint;
+    private AlertDialog privateSpaceOverLimitDialog;
+    private Runnable privateSpaceOverLimitCheckRunnable;
+
+    private void schedulePrivateSpaceOverLimitCheck() {
+        if (privateSpaceOverLimitCheckRunnable != null) {
+            AndroidUtilities.cancelRunOnUIThread(privateSpaceOverLimitCheckRunnable);
+        }
+        privateSpaceOverLimitCheckRunnable = () -> {
+            privateSpaceOverLimitCheckRunnable = null;
+            ensurePrivateSpaceOverLimitGate();
+        };
+        AndroidUtilities.runOnUIThread(privateSpaceOverLimitCheckRunnable, 150);
+    }
+
+    /**
+     * Keep an expired over-limit Private Space behind a modal gate until the user renews or reveals enough
+     * chats/accounts. Returning from either child screen re-enters here through onResume().
+     *
+     * @return true when the over-limit state owns the UI, even if showing must retry after a transition.
+     */
+    private boolean ensurePrivateSpaceOverLimitGate() {
+        SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+        boolean eligibleScreen = fragmentView != null && getParentActivity() != null
+                && !onlySelect && folderId == 0 && initialDialogsType == DIALOGS_TYPE_DEFAULT
+                && ssc.isRealActive();
+        if (!eligibleScreen || !ssc.isOverLimit()) {
+            if (privateSpaceOverLimitDialog != null && privateSpaceOverLimitDialog.isShowing()) {
+                privateSpaceOverLimitDialog.dismiss();
+            }
+            privateSpaceOverLimitDialog = null;
+            return false;
+        }
+        // Notifications can reach the underlying dialogs fragment while Settings/Premium is on top.
+        // Wait for its next onResume instead of placing the gate over the management screen itself.
+        if (isPaused() || !isLastFragment()) {
+            return true;
+        }
+        if (privateSpaceOverLimitDialog != null && privateSpaceOverLimitDialog.isShowing()) {
+            return true;
+        }
+        privateSpaceOverLimitDialog = LeemenPremiumActivity.showOverLimitDialog(this, currentAccount);
+        if (privateSpaceOverLimitDialog == null) {
+            // showDialog rejects calls during fragment transitions. Retry until this active screen is gated.
+            schedulePrivateSpaceOverLimitCheck();
+        }
+        return true;
+    }
+
+    private void clearPrivateSpaceOverLimitGate() {
+        if (privateSpaceOverLimitCheckRunnable != null) {
+            AndroidUtilities.cancelRunOnUIThread(privateSpaceOverLimitCheckRunnable);
+            privateSpaceOverLimitCheckRunnable = null;
+        }
+        if (privateSpaceOverLimitDialog != null && privateSpaceOverLimitDialog.isShowing()) {
+            privateSpaceOverLimitDialog.dismiss();
+        }
+        privateSpaceOverLimitDialog = null;
+    }
 
     /**
      * On entering the hidden space, decide what (if anything) to surface:
@@ -10638,8 +10701,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         // account (accounts are premium): on every entry, present a blocking renew-or-reveal gate — the
         // only ways out are to renew or to reveal/manage in settings (req #5). Outside the space the
         // hidden chats/accounts stay hidden as usual — expiry never reveals them. Precedes the one-time offer.
-        if (ssc.isOverLimit()) {
-            LeemenPremiumActivity.showOverLimitDialog(DialogsActivity.this, currentAccount);
+        if (ensurePrivateSpaceOverLimitGate()) {
             return;
         }
         // Completed via the settings chat-picker (not the coached long-press) or pre-existing
@@ -10807,11 +10869,15 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             }
             if (SecondSpaceController.getInstance(currentAccount).isRealActive()) {
                 // Entering the private space: (re)check the privacy-warning conditions and reset the
-                // which-dialog-next cursor, then let the list settle before coaching / offering.
+                // which-dialog-next cursor. Enforce an expired over-limit subscription immediately; only
+                // ordinary coaching / the one-time offer waits for the list transition to settle.
                 privacyWarningCursor = 0;
                 org.telegram.messenger.leemen.LeemenPrivacyWarning.refresh(currentAccount, this::updatePrivacyWarningButton);
-                AndroidUtilities.runOnUIThread(this::maybeStartPrivateSpaceOnboardingOrPaywall, 350);
+                if (!ensurePrivateSpaceOverLimitGate()) {
+                    AndroidUtilities.runOnUIThread(this::maybeStartPrivateSpaceOnboardingOrPaywall, 350);
+                }
             } else {
+                clearPrivateSpaceOverLimitGate();
                 stopPrivateSpaceOnboarding();
             }
             updatePrivacyWarningButton();
