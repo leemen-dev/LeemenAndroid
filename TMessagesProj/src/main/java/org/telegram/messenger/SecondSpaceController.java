@@ -49,6 +49,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private static final String PREF_TOOLBAR_HINT_SHOWN = "second_space_toolbar_hint_shown";
     private static final String PREF_SELF_PINNED = "second_space_self_pinned";
     private static final String PREF_ALLOW_SCREENSHOTS = "second_space_allow_screenshots";
+    private static final boolean DEFAULT_ALLOW_SCREENSHOTS = true;
     private static final String PREF_ONBOARDING_DONE = "second_space_onboarding_done";
     private static final String PREF_INTRO_SHOWN = "second_space_intro_shown";
     private static final String PREF_PAYWALL_SHOWN = "second_space_paywall_shown";
@@ -160,8 +161,8 @@ public class SecondSpaceController extends BaseController implements Notificatio
      *  presence are suppressed while private space is not active (i.e. in OFF mode). */
     private final Set<Integer> hiddenAccounts = new HashSet<>();
     /** When {@code true}, screenshots / screen-recording are permitted while this account's
-     *  Private Space is open. Default {@code false}: FLAG_SECURE blocks capture in-space. */
-    private boolean allowScreenshots;
+     *  Private Space is open. Defaults to {@code true}; an explicit opt-out enables FLAG_SECURE. */
+    private boolean allowScreenshots = DEFAULT_ALLOW_SCREENSHOTS;
 
     /** True while applying a merged sync blob (LeemenSync projection) — suppresses the
      *  local-change → sync-push hook so remote application doesn't echo back as a push. */
@@ -217,8 +218,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
         pinTimeoutMinutes = prefs.getInt(PREF_PIN_TIMEOUT_MIN, 0);
         pinLastVerifiedAt = prefs.getLong(PREF_PIN_LAST_OK_MS, 0L);
         switchPasswordHash = prefs.getString(PREF_SWITCH_PASSWORD_HASH, "");
-        // DEBUG: default screenshots ON for development convenience. TODO: revert default to false before release.
-        allowScreenshots = prefs.getBoolean(PREF_ALLOW_SCREENSHOTS, true);
+        allowScreenshots = prefs.getBoolean(PREF_ALLOW_SCREENSHOTS, DEFAULT_ALLOW_SCREENSHOTS);
         leemenPremiumUntil = prefs.getLong(PREF_PREMIUM_UNTIL, 0L);
         loadHiddenAccounts(hiddenAccounts, prefs.getString(PREF_HIDDEN_ACCOUNTS, ""), num);
         // Hold the OFF-mode list until the INITIAL preview warmup settles — set SYNCHRONOUSLY here, before the
@@ -1264,7 +1264,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
             shortcutTested = false;
             pinTimeoutMinutes = 0;
             pinLastVerifiedAt = 0;
-            allowScreenshots = false;
+            allowScreenshots = DEFAULT_ALLOW_SCREENSHOTS;
             leemenPremiumUntil = 0;
             activeMode = MODE_OFF;
         } finally {
