@@ -2377,13 +2377,13 @@
     <string name="PrivacyWarningNoCloudPasswordTitle">Set a cloud password</string>
     <string name="PrivacyWarningNoCloudPasswordText">You haven\'t set a Telegram cloud password. Without it, someone who gets into your account could open a session where your hidden chats are visible. Set a cloud password to protect them.</string>
     <string name="PrivacyWarningSetCloudPassword">Set password</string>
-    <string name="PrivacyWarningOtherSessionTitle">Hidden chats are exposed</string>
+    <string name="PrivacyWarningOtherSessionTitle">Protected Space is at risk</string>
     <string name="PrivacyWarningOtherSessionText">There\'s an active session in another app where your hidden chats are visible. End it to keep them private — you can always log back in.</string>
     <string name="PrivacyWarningOpenSessions">Sessions</string>
     <string name="PrivacyWarningNotNow">Not now</string>
     <string name="PrivacyWarningSessionCell">Your hidden chats are visible here</string>
-    <string name="PrivacyWarningCloudPasswordValue">Off — your hidden chats are at risk</string>
-    <string name="LeemenCloudPasswordWarningTitle">Your hidden chats are at risk</string>
+    <string name="PrivacyWarningCloudPasswordValue">Off — Protected Space is at risk</string>
+    <string name="LeemenCloudPasswordWarningTitle">Protected Space is at risk</string>
     <string name="LeemenCloudPasswordWarningMessage">Chat hiding works only in Leemen — in other Telegram clients these chats appear as normal, unhidden. To protect them, set a cloud password: without it, no one can sign into your account on another device.</string>
     <string name="LeemenCloudPasswordWarningSet">Set password</string>
     <string name="HiddenAccountsNoneToAdd">No other accounts to add.</string>

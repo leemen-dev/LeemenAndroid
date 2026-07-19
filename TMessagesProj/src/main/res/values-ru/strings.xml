@@ -440,13 +440,13 @@
     <string name="PrivacyWarningNoCloudPasswordTitle">Установите облачный пароль</string>
     <string name="PrivacyWarningNoCloudPasswordText">У вас не задан облачный пароль Telegram. Без него тот, кто получит доступ к аккаунту, сможет открыть сессию, где видны ваши скрытые чаты. Установите облачный пароль, чтобы защитить их.</string>
     <string name="PrivacyWarningSetCloudPassword">Установить пароль</string>
-    <string name="PrivacyWarningOtherSessionTitle">Скрытые чаты под угрозой</string>
+    <string name="PrivacyWarningOtherSessionTitle">Защищённое пространство под угрозой</string>
     <string name="PrivacyWarningOtherSessionText">Есть активная сессия в другом приложении, где видны ваши скрытые чаты. Завершите её, чтобы сохранить приватность — вы всегда сможете войти снова.</string>
     <string name="PrivacyWarningOpenSessions">Сессии</string>
     <string name="PrivacyWarningNotNow">Не сейчас</string>
     <string name="PrivacyWarningSessionCell">Здесь видны ваши скрытые чаты</string>
-    <string name="PrivacyWarningCloudPasswordValue">Выкл. — скрытые чаты под угрозой</string>
-    <string name="LeemenCloudPasswordWarningTitle">Скрытые чаты под угрозой</string>
+    <string name="PrivacyWarningCloudPasswordValue">Выкл. — защищённое пространство под угрозой</string>
+    <string name="LeemenCloudPasswordWarningTitle">Защищённое пространство под угрозой</string>
     <string name="LeemenCloudPasswordWarningMessage">Скрытие чатов работает только в Leemen — в других клиентах Telegram эти чаты видны как обычные. Чтобы защитить их, задайте облачный пароль: без него никто не сможет войти в ваш аккаунт с другого устройства.</string>
     <string name="LeemenCloudPasswordWarningSet">Задать пароль</string>
     <string name="HiddenAccountsNoneToAdd">Нет других аккаунтов для добавления.</string>
