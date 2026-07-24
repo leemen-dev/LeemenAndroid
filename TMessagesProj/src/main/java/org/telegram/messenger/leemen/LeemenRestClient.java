@@ -108,7 +108,13 @@ public final class LeemenRestClient {
                 final JsonObject fBody = body;
                 final int fCode = code;
                 final String fErrCode = errCode, fErrMsg = errMsg;
-                AndroidUtilities.runOnUIThread(() -> cb.onResult(fBody, fCode, fErrCode, fErrMsg));
+                AndroidUtilities.runOnUIThread(() -> {
+                    // Account deletion hard-revokes the JWT's master-account generation server-side.
+                    // Observe the dedicated response in one central place so an already-open stale
+                    // Leemen session logs itself out on whichever protected request sees it first.
+                    LeemenSessionGuard.onBackendResult(bearer, fCode, fErrCode);
+                    cb.onResult(fBody, fCode, fErrCode, fErrMsg);
+                });
             } catch (Exception e) {
                 // Network failures (offline, DNS, timeout) are EXPECTED and handled by the callback — keep
                 // them out of Crashlytics (FileLog.e reports there): they're noise and would leak the backend

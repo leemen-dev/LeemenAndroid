@@ -212,6 +212,23 @@ public final class LeemenAccount {
         }
     }
 
+    /**
+     * The backend confirmed that this JWT's master-account generation was deleted elsewhere. Erase the
+     * private-space working copy before Telegram logout so a later, explicit registration cannot push stale
+     * local data into its brand-new master account. This is intentionally the same destructive local half as
+     * {@link #deleteAndLogoutEverywhere(int, Runnable)}, but it does not attempt to revoke sibling sessions:
+     * each surviving Leemen client observes the same server signal and logs itself out.
+     */
+    public static void logoutDeletedGeneration(int account) {
+        if (account < 0 || account >= org.telegram.messenger.UserConfig.MAX_ACCOUNT_COUNT) return;
+        if (!org.telegram.messenger.UserConfig.getInstance(account).isClientActivated()) return;
+        // Suppress bind/sync work during the atomic wipe → logout transition. performLogout clears this
+        // slot-scoped flag together with the rest of the binding once the Telegram account is deactivated.
+        setDisabled(account, true);
+        wipeLocalAccountData(account);
+        org.telegram.messenger.MessagesController.getInstance(account).performLogout(1);
+    }
+
     /** Terminate every OTHER active Telegram session created by THIS app (api_id == APP_ID) — i.e. the user's
      *  other Leemen installs — leaving official Telegram clients (different api_id) and the Telegram account
      *  intact. The current session is excluded by its `current` flag (its api_id is also APP_ID) and is logged

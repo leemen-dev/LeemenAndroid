@@ -23,6 +23,7 @@ public final class LeemenConfig {
     // --- REST endpoint paths (appended to BASE_URL) ---
     public static final String EP_AUTH_TELEGRAM   = "/auth/telegram";
     public static final String EP_ME              = "/me";
+    public static final String EP_SESSION_STATUS  = "/session/status";
     public static final String EP_ACCOUNT_KEY     = "/account/key";
     public static final String EP_WRAP_DEFAULT    = "/account/wrap-default";
     // max-privacy (Phase 2): client wraps K_master with a dedicated passphrase + BIP-39 recovery phrase

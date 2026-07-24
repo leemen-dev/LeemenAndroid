@@ -6926,6 +6926,8 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         pipActivityHandler.onPause();
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.stopAllHeavyOperations, 4096);
         ApplicationLoader.mainInterfacePaused = true;
+        // Stop the account-generation liveness poll while no Leemen UI is visible.
+        try { org.telegram.messenger.leemen.LeemenSessionGuard.onAppBackground(); } catch (Throwable ignore) {}
         int account = currentAccount;
         Utilities.stageQueue.postRunnable(() -> {
             ApplicationLoader.mainInterfacePausedStageQueue = true;
@@ -7156,6 +7158,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.startAllHeavyOperations, 4096);
         MediaController.getInstance().setFeedbackView(feedbackView = actionBarLayout.getView(), true);
         ApplicationLoader.mainInterfacePaused = false;
+        // Telegram may have refused a fresh session's attempt to revoke its siblings during account deletion.
+        // Validate every surviving Leemen JWT now and every 30s while foregrounded; only the backend's
+        // authoritative deleted-generation response performs a logout.
+        try { org.telegram.messenger.leemen.LeemenSessionGuard.onAppForeground(); } catch (Throwable ignore) {}
         // Leemen: app returned to foreground — reconnect the Realtime push immediately instead of waiting
         // out a backoff that may have climbed to 60s while backgrounded during a network drop.
         try { org.telegram.messenger.leemen.LeemenRealtime.reconnectAllNow(); } catch (Throwable ignore) {}
