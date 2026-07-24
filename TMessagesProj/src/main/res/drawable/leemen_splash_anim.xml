@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Lottie geometry animated as pathData in one VectorDrawable layer.
-     Fractions and duration retain the legacy system-splash AVD timeline. -->
+     Direct animator segments retain the legacy timing and work in Samsung SystemUI. -->
 <animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt">
     <aapt:attr name="android:drawable">
@@ -111,458 +111,1789 @@
 
     <target android:name="facet1_path">
         <aapt:attr name="android:animation">
-            <set>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="pathType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="pathData" android:valueType="pathType">
-                        <keyframe android:fraction="0" android:value="M 130.702298,83.419703 L 200.12163,126.337068 L 165.659184,179.489335 Z" />
-                        <keyframe android:fraction="0.125455" android:value="M 131.183834,84.543039 L 214.825197,136.252942 L 173.302384,200.294584 Z" />
-                        <keyframe android:fraction="0.25" android:value="M 131.512851,85.310577 L 224.871645,143.028122 L 178.524722,214.510104 Z" />
-                        <keyframe android:fraction="0.374545" android:value="M 131.716569,85.785815 L 231.092131,147.223128 L 181.758252,223.311966 Z" />
-                        <keyframe android:fraction="0.5" android:value="M 131.822209,86.032254 L 234.317812,149.398481 L 183.435024,227.87624 Z" />
-                        <keyframe android:fraction="0.625455" android:value="M 131.856991,86.113392 L 235.379847,150.114702 L 183.98709,229.378997 Z" />
-                        <keyframe android:fraction="0.75" android:value="M 131.848133,86.092729 L 235.109391,149.93231 L 183.846501,228.996307 Z" />
-                        <keyframe android:fraction="0.874545" android:value="M 131.822857,86.033766 L 234.337602,149.411827 L 183.445311,227.904242 Z" />
-                        <keyframe android:fraction="1" android:value="M 131.808383,86 L 233.895637,149.113772 L 183.215569,227.278871 Z" />
-                    </propertyValuesHolder>
-                </objectAnimator>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="floatType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="fillAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="0.125455" android:value="0.325" />
-                        <keyframe android:fraction="0.25" android:value="0.65" />
-                        <keyframe android:fraction="0.374545" android:value="0.975" />
-                        <keyframe android:fraction="0.5" android:value="1" />
-                        <keyframe android:fraction="0.625455" android:value="1" />
-                        <keyframe android:fraction="0.75" android:value="1" />
-                        <keyframe android:fraction="0.874545" android:value="1" />
-                        <keyframe android:fraction="1" android:value="1" />
-                    </propertyValuesHolder>
-                    <propertyValuesHolder android:propertyName="strokeAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="0.125455" android:value="0.325" />
-                        <keyframe android:fraction="0.25" android:value="0.65" />
-                        <keyframe android:fraction="0.374545" android:value="0.975" />
-                        <keyframe android:fraction="0.5" android:value="1" />
-                        <keyframe android:fraction="0.625455" android:value="1" />
-                        <keyframe android:fraction="0.75" android:value="1" />
-                        <keyframe android:fraction="0.874545" android:value="1" />
-                        <keyframe android:fraction="1" android:value="1" />
-                    </propertyValuesHolder>
-                </objectAnimator>
+            <set android:ordering="together">
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 130.702298,83.419703 L 200.12163,126.337068 L 165.659184,179.489335 Z"
+                        android:valueTo="M 131.183834,84.543039 L 214.825197,136.252942 L 173.302384,200.294584 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 131.183834,84.543039 L 214.825197,136.252942 L 173.302384,200.294584 Z"
+                        android:valueTo="M 131.512851,85.310577 L 224.871645,143.028122 L 178.524722,214.510104 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 131.512851,85.310577 L 224.871645,143.028122 L 178.524722,214.510104 Z"
+                        android:valueTo="M 131.716569,85.785815 L 231.092131,147.223128 L 181.758252,223.311966 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="47"
+                        android:valueFrom="M 131.716569,85.785815 L 231.092131,147.223128 L 181.758252,223.311966 Z"
+                        android:valueTo="M 131.822209,86.032254 L 234.317812,149.398481 L 183.435024,227.87624 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 131.822209,86.032254 L 234.317812,149.398481 L 183.435024,227.87624 Z"
+                        android:valueTo="M 131.856991,86.113392 L 235.379847,150.114702 L 183.98709,229.378997 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 131.856991,86.113392 L 235.379847,150.114702 L 183.98709,229.378997 Z"
+                        android:valueTo="M 131.848133,86.092729 L 235.109391,149.93231 L 183.846501,228.996307 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 131.848133,86.092729 L 235.109391,149.93231 L 183.846501,228.996307 Z"
+                        android:valueTo="M 131.822857,86.033766 L 234.337602,149.411827 L 183.445311,227.904242 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 131.822857,86.033766 L 234.337602,149.411827 L 183.445311,227.904242 Z"
+                        android:valueTo="M 131.808383,86 L 233.895637,149.113772 L 183.215569,227.278871 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
             </set>
         </aapt:attr>
     </target>
     <target android:name="facet2_path">
         <aapt:attr name="android:animation">
-            <set>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="pathType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="pathData" android:valueType="pathType">
-                        <keyframe android:fraction="0.181818" android:value="M 109.13036,295.235121 L 108.932584,119.016815 L 143.889471,215.086447 Z" />
-                        <keyframe android:fraction="0.307273" android:value="M 119.129894,316.963277 L 118.891599,104.642893 L 161.010149,220.394438 Z" />
-                        <keyframe android:fraction="0.431818" android:value="M 125.962235,331.809388 L 125.696256,94.82168 L 172.708127,224.021208 Z" />
-                        <keyframe android:fraction="0.556364" android:value="M 130.192634,341.001694 L 129.909513,88.740654 L 179.951195,226.266804 Z" />
-                        <keyframe android:fraction="0.681818" android:value="M 132.386341,345.768436 L 132.094331,85.58729 L 183.707145,227.431276 Z" />
-                        <keyframe android:fraction="0.807273" android:value="M 133.108604,347.337854 L 132.813667,84.549066 L 184.943767,227.814671 Z" />
-                        <keyframe android:fraction="0.931818" android:value="M 132.924674,346.938189 L 132.630482,84.813458 L 184.628851,227.717036 Z" />
-                        <keyframe android:fraction="1.056364" android:value="M 132.399799,345.79768 L 132.107735,85.567944 L 183.730188,227.43842 Z" />
-                        <keyframe android:fraction="1.181818" android:value="M 132.09923,345.144568 L 131.808383,86 L 183.215569,227.278871 Z" />
-                    </propertyValuesHolder>
-                </objectAnimator>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="floatType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="fillAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="0.181818" android:value="0" />
-                        <keyframe android:fraction="0.307273" android:value="0.325" />
-                        <keyframe android:fraction="0.431818" android:value="0.65" />
-                        <keyframe android:fraction="0.556364" android:value="0.975" />
-                        <keyframe android:fraction="0.681818" android:value="1" />
-                        <keyframe android:fraction="0.807273" android:value="1" />
-                        <keyframe android:fraction="0.931818" android:value="1" />
-                        <keyframe android:fraction="1.056364" android:value="1" />
-                        <keyframe android:fraction="1.181818" android:value="1" />
-                    </propertyValuesHolder>
-                    <propertyValuesHolder android:propertyName="strokeAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="0.181818" android:value="0" />
-                        <keyframe android:fraction="0.307273" android:value="0.325" />
-                        <keyframe android:fraction="0.431818" android:value="0.65" />
-                        <keyframe android:fraction="0.556364" android:value="0.975" />
-                        <keyframe android:fraction="0.681818" android:value="1" />
-                        <keyframe android:fraction="0.807273" android:value="1" />
-                        <keyframe android:fraction="0.931818" android:value="1" />
-                        <keyframe android:fraction="1.056364" android:value="1" />
-                        <keyframe android:fraction="1.181818" android:value="1" />
-                    </propertyValuesHolder>
-                </objectAnimator>
+            <set android:ordering="together">
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="67"
+                        android:valueFrom="M 109.13036,295.235121 L 108.932584,119.016815 L 143.889471,215.086447 Z"
+                        android:valueTo="M 109.13036,295.235121 L 108.932584,119.016815 L 143.889471,215.086447 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 109.13036,295.235121 L 108.932584,119.016815 L 143.889471,215.086447 Z"
+                        android:valueTo="M 119.129894,316.963277 L 118.891599,104.642893 L 161.010149,220.394438 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 119.129894,316.963277 L 118.891599,104.642893 L 161.010149,220.394438 Z"
+                        android:valueTo="M 125.962235,331.809388 L 125.696256,94.82168 L 172.708127,224.021208 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 125.962235,331.809388 L 125.696256,94.82168 L 172.708127,224.021208 Z"
+                        android:valueTo="M 130.192634,341.001694 L 129.909513,88.740654 L 179.951195,226.266804 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="47"
+                        android:valueFrom="M 130.192634,341.001694 L 129.909513,88.740654 L 179.951195,226.266804 Z"
+                        android:valueTo="M 132.386341,345.768436 L 132.094331,85.58729 L 183.707145,227.431276 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 132.386341,345.768436 L 132.094331,85.58729 L 183.707145,227.431276 Z"
+                        android:valueTo="M 133.108604,347.337854 L 132.813667,84.549066 L 184.943767,227.814671 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 133.108604,347.337854 L 132.813667,84.549066 L 184.943767,227.814671 Z"
+                        android:valueTo="M 132.924674,346.938189 L 132.630482,84.813458 L 184.628851,227.717036 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 132.924674,346.938189 L 132.630482,84.813458 L 184.628851,227.717036 Z"
+                        android:valueTo="M 132.399799,345.79768 L 132.107735,85.567944 L 183.730188,227.43842 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 132.399799,345.79768 L 132.107735,85.567944 L 183.730188,227.43842 Z"
+                        android:valueTo="M 132.09923,345.144568 L 131.808383,86 L 183.215569,227.278871 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="67"
+                        android:valueFrom="0"
+                        android:valueTo="0"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="67"
+                        android:valueFrom="0"
+                        android:valueTo="0"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
             </set>
         </aapt:attr>
     </target>
     <target android:name="facet3_path">
         <aapt:attr name="android:animation">
-            <set>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="pathType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="pathData" android:valueType="pathType">
-                        <keyframe android:fraction="0.363636" android:value="M 202.235966,162.333914 L 203.027069,284.559406 L 167.773519,215.486181 Z" />
-                        <keyframe android:fraction="0.489091" android:value="M 216.019053,156.578505 L 216.972231,303.844495 L 174.49624,220.620147 Z" />
-                        <keyframe android:fraction="0.613636" android:value="M 225.436569,152.646029 L 226.500487,317.021341 L 179.089646,224.128012 Z" />
-                        <keyframe android:fraction="0.738182" android:value="M 231.267637,150.211148 L 232.400122,325.180085 L 181.933758,226.299985 Z" />
-                        <keyframe android:fraction="0.863636" android:value="M 234.291383,148.948521 L 235.459424,329.410865 L 183.408594,227.426279 Z" />
-                        <keyframe android:fraction="0.989091" android:value="M 235.286931,148.532809 L 236.466679,330.803821 L 183.894175,227.797104 Z" />
-                        <keyframe android:fraction="1.113636" android:value="M 235.033407,148.638674 L 236.210173,330.449093 L 183.770518,227.702671 Z" />
-                        <keyframe android:fraction="1.238182" android:value="M 234.309934,148.940775 L 235.478193,329.43682 L 183.417643,227.433189 Z" />
-                        <keyframe android:fraction="1.363636" android:value="M 233.895637,149.113772 L 235.059025,328.857143 L 183.215569,227.278871 Z" />
-                    </propertyValuesHolder>
-                </objectAnimator>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="floatType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="fillAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="0.363636" android:value="0" />
-                        <keyframe android:fraction="0.489091" android:value="0.325" />
-                        <keyframe android:fraction="0.613636" android:value="0.65" />
-                        <keyframe android:fraction="0.738182" android:value="0.975" />
-                        <keyframe android:fraction="0.863636" android:value="1" />
-                        <keyframe android:fraction="0.989091" android:value="1" />
-                        <keyframe android:fraction="1.113636" android:value="1" />
-                        <keyframe android:fraction="1.238182" android:value="1" />
-                        <keyframe android:fraction="1.363636" android:value="1" />
-                    </propertyValuesHolder>
-                    <propertyValuesHolder android:propertyName="strokeAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="0.363636" android:value="0" />
-                        <keyframe android:fraction="0.489091" android:value="0.325" />
-                        <keyframe android:fraction="0.613636" android:value="0.65" />
-                        <keyframe android:fraction="0.738182" android:value="0.975" />
-                        <keyframe android:fraction="0.863636" android:value="1" />
-                        <keyframe android:fraction="0.989091" android:value="1" />
-                        <keyframe android:fraction="1.113636" android:value="1" />
-                        <keyframe android:fraction="1.238182" android:value="1" />
-                        <keyframe android:fraction="1.363636" android:value="1" />
-                    </propertyValuesHolder>
-                </objectAnimator>
+            <set android:ordering="together">
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="133"
+                        android:valueFrom="M 202.235966,162.333914 L 203.027069,284.559406 L 167.773519,215.486181 Z"
+                        android:valueTo="M 202.235966,162.333914 L 203.027069,284.559406 L 167.773519,215.486181 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 202.235966,162.333914 L 203.027069,284.559406 L 167.773519,215.486181 Z"
+                        android:valueTo="M 216.019053,156.578505 L 216.972231,303.844495 L 174.49624,220.620147 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 216.019053,156.578505 L 216.972231,303.844495 L 174.49624,220.620147 Z"
+                        android:valueTo="M 225.436569,152.646029 L 226.500487,317.021341 L 179.089646,224.128012 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 225.436569,152.646029 L 226.500487,317.021341 L 179.089646,224.128012 Z"
+                        android:valueTo="M 231.267637,150.211148 L 232.400122,325.180085 L 181.933758,226.299985 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="47"
+                        android:valueFrom="M 231.267637,150.211148 L 232.400122,325.180085 L 181.933758,226.299985 Z"
+                        android:valueTo="M 234.291383,148.948521 L 235.459424,329.410865 L 183.408594,227.426279 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 234.291383,148.948521 L 235.459424,329.410865 L 183.408594,227.426279 Z"
+                        android:valueTo="M 235.286931,148.532809 L 236.466679,330.803821 L 183.894175,227.797104 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 235.286931,148.532809 L 236.466679,330.803821 L 183.894175,227.797104 Z"
+                        android:valueTo="M 235.033407,148.638674 L 236.210173,330.449093 L 183.770518,227.702671 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 235.033407,148.638674 L 236.210173,330.449093 L 183.770518,227.702671 Z"
+                        android:valueTo="M 234.309934,148.940775 L 235.478193,329.43682 L 183.417643,227.433189 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 234.309934,148.940775 L 235.478193,329.43682 L 183.417643,227.433189 Z"
+                        android:valueTo="M 233.895637,149.113772 L 235.059025,328.857143 L 183.215569,227.278871 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="133"
+                        android:valueFrom="0"
+                        android:valueTo="0"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="133"
+                        android:valueFrom="0"
+                        android:valueTo="0"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
             </set>
         </aapt:attr>
     </target>
     <target android:name="facet4_path">
         <aapt:attr name="android:animation">
-            <set>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="pathType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="pathData" android:valueType="pathType">
-                        <keyframe android:fraction="0.545455" android:value="M 192.963237,335.427494 L 122.950576,346.502943 L 157.709687,266.354269 Z" />
-                        <keyframe android:fraction="0.670909" android:value="M 211.289704,332.567081 L 126.933457,345.911572 L 168.813712,249.342733 Z" />
-                        <keyframe android:fraction="0.795455" android:value="M 223.811556,330.612659 L 129.654824,345.507509 L 176.400716,237.719329 Z" />
-                        <keyframe android:fraction="0.92" android:value="M 231.564746,329.402533 L 131.33982,345.257324 L 181.098381,230.522434 Z" />
-                        <keyframe android:fraction="1.045455" android:value="M 235.585222,328.775013 L 132.213588,345.127588 L 183.534392,226.790428 Z" />
-                        <keyframe android:fraction="1.170909" android:value="M 236.908937,328.568407 L 132.501271,345.084874 L 184.336433,225.56169 Z" />
-                        <keyframe android:fraction="1.295455" android:value="M 236.571842,328.621021 L 132.42801,345.095751 L 184.132187,225.874599 Z" />
-                        <keyframe android:fraction="1.42" android:value="M 235.609888,328.771164 L 132.218949,345.126792 L 183.549337,226.767533 Z" />
-                        <keyframe android:fraction="1.545455" android:value="M 235.059025,328.857143 L 132.09923,345.144568 L 183.215569,227.278871 Z" />
-                    </propertyValuesHolder>
-                </objectAnimator>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="floatType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="fillAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="0.545455" android:value="0" />
-                        <keyframe android:fraction="0.670909" android:value="0.325" />
-                        <keyframe android:fraction="0.795455" android:value="0.65" />
-                        <keyframe android:fraction="0.92" android:value="0.975" />
-                        <keyframe android:fraction="1.045455" android:value="1" />
-                        <keyframe android:fraction="1.170909" android:value="1" />
-                        <keyframe android:fraction="1.295455" android:value="1" />
-                        <keyframe android:fraction="1.42" android:value="1" />
-                        <keyframe android:fraction="1.545455" android:value="1" />
-                    </propertyValuesHolder>
-                    <propertyValuesHolder android:propertyName="strokeAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="0.545455" android:value="0" />
-                        <keyframe android:fraction="0.670909" android:value="0.325" />
-                        <keyframe android:fraction="0.795455" android:value="0.65" />
-                        <keyframe android:fraction="0.92" android:value="0.975" />
-                        <keyframe android:fraction="1.045455" android:value="1" />
-                        <keyframe android:fraction="1.170909" android:value="1" />
-                        <keyframe android:fraction="1.295455" android:value="1" />
-                        <keyframe android:fraction="1.42" android:value="1" />
-                        <keyframe android:fraction="1.545455" android:value="1" />
-                    </propertyValuesHolder>
-                </objectAnimator>
+            <set android:ordering="together">
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="200"
+                        android:valueFrom="M 192.963237,335.427494 L 122.950576,346.502943 L 157.709687,266.354269 Z"
+                        android:valueTo="M 192.963237,335.427494 L 122.950576,346.502943 L 157.709687,266.354269 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 192.963237,335.427494 L 122.950576,346.502943 L 157.709687,266.354269 Z"
+                        android:valueTo="M 211.289704,332.567081 L 126.933457,345.911572 L 168.813712,249.342733 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 211.289704,332.567081 L 126.933457,345.911572 L 168.813712,249.342733 Z"
+                        android:valueTo="M 223.811556,330.612659 L 129.654824,345.507509 L 176.400716,237.719329 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 223.811556,330.612659 L 129.654824,345.507509 L 176.400716,237.719329 Z"
+                        android:valueTo="M 231.564746,329.402533 L 131.33982,345.257324 L 181.098381,230.522434 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="47"
+                        android:valueFrom="M 231.564746,329.402533 L 131.33982,345.257324 L 181.098381,230.522434 Z"
+                        android:valueTo="M 235.585222,328.775013 L 132.213588,345.127588 L 183.534392,226.790428 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 235.585222,328.775013 L 132.213588,345.127588 L 183.534392,226.790428 Z"
+                        android:valueTo="M 236.908937,328.568407 L 132.501271,345.084874 L 184.336433,225.56169 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 236.908937,328.568407 L 132.501271,345.084874 L 184.336433,225.56169 Z"
+                        android:valueTo="M 236.571842,328.621021 L 132.42801,345.095751 L 184.132187,225.874599 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 236.571842,328.621021 L 132.42801,345.095751 L 184.132187,225.874599 Z"
+                        android:valueTo="M 235.609888,328.771164 L 132.218949,345.126792 L 183.549337,226.767533 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 235.609888,328.771164 L 132.218949,345.126792 L 183.549337,226.767533 Z"
+                        android:valueTo="M 235.059025,328.857143 L 132.09923,345.144568 L 183.215569,227.278871 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="200"
+                        android:valueFrom="0"
+                        android:valueTo="0"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="200"
+                        android:valueFrom="0"
+                        android:valueTo="0"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
             </set>
         </aapt:attr>
     </target>
     <target android:name="facet5_path">
         <aapt:attr name="android:animation">
-            <set>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="pathType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="pathData" android:valueType="pathType">
-                        <keyframe android:fraction="0.727273" android:value="M 264.560925,361.170091 L 363.251087,361.565643 L 281.411429,389.808038 Z" />
-                        <keyframe android:fraction="0.852727" android:value="M 251.717226,347.102599 L 370.626173,347.579188 L 272.019916,381.60764 Z" />
-                        <keyframe android:fraction="0.977273" android:value="M 242.941564,337.490759 L 375.665319,338.022718 L 265.603014,376.004586 Z" />
-                        <keyframe android:fraction="1.101818" android:value="M 237.507913,331.53937 L 378.78542,332.105613 L 261.629844,372.535328 Z" />
-                        <keyframe android:fraction="1.227273" android:value="M 234.690251,328.453231 L 380.403373,329.037252 L 259.569526,370.736317 Z" />
-                        <keyframe android:fraction="1.352727" android:value="M 233.762555,327.43714 L 380.936074,328.027014 L 258.891179,370.144005 Z" />
-                        <keyframe android:fraction="1.477273" android:value="M 233.9988,327.695896 L 380.800417,328.28428 L 259.063926,370.294842 Z" />
-                        <keyframe android:fraction="1.601818" android:value="M 234.672965,328.434298 L 380.413299,329.018427 L 259.556886,370.725281 Z" />
-                        <keyframe android:fraction="1.727273" android:value="M 235.059025,328.857143 L 380.191617,329.438837 L 259.839179,370.971771 Z" />
-                    </propertyValuesHolder>
-                </objectAnimator>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="floatType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="fillAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="0.727273" android:value="0" />
-                        <keyframe android:fraction="0.852727" android:value="0.325" />
-                        <keyframe android:fraction="0.977273" android:value="0.65" />
-                        <keyframe android:fraction="1.101818" android:value="0.975" />
-                        <keyframe android:fraction="1.227273" android:value="1" />
-                        <keyframe android:fraction="1.352727" android:value="1" />
-                        <keyframe android:fraction="1.477273" android:value="1" />
-                        <keyframe android:fraction="1.601818" android:value="1" />
-                        <keyframe android:fraction="1.727273" android:value="1" />
-                    </propertyValuesHolder>
-                    <propertyValuesHolder android:propertyName="strokeAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="0.727273" android:value="0" />
-                        <keyframe android:fraction="0.852727" android:value="0.325" />
-                        <keyframe android:fraction="0.977273" android:value="0.65" />
-                        <keyframe android:fraction="1.101818" android:value="0.975" />
-                        <keyframe android:fraction="1.227273" android:value="1" />
-                        <keyframe android:fraction="1.352727" android:value="1" />
-                        <keyframe android:fraction="1.477273" android:value="1" />
-                        <keyframe android:fraction="1.601818" android:value="1" />
-                        <keyframe android:fraction="1.727273" android:value="1" />
-                    </propertyValuesHolder>
-                </objectAnimator>
+            <set android:ordering="together">
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="267"
+                        android:valueFrom="M 264.560925,361.170091 L 363.251087,361.565643 L 281.411429,389.808038 Z"
+                        android:valueTo="M 264.560925,361.170091 L 363.251087,361.565643 L 281.411429,389.808038 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 264.560925,361.170091 L 363.251087,361.565643 L 281.411429,389.808038 Z"
+                        android:valueTo="M 251.717226,347.102599 L 370.626173,347.579188 L 272.019916,381.60764 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 251.717226,347.102599 L 370.626173,347.579188 L 272.019916,381.60764 Z"
+                        android:valueTo="M 242.941564,337.490759 L 375.665319,338.022718 L 265.603014,376.004586 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 242.941564,337.490759 L 375.665319,338.022718 L 265.603014,376.004586 Z"
+                        android:valueTo="M 237.507913,331.53937 L 378.78542,332.105613 L 261.629844,372.535328 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="47"
+                        android:valueFrom="M 237.507913,331.53937 L 378.78542,332.105613 L 261.629844,372.535328 Z"
+                        android:valueTo="M 234.690251,328.453231 L 380.403373,329.037252 L 259.569526,370.736317 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 234.690251,328.453231 L 380.403373,329.037252 L 259.569526,370.736317 Z"
+                        android:valueTo="M 233.762555,327.43714 L 380.936074,328.027014 L 258.891179,370.144005 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 233.762555,327.43714 L 380.936074,328.027014 L 258.891179,370.144005 Z"
+                        android:valueTo="M 233.9988,327.695896 L 380.800417,328.28428 L 259.063926,370.294842 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 233.9988,327.695896 L 380.800417,328.28428 L 259.063926,370.294842 Z"
+                        android:valueTo="M 234.672965,328.434298 L 380.413299,329.018427 L 259.556886,370.725281 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 234.672965,328.434298 L 380.413299,329.018427 L 259.556886,370.725281 Z"
+                        android:valueTo="M 235.059025,328.857143 L 380.191617,329.438837 L 259.839179,370.971771 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="267"
+                        android:valueFrom="0"
+                        android:valueTo="0"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="267"
+                        android:valueFrom="0"
+                        android:valueTo="0"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
             </set>
         </aapt:attr>
     </target>
     <target android:name="facet6_path">
         <aapt:attr name="android:animation">
-            <set>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="pathType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="pathData" android:valueType="pathType">
-                        <keyframe android:fraction="0.909091" android:value="M 143.096874,372.89712 L 213.109534,361.821671 L 229.960039,390.459618 Z" />
-                        <keyframe android:fraction="1.034545" android:value="M 138.309032,360.815003 L 222.665279,347.470512 L 242.967969,381.975553 Z" />
-                        <keyframe android:fraction="1.159091" android:value="M 135.037663,352.559703 L 229.194395,337.664853 L 251.855846,376.17868 Z" />
-                        <keyframe android:fraction="1.283636" android:value="M 133.01212,347.448247 L 233.237046,331.593456 L 257.358977,372.589414 Z" />
-                        <keyframe android:fraction="1.409091" android:value="M 131.96176,344.797661 L 235.333393,328.445086 L 260.212668,370.728173 Z" />
-                        <keyframe android:fraction="1.534545" android:value="M 131.615935,343.924973 L 236.023602,327.408506 L 261.152227,370.115371 Z" />
-                        <keyframe android:fraction="1.659091" android:value="M 131.704002,344.147211 L 235.847835,327.67248 L 260.91296,370.271426 Z" />
-                        <keyframe android:fraction="1.783636" android:value="M 131.955316,344.7814 L 235.346254,328.425771 L 260.230175,370.716754 Z" />
-                        <keyframe android:fraction="1.909091" android:value="M 132.09923,345.144568 L 235.059025,328.857143 L 259.839179,370.971771 Z" />
-                    </propertyValuesHolder>
-                </objectAnimator>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="floatType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="fillAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="0.909091" android:value="0" />
-                        <keyframe android:fraction="1.034545" android:value="0.325" />
-                        <keyframe android:fraction="1.159091" android:value="0.65" />
-                        <keyframe android:fraction="1.283636" android:value="0.975" />
-                        <keyframe android:fraction="1.409091" android:value="1" />
-                        <keyframe android:fraction="1.534545" android:value="1" />
-                        <keyframe android:fraction="1.659091" android:value="1" />
-                        <keyframe android:fraction="1.783636" android:value="1" />
-                        <keyframe android:fraction="1.909091" android:value="1" />
-                    </propertyValuesHolder>
-                    <propertyValuesHolder android:propertyName="strokeAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="0.909091" android:value="0" />
-                        <keyframe android:fraction="1.034545" android:value="0.325" />
-                        <keyframe android:fraction="1.159091" android:value="0.65" />
-                        <keyframe android:fraction="1.283636" android:value="0.975" />
-                        <keyframe android:fraction="1.409091" android:value="1" />
-                        <keyframe android:fraction="1.534545" android:value="1" />
-                        <keyframe android:fraction="1.659091" android:value="1" />
-                        <keyframe android:fraction="1.783636" android:value="1" />
-                        <keyframe android:fraction="1.909091" android:value="1" />
-                    </propertyValuesHolder>
-                </objectAnimator>
+            <set android:ordering="together">
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="334"
+                        android:valueFrom="M 143.096874,372.89712 L 213.109534,361.821671 L 229.960039,390.459618 Z"
+                        android:valueTo="M 143.096874,372.89712 L 213.109534,361.821671 L 229.960039,390.459618 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 143.096874,372.89712 L 213.109534,361.821671 L 229.960039,390.459618 Z"
+                        android:valueTo="M 138.309032,360.815003 L 222.665279,347.470512 L 242.967969,381.975553 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 138.309032,360.815003 L 222.665279,347.470512 L 242.967969,381.975553 Z"
+                        android:valueTo="M 135.037663,352.559703 L 229.194395,337.664853 L 251.855846,376.17868 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 135.037663,352.559703 L 229.194395,337.664853 L 251.855846,376.17868 Z"
+                        android:valueTo="M 133.01212,347.448247 L 233.237046,331.593456 L 257.358977,372.589414 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="47"
+                        android:valueFrom="M 133.01212,347.448247 L 233.237046,331.593456 L 257.358977,372.589414 Z"
+                        android:valueTo="M 131.96176,344.797661 L 235.333393,328.445086 L 260.212668,370.728173 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 131.96176,344.797661 L 235.333393,328.445086 L 260.212668,370.728173 Z"
+                        android:valueTo="M 131.615935,343.924973 L 236.023602,327.408506 L 261.152227,370.115371 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 131.615935,343.924973 L 236.023602,327.408506 L 261.152227,370.115371 Z"
+                        android:valueTo="M 131.704002,344.147211 L 235.847835,327.67248 L 260.91296,370.271426 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 131.704002,344.147211 L 235.847835,327.67248 L 260.91296,370.271426 Z"
+                        android:valueTo="M 131.955316,344.7814 L 235.346254,328.425771 L 260.230175,370.716754 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 131.955316,344.7814 L 235.346254,328.425771 L 260.230175,370.716754 Z"
+                        android:valueTo="M 132.09923,345.144568 L 235.059025,328.857143 L 259.839179,370.971771 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="334"
+                        android:valueFrom="0"
+                        android:valueTo="0"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="334"
+                        android:valueFrom="0"
+                        android:valueTo="0"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
             </set>
         </aapt:attr>
     </target>
     <target android:name="facet7_path">
         <aapt:attr name="android:animation">
-            <set>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="pathType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="pathData" android:valueType="pathType">
-                        <keyframe android:fraction="1.090909" android:value="M 378.508465,369.886731 L 351.808722,435.15277 L 296.668807,398.129126 Z" />
-                        <keyframe android:fraction="1.216364" android:value="M 379.241228,352.277677 L 347.071473,430.914856 L 280.634971,386.306129 Z" />
-                        <keyframe android:fraction="1.340909" android:value="M 379.7419,340.246008 L 343.834671,428.019233 L 269.679595,378.227877 Z" />
-                        <keyframe android:fraction="1.465455" android:value="M 380.051902,332.796328 L 341.830532,426.226343 L 262.896326,373.226043 Z" />
-                        <keyframe android:fraction="1.590909" android:value="M 380.212656,328.933238 L 340.79127,425.296625 L 259.378808,370.632304 Z" />
-                        <keyframe android:fraction="1.716364" android:value="M 380.265583,327.661341 L 340.4491,424.990522 L 258.220689,369.778332 Z" />
-                        <keyframe android:fraction="1.840909" android:value="M 380.252105,327.98524 L 340.536237,425.068474 L 258.515614,369.995803 Z" />
-                        <keyframe android:fraction="1.965455" android:value="M 380.213642,328.909538 L 340.784895,425.290922 L 259.357229,370.616391 Z" />
-                        <keyframe android:fraction="2.090909" android:value="M 380.191617,329.438837 L 340.927288,425.418306 L 259.839179,370.971771 Z" />
-                    </propertyValuesHolder>
-                </objectAnimator>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="floatType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="fillAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="1.090909" android:value="0" />
-                        <keyframe android:fraction="1.216364" android:value="0.325" />
-                        <keyframe android:fraction="1.340909" android:value="0.65" />
-                        <keyframe android:fraction="1.465455" android:value="0.975" />
-                        <keyframe android:fraction="1.590909" android:value="1" />
-                        <keyframe android:fraction="1.716364" android:value="1" />
-                        <keyframe android:fraction="1.840909" android:value="1" />
-                        <keyframe android:fraction="1.965455" android:value="1" />
-                        <keyframe android:fraction="2.090909" android:value="1" />
-                    </propertyValuesHolder>
-                    <propertyValuesHolder android:propertyName="strokeAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="1.090909" android:value="0" />
-                        <keyframe android:fraction="1.216364" android:value="0.325" />
-                        <keyframe android:fraction="1.340909" android:value="0.65" />
-                        <keyframe android:fraction="1.465455" android:value="0.975" />
-                        <keyframe android:fraction="1.590909" android:value="1" />
-                        <keyframe android:fraction="1.716364" android:value="1" />
-                        <keyframe android:fraction="1.840909" android:value="1" />
-                        <keyframe android:fraction="1.965455" android:value="1" />
-                        <keyframe android:fraction="2.090909" android:value="1" />
-                    </propertyValuesHolder>
-                </objectAnimator>
+            <set android:ordering="together">
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="400"
+                        android:valueFrom="M 378.508465,369.886731 L 351.808722,435.15277 L 296.668807,398.129126 Z"
+                        android:valueTo="M 378.508465,369.886731 L 351.808722,435.15277 L 296.668807,398.129126 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 378.508465,369.886731 L 351.808722,435.15277 L 296.668807,398.129126 Z"
+                        android:valueTo="M 379.241228,352.277677 L 347.071473,430.914856 L 280.634971,386.306129 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 379.241228,352.277677 L 347.071473,430.914856 L 280.634971,386.306129 Z"
+                        android:valueTo="M 379.7419,340.246008 L 343.834671,428.019233 L 269.679595,378.227877 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 379.7419,340.246008 L 343.834671,428.019233 L 269.679595,378.227877 Z"
+                        android:valueTo="M 380.051902,332.796328 L 341.830532,426.226343 L 262.896326,373.226043 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="47"
+                        android:valueFrom="M 380.051902,332.796328 L 341.830532,426.226343 L 262.896326,373.226043 Z"
+                        android:valueTo="M 380.212656,328.933238 L 340.79127,425.296625 L 259.378808,370.632304 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 380.212656,328.933238 L 340.79127,425.296625 L 259.378808,370.632304 Z"
+                        android:valueTo="M 380.265583,327.661341 L 340.4491,424.990522 L 258.220689,369.778332 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 380.265583,327.661341 L 340.4491,424.990522 L 258.220689,369.778332 Z"
+                        android:valueTo="M 380.252105,327.98524 L 340.536237,425.068474 L 258.515614,369.995803 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 380.252105,327.98524 L 340.536237,425.068474 L 258.515614,369.995803 Z"
+                        android:valueTo="M 380.213642,328.909538 L 340.784895,425.290922 L 259.357229,370.616391 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 380.213642,328.909538 L 340.784895,425.290922 L 259.357229,370.616391 Z"
+                        android:valueTo="M 380.191617,329.438837 L 340.927288,425.418306 L 259.839179,370.971771 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="400"
+                        android:valueFrom="0"
+                        android:valueTo="0"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="400"
+                        android:valueFrom="0"
+                        android:valueTo="0"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
             </set>
         </aapt:attr>
     </target>
     <target android:name="facet8_path">
         <aapt:attr name="android:animation">
-            <set>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="pathType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="pathData" android:valueType="pathType">
-                        <keyframe android:fraction="1.272727" android:value="M 195.614674,438.950797 L 142.017412,383.969103 L 228.880577,401.531601 Z" />
-                        <keyframe android:fraction="1.398182" android:value="M 202.277321,433.312647 L 137.699516,367.066781 L 242.358453,388.227331 Z" />
-                        <keyframe android:fraction="1.522727" android:value="M 206.829681,429.460291 L 134.749244,355.517998 L 251.567427,379.136975 Z" />
-                        <keyframe android:fraction="1.647273" android:value="M 209.648377,427.075017 L 132.922517,348.367308 L 257.269373,373.508475 Z" />
-                        <keyframe android:fraction="1.772727" android:value="M 211.110035,425.838115 L 131.975253,344.659261 L 260.226161,370.589773 Z" />
-                        <keyframe android:fraction="1.898182" android:value="M 211.591276,425.430873 L 131.663373,343.438412 L 261.199664,369.628809 Z" />
-                        <keyframe android:fraction="2.022727" android:value="M 211.468724,425.534581 L 131.742795,343.749311 L 260.951754,369.873527 Z" />
-                        <keyframe android:fraction="2.147273" android:value="M 211.119002,425.830527 L 131.969441,344.636513 L 260.244301,370.571867 Z" />
-                        <keyframe android:fraction="2.272727" android:value="M 210.918734,426 L 132.09923,345.144568 L 259.839179,370.971771 Z" />
-                    </propertyValuesHolder>
-                </objectAnimator>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="floatType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="fillAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="1.272727" android:value="0" />
-                        <keyframe android:fraction="1.398182" android:value="0.325" />
-                        <keyframe android:fraction="1.522727" android:value="0.65" />
-                        <keyframe android:fraction="1.647273" android:value="0.975" />
-                        <keyframe android:fraction="1.772727" android:value="1" />
-                        <keyframe android:fraction="1.898182" android:value="1" />
-                        <keyframe android:fraction="2.022727" android:value="1" />
-                        <keyframe android:fraction="2.147273" android:value="1" />
-                        <keyframe android:fraction="2.272727" android:value="1" />
-                    </propertyValuesHolder>
-                    <propertyValuesHolder android:propertyName="strokeAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="1.272727" android:value="0" />
-                        <keyframe android:fraction="1.398182" android:value="0.325" />
-                        <keyframe android:fraction="1.522727" android:value="0.65" />
-                        <keyframe android:fraction="1.647273" android:value="0.975" />
-                        <keyframe android:fraction="1.772727" android:value="1" />
-                        <keyframe android:fraction="1.898182" android:value="1" />
-                        <keyframe android:fraction="2.022727" android:value="1" />
-                        <keyframe android:fraction="2.147273" android:value="1" />
-                        <keyframe android:fraction="2.272727" android:value="1" />
-                    </propertyValuesHolder>
-                </objectAnimator>
+            <set android:ordering="together">
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="467"
+                        android:valueFrom="M 195.614674,438.950797 L 142.017412,383.969103 L 228.880577,401.531601 Z"
+                        android:valueTo="M 195.614674,438.950797 L 142.017412,383.969103 L 228.880577,401.531601 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 195.614674,438.950797 L 142.017412,383.969103 L 228.880577,401.531601 Z"
+                        android:valueTo="M 202.277321,433.312647 L 137.699516,367.066781 L 242.358453,388.227331 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 202.277321,433.312647 L 137.699516,367.066781 L 242.358453,388.227331 Z"
+                        android:valueTo="M 206.829681,429.460291 L 134.749244,355.517998 L 251.567427,379.136975 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 206.829681,429.460291 L 134.749244,355.517998 L 251.567427,379.136975 Z"
+                        android:valueTo="M 209.648377,427.075017 L 132.922517,348.367308 L 257.269373,373.508475 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="47"
+                        android:valueFrom="M 209.648377,427.075017 L 132.922517,348.367308 L 257.269373,373.508475 Z"
+                        android:valueTo="M 211.110035,425.838115 L 131.975253,344.659261 L 260.226161,370.589773 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 211.110035,425.838115 L 131.975253,344.659261 L 260.226161,370.589773 Z"
+                        android:valueTo="M 211.591276,425.430873 L 131.663373,343.438412 L 261.199664,369.628809 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 211.591276,425.430873 L 131.663373,343.438412 L 261.199664,369.628809 Z"
+                        android:valueTo="M 211.468724,425.534581 L 131.742795,343.749311 L 260.951754,369.873527 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 211.468724,425.534581 L 131.742795,343.749311 L 260.951754,369.873527 Z"
+                        android:valueTo="M 211.119002,425.830527 L 131.969441,344.636513 L 260.244301,370.571867 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 211.119002,425.830527 L 131.969441,344.636513 L 260.244301,370.571867 Z"
+                        android:valueTo="M 210.918734,426 L 132.09923,345.144568 L 259.839179,370.971771 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="467"
+                        android:valueFrom="0"
+                        android:valueTo="0"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="467"
+                        android:valueFrom="0"
+                        android:valueTo="0"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
             </set>
         </aapt:attr>
     </target>
     <target android:name="facet9_path">
         <aapt:attr name="android:animation">
-            <set>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="pathType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="pathData" android:valueType="pathType">
-                        <keyframe android:fraction="1.454545" android:value="M 321.281282,449.535033 L 232.875465,449.930584 L 266.141368,412.511388 Z" />
-                        <keyframe android:fraction="1.58" android:value="M 329.834202,439.035778 L 223.316568,439.512367 L 263.3977,394.427051 Z" />
-                        <keyframe android:fraction="1.704545" android:value="M 335.678121,431.861994 L 216.785298,432.393953 L 261.523045,382.070637 Z" />
-                        <keyframe android:fraction="1.829091" android:value="M 339.296516,427.420183 L 212.741314,427.986425 L 260.36231,374.419884 Z" />
-                        <keyframe android:fraction="1.954545" android:value="M 341.172863,425.116847 L 210.644275,425.700868 L 259.760401,370.452526 Z" />
-                        <keyframe android:fraction="2.08" android:value="M 341.790638,424.358489 L 209.953839,424.948363 L 259.562227,369.146299 Z" />
-                        <keyframe android:fraction="2.204545" android:value="M 341.633317,424.551611 L 210.129664,425.139995 L 259.612694,369.478941 Z" />
-                        <keyframe android:fraction="2.329091" android:value="M 341.184375,425.102716 L 210.63141,425.686846 L 259.756709,370.428186 Z" />
-                        <keyframe android:fraction="2.454545" android:value="M 340.927288,425.418306 L 210.918734,426 L 259.839179,370.971771 Z" />
-                    </propertyValuesHolder>
-                </objectAnimator>
-                <objectAnimator
-                    android:duration="367"
-                    android:valueType="floatType"
-                    android:interpolator="@android:anim/linear_interpolator">
-                    <propertyValuesHolder android:propertyName="fillAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="1.454545" android:value="0" />
-                        <keyframe android:fraction="1.58" android:value="0.325" />
-                        <keyframe android:fraction="1.704545" android:value="0.65" />
-                        <keyframe android:fraction="1.829091" android:value="0.975" />
-                        <keyframe android:fraction="1.954545" android:value="1" />
-                        <keyframe android:fraction="2.08" android:value="1" />
-                        <keyframe android:fraction="2.204545" android:value="1" />
-                        <keyframe android:fraction="2.329091" android:value="1" />
-                        <keyframe android:fraction="2.454545" android:value="1" />
-                    </propertyValuesHolder>
-                    <propertyValuesHolder android:propertyName="strokeAlpha">
-                        <keyframe android:fraction="0" android:value="0" />
-                        <keyframe android:fraction="1.454545" android:value="0" />
-                        <keyframe android:fraction="1.58" android:value="0.325" />
-                        <keyframe android:fraction="1.704545" android:value="0.65" />
-                        <keyframe android:fraction="1.829091" android:value="0.975" />
-                        <keyframe android:fraction="1.954545" android:value="1" />
-                        <keyframe android:fraction="2.08" android:value="1" />
-                        <keyframe android:fraction="2.204545" android:value="1" />
-                        <keyframe android:fraction="2.329091" android:value="1" />
-                        <keyframe android:fraction="2.454545" android:value="1" />
-                    </propertyValuesHolder>
-                </objectAnimator>
+            <set android:ordering="together">
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="534"
+                        android:valueFrom="M 321.281282,449.535033 L 232.875465,449.930584 L 266.141368,412.511388 Z"
+                        android:valueTo="M 321.281282,449.535033 L 232.875465,449.930584 L 266.141368,412.511388 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 321.281282,449.535033 L 232.875465,449.930584 L 266.141368,412.511388 Z"
+                        android:valueTo="M 329.834202,439.035778 L 223.316568,439.512367 L 263.3977,394.427051 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 329.834202,439.035778 L 223.316568,439.512367 L 263.3977,394.427051 Z"
+                        android:valueTo="M 335.678121,431.861994 L 216.785298,432.393953 L 261.523045,382.070637 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 335.678121,431.861994 L 216.785298,432.393953 L 261.523045,382.070637 Z"
+                        android:valueTo="M 339.296516,427.420183 L 212.741314,427.986425 L 260.36231,374.419884 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="47"
+                        android:valueFrom="M 339.296516,427.420183 L 212.741314,427.986425 L 260.36231,374.419884 Z"
+                        android:valueTo="M 341.172863,425.116847 L 210.644275,425.700868 L 259.760401,370.452526 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 341.172863,425.116847 L 210.644275,425.700868 L 259.760401,370.452526 Z"
+                        android:valueTo="M 341.790638,424.358489 L 209.953839,424.948363 L 259.562227,369.146299 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="45"
+                        android:valueFrom="M 341.790638,424.358489 L 209.953839,424.948363 L 259.562227,369.146299 Z"
+                        android:valueTo="M 341.633317,424.551611 L 210.129664,425.139995 L 259.612694,369.478941 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 341.633317,424.551611 L 210.129664,425.139995 L 259.612694,369.478941 Z"
+                        android:valueTo="M 341.184375,425.102716 L 210.63141,425.686846 L 259.756709,370.428186 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="pathData"
+                        android:duration="46"
+                        android:valueFrom="M 341.184375,425.102716 L 210.63141,425.686846 L 259.756709,370.428186 Z"
+                        android:valueTo="M 340.927288,425.418306 L 210.918734,426 L 259.839179,370.971771 Z"
+                        android:valueType="pathType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="534"
+                        android:valueFrom="0"
+                        android:valueTo="0"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="fillAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
+                <set android:ordering="sequentially">
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="534"
+                        android:valueFrom="0"
+                        android:valueTo="0"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0"
+                        android:valueTo="0.325"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="0.325"
+                        android:valueTo="0.65"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="0.65"
+                        android:valueTo="0.975"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="47"
+                        android:valueFrom="0.975"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="45"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                    <objectAnimator
+                        android:propertyName="strokeAlpha"
+                        android:duration="46"
+                        android:valueFrom="1"
+                        android:valueTo="1"
+                        android:valueType="floatType"
+                        android:interpolator="@android:anim/linear_interpolator" />
+                </set>
             </set>
         </aapt:attr>
     </target>
