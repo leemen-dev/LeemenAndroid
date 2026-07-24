@@ -205,3 +205,16 @@ android {
 
 apply plugin: 'com.google.gms.google-services'
 apply plugin: 'com.google.firebase.crashlytics'
+
+// The "afat" flavor is the universal APK variant. Gradle nevertheless creates an
+// AAB task named "bundleAfatRelease", which is easy to confuse with the intended
+// "bundleAfat" flavor task ("bundleBundleAfatRelease"). Fail before execution so
+// an APK-flavor AAB with the version-code suffix 9 cannot be uploaded by mistake.
+def accidentalAfatBundleTask = "${project.path}:bundleAfatRelease"
+gradle.taskGraph.whenReady { taskGraph ->
+    if (taskGraph.hasTask(accidentalAfatBundleTask)) {
+        throw new GradleException(
+            "${accidentalAfatBundleTask} builds the APK-only 'afat' flavor as an AAB. " +
+            "Use ${project.path}:bundleBundleAfatRelease instead.")
+    }
+}
