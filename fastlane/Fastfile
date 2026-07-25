@@ -1,0 +1,66 @@
+require "json"
+
+ENV["FASTLANE_SKIP_UPDATE_CHECK"] = "1"
+
+EXPECTED_GOOGLE_PLAY_ACCOUNT = "leemengoogleplay@leemen-61437.iam.gserviceaccount.com"
+
+opt_out_usage
+default_platform(:android)
+
+platform :android do
+  desc "Upload both release AAB variants to the Google Play internal track"
+  lane :internal do
+    credentials_json = ENV["GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"]
+    UI.user_error!("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON is not configured") if credentials_json.to_s.empty?
+
+    begin
+      client_email = JSON.parse(credentials_json).fetch("client_email")
+    rescue JSON::ParserError, KeyError => error
+      UI.user_error!("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON is invalid: #{error.message}")
+    end
+
+    unless client_email == EXPECTED_GOOGLE_PLAY_ACCOUNT
+      UI.user_error!(
+        "Wrong Google Play service account: expected #{EXPECTED_GOOGLE_PLAY_ACCOUNT}, got #{client_email}"
+      )
+    end
+
+    project_root = File.expand_path("..", __dir__)
+    variants = {
+      "Android 21+" => "bundleAfatRelease",
+      "Android 23+" => "bundleAfat_SDK23Release"
+    }
+
+    aab_paths = variants.map do |label, variant|
+      output_dir = File.join(
+        project_root,
+        "TMessagesProj_App",
+        "build",
+        "outputs",
+        "bundle",
+        variant
+      )
+      matches = Dir[File.join(output_dir, "*.aab")].sort
+
+      unless matches.length == 1
+        UI.user_error!(
+          "#{label}: expected exactly one AAB in #{output_dir}, found #{matches.length}"
+        )
+      end
+
+      matches.first
+    end
+
+    upload_to_play_store(
+      package_name: "app.leemen.android",
+      json_key_data: credentials_json,
+      track: "internal",
+      release_status: "completed",
+      aab_paths: aab_paths,
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+end
