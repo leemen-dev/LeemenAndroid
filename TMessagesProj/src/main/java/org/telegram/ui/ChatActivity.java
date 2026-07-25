@@ -3183,6 +3183,10 @@ public class ChatActivity extends BaseFragment implements
         }
         firstMessagesLoaded = true;
         final Runnable load = () -> {
+            // Persistent mode of the CURRENT message dataset. ssLoadedByExposedIds below is only a transient
+            // request marker and is cleared when that request finishes, so it cannot be used to decide whether
+            // a later cross-device sync must replace an already-rendered filtered dataset.
+            ssContentLoadedSuppressed = false;
             waitingForLoad.add(lastLoadIndex);
             if (chatMode == MODE_SEARCH) {
                 HashtagSearchController.getInstance(currentAccount).searchHashtag(searchingHashtag, classGuid, searchType, lastLoadIndex++);
@@ -3191,6 +3195,7 @@ public class ChatActivity extends BaseFragment implements
             } else if (isSecondSpaceContentSuppressed()) {
                 startLoadFromMessageId = 0;
                 startLoadFromMessageIdSaved = 0;
+                ssContentLoadedSuppressed = true;
                 SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
                 java.util.Set<Integer> exposedIds = ssc.getExposedMessageIds(dialog_id);
                 java.util.Set<Integer> pendingIds = ssc.getPendingMessages(dialog_id);
@@ -20207,6 +20212,8 @@ public class ChatActivity extends BaseFragment implements
     private int ssPreFilterMinMsgId = Integer.MAX_VALUE;
     private boolean ssPreFilterDbEnd = false;
     private boolean ssLoadedByExposedIds = false;
+    /** True while the currently rendered message dataset was loaded through the OFF-mode exposed-id path. */
+    private boolean ssContentLoadedSuppressed = false;
 
     // After the user clicks "Manage" in the decision popup we drop into Telegram's
     // existing multi-select mode with these IDs pre-selected. The set sticks around
@@ -20577,12 +20584,19 @@ public class ChatActivity extends BaseFragment implements
     @Override
     public void didReceivedNotification(int id, int account, final Object... args) {
         if (id == NotificationCenter.secondSpaceSyncApplied) {
-            // A remote private-space sync changed the exposed/pending set while this chat is open. If we're an
-            // OFF-mode hidden chat that loaded via the exposed-id path, reload from scratch so the now-current
-            // set is re-fetched and re-filtered. Guarded tightly so it never fires for normal chats or teardown.
-            if (firstMessagesLoaded && ssLoadedByExposedIds && isSecondSpaceContentSuppressed()) {
+            // A remote private-space sync may change membership and/or the exposed/pending set while this chat
+            // is open. Reload when either the rendered dataset WAS filtered or the chat MUST be filtered now:
+            // this covers exposed-set changes in place as well as both membership transitions (normal→hidden
+            // and hidden→normal). ssLoadedByExposedIds is intentionally not used here — it is cleared as soon
+            // as the load request settles and was the reason live cross-device changes were ignored.
+            if (firstMessagesLoaded && (ssContentLoadedSuppressed || isSecondSpaceContentSuppressed())) {
                 resetForReload();
                 firstLoadMessages();
+            } else if (firstMessagesLoaded) {
+                // In REAL mode the dataset itself is already complete, but synced exposure/self-pin markers
+                // still affect eye badges and the effective pinned-message banner.
+                updateVisibleRows();
+                updatePinnedMessageView(true);
             }
             return;
         }

@@ -1062,6 +1062,13 @@ public class SecondSpaceController extends BaseController implements Notificatio
                                  Integer pinTimeout,
                                  Boolean allowScreenshotsVal,
                                  java.util.List<TabStep> tabSeq) {
+        // Keep the rendered-chat portion of the old state so a no-op pull (including our own PUT echo) does
+        // not force every open OFF-mode chat to reload. Local mutations are already present in the controller;
+        // only an actually different merged projection needs the cross-device UI event below.
+        Set<Long> previousMembers = new HashSet<>(dialogIds);
+        Map<Long, Set<Integer>> previousExposed = copyMsgMap(exposedMessages);
+        Map<Long, Set<Integer>> previousPending = copyMsgMap(pendingMessages);
+        Map<Long, Set<Integer>> previousSelfPinned = copyMsgMap(selfPinnedMessages);
         applyingRemoteSync = true;
         try {
             // Tier-P: apply our platform's synced tab gesture under the SAME guard (no spurious back-push).
@@ -1130,7 +1137,13 @@ public class SecondSpaceController extends BaseController implements Notificatio
         // Tell any OPEN OFF-mode chat that the synced exposed/pending set changed so it re-filters its messages.
         // Narrow event (only ChatActivity listens) — deliberately NOT secondSpaceModeChanged, which would churn
         // the whole mode-transition UI (tabs, settings, shared-media) on every sync.
-        getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceSyncApplied);
+        boolean renderedChatStateChanged = !previousMembers.equals(dialogIds)
+                || !previousExposed.equals(exposedMessages)
+                || !previousPending.equals(pendingMessages)
+                || !previousSelfPinned.equals(selfPinnedMessages);
+        if (renderedChatStateChanged) {
+            getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceSyncApplied);
+        }
     }
 
     /** Load the exposed/pending message bodies for every hidden dialog from the local DB, so the OFF-mode dialog
@@ -1218,6 +1231,14 @@ public class SecondSpaceController extends BaseController implements Notificatio
             }
             dst.addAll(e.getValue());
         }
+    }
+
+    private static Map<Long, Set<Integer>> copyMsgMap(Map<Long, Set<Integer>> source) {
+        Map<Long, Set<Integer>> copy = new HashMap<>();
+        for (Map.Entry<Long, Set<Integer>> e : source.entrySet()) {
+            copy.put(e.getKey(), new HashSet<>(e.getValue()));
+        }
+        return copy;
     }
 
     /** Local PS-state change → schedule a debounced sync push (no-op while applying remote state). */
