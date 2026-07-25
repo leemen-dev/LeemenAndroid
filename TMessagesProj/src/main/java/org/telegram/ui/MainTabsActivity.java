@@ -281,14 +281,6 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             return true;
         });
         tabs[INDEX_PRIVATE_SPACE_EXIT].setOnClickListener(v -> {
-            // On a wide/tablet layout the chats list stays in the left pane while the opened
-            // ChatActivity lives in LaunchActivity's separate right navigation stack. Reset the
-            // navigation before changing the mode so a protected chat cannot remain visible after
-            // the left-pane Exit tab switches the list back to the regular space.
-            LaunchActivity launchActivity = LaunchActivity.instance;
-            if (launchActivity != null) {
-                launchActivity.resetNavigationAfterPrivateSpaceExit(currentAccount);
-            }
             org.telegram.messenger.SecondSpaceController.getInstance(currentAccount).setActive(false);
         });
 

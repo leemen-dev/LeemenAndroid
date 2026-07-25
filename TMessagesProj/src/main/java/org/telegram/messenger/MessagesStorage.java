@@ -9625,9 +9625,26 @@ public class MessagesStorage extends BaseController {
         getExposedMessagesById(dialogId, messageIds, classGuid, loadIndex, null);
     }
 
+    /**
+     * Completes an exact-ID private-space load without allowing Telegram's generic empty-cache fallback to
+     * replace it with a normal history request. {@code resCount} is only used by
+     * {@link MessagesController#processLoadedMessages} to decide whether a cache miss should hit the server;
+     * an exact-ID result is authoritative even when it is empty.
+     */
+    private void processLoadedExposedMessages(TLRPC.TL_messages_messages res, long dialogId, int requestedCount, int classGuid, int loadIndex) {
+        int exactResultCount = Math.max(1, res.messages.size());
+        Utilities.stageQueue.postRunnable(() -> getMessagesController().processLoadedMessages(
+            res, exactResultCount, dialogId, 0, requestedCount, 0, 0,
+            true, classGuid, 0, 0, 0, 0,
+            MessagesController.LOAD_FROM_UNREAD, true, 0, 0, loadIndex,
+            false, 0, true, false, null
+        ));
+    }
+
     /** Loads the given message ids for one dialog from the local DB. When {@code rawCallback} is provided the
      *  raw DB result is delivered to it on the UI thread (used by the private-space media-by-ids load); otherwise
-     *  the result is routed through {@link MessagesController#processLoadedMessages} (the dialog-preview warmup). */
+     *  the result is routed through {@link MessagesController#processLoadedMessages} for the exposed-only chat
+     *  load or dialog-preview warmup. */
     public void getExposedMessagesById(long dialogId, int[] messageIds, int classGuid, int loadIndex, Utilities.Callback<TLRPC.messages_Messages> rawCallback) {
         storageQueue.postRunnable(() -> {
             TLRPC.TL_messages_messages res = new TLRPC.TL_messages_messages();
@@ -9636,12 +9653,7 @@ public class MessagesStorage extends BaseController {
                     AndroidUtilities.runOnUIThread(() -> rawCallback.run(res));
                     return;
                 }
-                Utilities.stageQueue.postRunnable(() -> getMessagesController().processLoadedMessages(
-                    res, 0, dialogId, 0, 0, 0, 0,
-                    true, classGuid, 0, 0, 0, 0,
-                    MessagesController.LOAD_FROM_UNREAD, true, 0, 0, loadIndex,
-                    false, 0, true, false, null
-                ));
+                processLoadedExposedMessages(res, dialogId, 0, classGuid, loadIndex);
                 return;
             }
             long currentUserId = getUserConfig().clientUserId;
@@ -9788,13 +9800,7 @@ public class MessagesStorage extends BaseController {
                 AndroidUtilities.runOnUIThread(() -> rawCallback.run(res));
                 return;
             }
-            int count = messageIds.length;
-            Utilities.stageQueue.postRunnable(() -> getMessagesController().processLoadedMessages(
-                res, res.messages.size(), dialogId, 0, count, 0, 0,
-                true, classGuid, 0, 0, 0, 0,
-                MessagesController.LOAD_FROM_UNREAD, true, 0, 0, loadIndex,
-                false, 0, true, false, null
-            ));
+            processLoadedExposedMessages(res, dialogId, messageIds.length, classGuid, loadIndex);
         });
     }
 

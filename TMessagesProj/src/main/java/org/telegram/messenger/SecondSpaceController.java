@@ -1337,10 +1337,15 @@ public class SecondSpaceController extends BaseController implements Notificatio
         if (oldMode == MODE_REAL && mode == MODE_OFF) {
             wipePsDrafts();
         }
-        // Re-evaluate FLAG_SECURE: snapshot capture / screenshots must be blocked while PS is on.
+        // A mode switch always invalidates the currently open chat. This is centralized here so every
+        // entry/exit route also clears the separate right-hand ChatActivity stack on wide layouts.
+        // Re-evaluate FLAG_SECURE at the same time: snapshots/screenshots must be blocked while PS is on.
         try {
             org.telegram.ui.LaunchActivity la = org.telegram.ui.LaunchActivity.instance;
-            if (la != null) la.invalidateFlagSecure();
+            if (la != null) {
+                la.resetNavigationAfterPrivateSpaceModeChange(currentAccount);
+                la.invalidateFlagSecure();
+            }
         } catch (Throwable ignored) {
         }
         NotificationCenter nc = getNotificationCenter();

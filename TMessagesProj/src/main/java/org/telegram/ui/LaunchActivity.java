@@ -6825,10 +6825,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
     /**
      * Pops every fragment stacked above the root tabs fragment and selects the Chats tab, with no
-     * animation. Used for both an explicit Private Space exit and focus loss so the regular space
-     * never retains an open (possibly protected) chat or a deep Private-Space screen.
+     * animation. Used for every Private Space mode change and focus loss so neither space retains
+     * an open chat (including the separate right pane on wide/tablet layouts).
      */
-    void resetNavigationAfterPrivateSpaceExit(int account) {
+    public void resetNavigationAfterPrivateSpaceModeChange(int account) {
         if (account != UserConfig.selectedAccount) {
             return;
         }
@@ -6887,8 +6887,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         // arm pendingSecureSnapshot BEFORE clearing active so the lambda keeps returning true even
         // after each setActive(false) call invalidates the secure reason. Cleared on resume.
         final int selectedAccount = UserConfig.selectedAccount;
-        final boolean selectedWasInSecondSpace = UserConfig.getInstance(selectedAccount).isClientActivated()
-                && SecondSpaceController.getInstance(selectedAccount).isActive();
         boolean anyWasActive = false;
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (UserConfig.getInstance(a).isClientActivated()
@@ -6930,12 +6928,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             }
             pendingSafeAccountSwitch = target;
             preHiddenAccount = -1;
-        }
-        // Deniability: if focus was lost while the visible account was in Private Space, drop the
-        // user back onto the chats list regardless of where they were (open chat, settings, PS
-        // screen). Skipped when a safe-account switch is queued — that rebuild lands on chats anyway.
-        if (selectedWasInSecondSpace && pendingSafeAccountSwitch < 0) {
-            resetNavigationAfterPrivateSpaceExit(selectedAccount);
         }
         pipActivityHandler.onPause();
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.stopAllHeavyOperations, 4096);
