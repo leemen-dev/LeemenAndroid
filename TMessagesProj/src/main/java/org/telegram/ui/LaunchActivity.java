@@ -6825,11 +6825,13 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
     /**
      * Pops every fragment stacked above the root tabs fragment and selects the Chats tab, with no
-     * animation. Used on focus loss while in Private Space so the user comes back to the neutral
-     * chats list instead of an open (possibly hidden) chat or a deep Private-Space screen. Runs
-     * while the activity is paused, so the change is invisible and already in place on resume.
+     * animation. Used for both an explicit Private Space exit and focus loss so the regular space
+     * never retains an open (possibly protected) chat or a deep Private-Space screen.
      */
-    private void resetToChatsPageAfterFocusLoss() {
+    void resetNavigationAfterPrivateSpaceExit(int account) {
+        if (account != UserConfig.selectedAccount) {
+            return;
+        }
         MainTabsActivity mainTabs = null;
         for (int i = 0; i < mainFragmentsStack.size(); i++) {
             if (mainFragmentsStack.get(i) instanceof MainTabsActivity) {
@@ -6844,8 +6846,20 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         if (AndroidUtilities.isTablet()) {
             if (rightActionBarLayout != null) {
                 rightActionBarLayout.removeAllFragments();
+                rightActionBarLayout.getView().setVisibility(View.GONE);
+                if (!tabletFullSize) {
+                    if (backgroundTablet != null) {
+                        backgroundTablet.setVisibility(View.VISIBLE);
+                    }
+                    if (shadowTabletSide != null) {
+                        shadowTabletSide.setVisibility(View.VISIBLE);
+                    }
+                }
             }
             popFragmentsAboveTabsRoot(layersActionBarLayout, mainTabs);
+            if (layersActionBarLayout != null && layersActionBarLayout.getFragmentStack().isEmpty()) {
+                layersActionBarLayout.getView().setVisibility(View.GONE);
+            }
         }
         mainTabs.switchToChatsTab(false);
     }
@@ -6921,7 +6935,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         // user back onto the chats list regardless of where they were (open chat, settings, PS
         // screen). Skipped when a safe-account switch is queued — that rebuild lands on chats anyway.
         if (selectedWasInSecondSpace && pendingSafeAccountSwitch < 0) {
-            resetToChatsPageAfterFocusLoss();
+            resetNavigationAfterPrivateSpaceExit(selectedAccount);
         }
         pipActivityHandler.onPause();
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.stopAllHeavyOperations, 4096);
