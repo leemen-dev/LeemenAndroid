@@ -1404,6 +1404,13 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             if (AndroidUtilities.isTablet()) {
                 layersActionBarLayout.rebuildLogout();
                 rightActionBarLayout.rebuildLogout();
+                // rebuildLogout() clears a navigation container's children but intentionally keeps its root
+                // view visibility. If a chat occupied the wide right pane, that now-empty pane would continue
+                // covering the auth backdrop (often as a solid black rectangle).
+                rightActionBarLayout.getView().setVisibility(View.GONE);
+                backgroundTablet.setVisibility(View.VISIBLE);
+                shadowTabletSide.setVisibility(View.GONE);
+                shadowTablet.setBackgroundColor(0x00000000);
             }
             presentFragment(new IntroActivity().setOnLogout());
         }
@@ -8756,7 +8763,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                     }
                 }
 
-                if (fragment instanceof LoginActivity && account == -1) {
+                if (isLoggedOutAuthFragment(fragment, account)) {
                     backgroundTablet.setVisibility(View.VISIBLE);
                     shadowTabletSide.setVisibility(View.GONE);
                     shadowTablet.setBackgroundColor(0x00000000);
@@ -8831,7 +8838,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                     }
                 }
 
-                if (fragment instanceof LoginActivity && account == -1) {
+                if (isLoggedOutAuthFragment(fragment, account)) {
                     backgroundTablet.setVisibility(View.VISIBLE);
                     shadowTabletSide.setVisibility(View.GONE);
                     shadowTablet.setBackgroundColor(0x00000000);
@@ -8843,6 +8850,16 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             }
         }
         return true;
+    }
+
+    /**
+     * Login and intro are two states of the same logged-out flow. On a wide layout both live in the layers
+     * container, so both must suppress the normal modal scrim; otherwise a remote logout leaves a black
+     * surround that does not match the app's initial authentication screen.
+     */
+    private static boolean isLoggedOutAuthFragment(BaseFragment fragment, int availableAccount) {
+        return availableAccount == -1
+                && (fragment instanceof LoginActivity || fragment instanceof IntroActivity);
     }
 
     @Override

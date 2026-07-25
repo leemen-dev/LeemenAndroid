@@ -4,8 +4,17 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import java.io.IOException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.HttpUrl;
+import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.WebSocket;
 import okhttp3.WebSocketListener;
@@ -14,9 +23,6 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.UserConfig;
-
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Phase 4 — Realtime push (notify-only). Per bound account, opens a Supabase Realtime websocket DIRECTLY
@@ -40,13 +46,17 @@ public final class LeemenRealtime {
             .pingInterval(20, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .build();
+    private static final OkHttpClient BROADCAST_HTTP = HTTP.newBuilder()
+            .callTimeout(5, TimeUnit.SECONDS)
+            .build();
+    private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
     private static final long JOIN_TIMEOUT_MS = 15000;
+    private static final int MAX_RECONNECT_DELAY_MS = 10_000;
     private static final String EVENT_ACCOUNT_GENERATION_INVALIDATED = "account_generation_invalidated";
     private static final AtomicLong NEXT_REF = new AtomicLong();
 
     private static final WebSocket[] sockets = new WebSocket[N];
     private static final boolean[] joined = new boolean[N];
-    private static final String[] joinRefs = new String[N];
     private static final Runnable[] heartbeats = new Runnable[N];
     private static final Runnable[] joinTimeouts = new Runnable[N];
     private static final Runnable[] reconnects = new Runnable[N];
@@ -90,7 +100,6 @@ public final class LeemenRealtime {
         if (syncId == null) return;
         cancel(reconnects, account);
         joined[account] = false;
-        joinRefs[account] = null;
         String url = LeemenConfig.supabaseRealtimeUrl()
                 + "/websocket?apikey=" + LeemenConfig.SUPABASE_ANON_KEY + "&vsn=1.0.0";
         try {
@@ -110,7 +119,6 @@ public final class LeemenRealtime {
         WebSocket ws = sockets[account];
         sockets[account] = null;
         joined[account] = false;
-        joinRefs[account] = null;
         if (ws != null) {
             try { ws.close(1000, "bye"); } catch (Throwable ignore) {}
         }
@@ -120,32 +128,71 @@ public final class LeemenRealtime {
      * Notify other live clients that this account generation was deleted. The event itself is deliberately
      * non-authoritative: receivers only use it to trigger {@link LeemenSessionGuard#checkNow(int)}.
      *
-     * Called on the UI thread after /account/delete returned success and before this socket is disconnected.
+     * Called on the UI thread after /account/delete returned success. Use Realtime's HTTP Broadcast endpoint
+     * instead of the deleting client's WebSocket: deletion must still wake sibling devices when that socket
+     * has not joined yet, is between reconnects, or is about to be torn down by local logout.
      */
     public static boolean broadcastAccountGenerationInvalidated(int account) {
-        if (!inRange(account) || !joined[account]) return false;
-        WebSocket ws = sockets[account];
-        String joinRef = joinRefs[account];
+        if (!inRange(account)) return false;
         String syncId = LeemenAccount.getSyncAccountId(account);
-        if (ws == null || joinRef == null || syncId == null) return false;
-
-        JsonObject data = new JsonObject();
-        JsonObject payload = new JsonObject();
-        payload.addProperty("type", "broadcast");
-        payload.addProperty("event", EVENT_ACCOUNT_GENERATION_INVALIDATED);
-        payload.add("payload", data);
-        String topic = "realtime:" + LeemenConfig.syncChannel(syncId);
-        boolean sent;
+        if (syncId == null) return false;
         try {
-            sent = ws.send(phx(topic, "broadcast", payload, nextRef(), joinRef).toString());
+            enqueueAccountInvalidationBroadcast(LeemenConfig.syncChannel(syncId), 0);
+            return true;
         } catch (Throwable e) {
             FileLog.e(e);
-            sent = false;
+            return false;
         }
-        if (BuildVars.LOGS_ENABLED) {
-            FileLog.d("Leemen: realtime account-generation invalidation sent=" + sent + " account " + account);
+    }
+
+    private static void enqueueAccountInvalidationBroadcast(final String channel, final int attempt) {
+        HttpUrl url = new HttpUrl.Builder()
+                .scheme("https")
+                .host(LeemenConfig.SUPABASE_REF + ".supabase.co")
+                .addPathSegments("realtime/v1/api/broadcast")
+                .addPathSegment(channel)
+                .addPathSegment("events")
+                .addPathSegment(EVENT_ACCOUNT_GENERATION_INVALIDATED)
+                .build();
+        Request request = new Request.Builder()
+                .url(url)
+                .header("apikey", LeemenConfig.SUPABASE_ANON_KEY)
+                .post(RequestBody.create(JSON, "{}"))
+                .build();
+        BROADCAST_HTTP.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                retryAccountInvalidationBroadcast(channel, attempt, "transport");
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) {
+                boolean accepted = response.isSuccessful();
+                int code = response.code();
+                response.close();
+                if (accepted) {
+                    if (BuildVars.LOGS_ENABLED) {
+                        FileLog.d("Leemen: realtime account-generation invalidation accepted");
+                    }
+                } else {
+                    retryAccountInvalidationBroadcast(channel, attempt, "http " + code);
+                }
+            }
+        });
+    }
+
+    private static void retryAccountInvalidationBroadcast(String channel, int attempt, String reason) {
+        if (attempt >= 1) {
+            if (BuildVars.LOGS_ENABLED) {
+                FileLog.d("Leemen: realtime account-generation invalidation failed: " + reason);
+            }
+            return;
         }
-        return sent;
+        // Keep the channel captured: local logout is allowed to clear the account binding before this retry.
+        AndroidUtilities.runOnUIThread(
+                () -> enqueueAccountInvalidationBroadcast(channel, attempt + 1),
+                250
+        );
     }
 
     private static final class Listener extends WebSocketListener {
@@ -272,7 +319,6 @@ public final class LeemenRealtime {
             if (sockets[account] != ws) return;
             cancel(joinTimeouts, account);
             joined[account] = true;
-            joinRefs[account] = joinRef;
             backoffMs[account] = 0;
             scheduleHeartbeat(account, ws);
             if (BuildVars.LOGS_ENABLED) {
@@ -281,6 +327,9 @@ public final class LeemenRealtime {
             // Close the race between the initial GET and the moment this channel became live: any broadcast
             // sent in that interval was legitimately missed, so reconcile once after every successful join.
             LeemenSync.onRemoteChanged(account);
+            // Broadcasts are not replayed. If account deletion happened while this socket was down, the
+            // authoritative status check makes the reconnect itself terminate the stale generation.
+            LeemenSessionGuard.checkNow(account);
         });
     }
 
@@ -289,7 +338,6 @@ public final class LeemenRealtime {
             if (sockets[account] != ws) return;
             sockets[account] = null;
             joined[account] = false;
-            joinRefs[account] = null;
             cancel(joinTimeouts, account);
             cancel(heartbeats, account);
             try { ws.cancel(); } catch (Throwable ignore) {}
@@ -299,7 +347,7 @@ public final class LeemenRealtime {
 
     private static void scheduleReconnect(final int account) {
         cancel(reconnects, account);
-        int delay = backoffMs[account] <= 0 ? 2000 : Math.min(backoffMs[account] * 2, 60000);
+        int delay = backoffMs[account] <= 0 ? 2000 : Math.min(backoffMs[account] * 2, MAX_RECONNECT_DELAY_MS);
         backoffMs[account] = delay;
         reconnects[account] = () -> { reconnects[account] = null; connect(account); };
         AndroidUtilities.runOnUIThread(reconnects[account], delay);
