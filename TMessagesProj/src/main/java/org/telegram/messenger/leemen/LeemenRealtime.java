@@ -24,7 +24,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * it triggers a normal GET→merge via LeemenSync.onRemoteChanged.
  *
  * Purely advisory: correctness comes from the GET+CAS backstop (foreground / reconnect / 409), so a missed
- * or spoofed notify is harmless (just a no-op GET). The client only ever SUBSCRIBES, never broadcasts.
+ * or spoofed notify is harmless (just a no-op GET). The sole client-originated event is an account-generation
+ * invalidation hint after the delete endpoint has succeeded; receivers still verify it through authenticated
+ * REST before logging out.
  *
  * Threading: OkHttp delivers listener callbacks on its own thread; all access to the per-account arrays is
  * marshalled onto the UI thread, and WebSocket.send() is itself thread-safe.
@@ -39,10 +41,12 @@ public final class LeemenRealtime {
             .retryOnConnectionFailure(true)
             .build();
     private static final long JOIN_TIMEOUT_MS = 15000;
+    private static final String EVENT_ACCOUNT_GENERATION_INVALIDATED = "account_generation_invalidated";
     private static final AtomicLong NEXT_REF = new AtomicLong();
 
     private static final WebSocket[] sockets = new WebSocket[N];
     private static final boolean[] joined = new boolean[N];
+    private static final String[] joinRefs = new String[N];
     private static final Runnable[] heartbeats = new Runnable[N];
     private static final Runnable[] joinTimeouts = new Runnable[N];
     private static final Runnable[] reconnects = new Runnable[N];
@@ -86,6 +90,7 @@ public final class LeemenRealtime {
         if (syncId == null) return;
         cancel(reconnects, account);
         joined[account] = false;
+        joinRefs[account] = null;
         String url = LeemenConfig.supabaseRealtimeUrl()
                 + "/websocket?apikey=" + LeemenConfig.SUPABASE_ANON_KEY + "&vsn=1.0.0";
         try {
@@ -105,9 +110,42 @@ public final class LeemenRealtime {
         WebSocket ws = sockets[account];
         sockets[account] = null;
         joined[account] = false;
+        joinRefs[account] = null;
         if (ws != null) {
             try { ws.close(1000, "bye"); } catch (Throwable ignore) {}
         }
+    }
+
+    /**
+     * Notify other live clients that this account generation was deleted. The event itself is deliberately
+     * non-authoritative: receivers only use it to trigger {@link LeemenSessionGuard#checkNow(int)}.
+     *
+     * Called on the UI thread after /account/delete returned success and before this socket is disconnected.
+     */
+    public static boolean broadcastAccountGenerationInvalidated(int account) {
+        if (!inRange(account) || !joined[account]) return false;
+        WebSocket ws = sockets[account];
+        String joinRef = joinRefs[account];
+        String syncId = LeemenAccount.getSyncAccountId(account);
+        if (ws == null || joinRef == null || syncId == null) return false;
+
+        JsonObject data = new JsonObject();
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", "broadcast");
+        payload.addProperty("event", EVENT_ACCOUNT_GENERATION_INVALIDATED);
+        payload.add("payload", data);
+        String topic = "realtime:" + LeemenConfig.syncChannel(syncId);
+        boolean sent;
+        try {
+            sent = ws.send(phx(topic, "broadcast", payload, nextRef(), joinRef).toString());
+        } catch (Throwable e) {
+            FileLog.e(e);
+            sent = false;
+        }
+        if (BuildVars.LOGS_ENABLED) {
+            FileLog.d("Leemen: realtime account-generation invalidation sent=" + sent + " account " + account);
+        }
+        return sent;
     }
 
     private static final class Listener extends WebSocketListener {
@@ -149,7 +187,7 @@ public final class LeemenRealtime {
                 if ("phx_reply".equals(event) && joinRef != null && joinRef.equals(optStr(m, "ref"))) {
                     JsonObject payload = object(m, "payload");
                     if (payload != null && "ok".equals(optStr(payload, "status"))) {
-                        markJoined(account, ws);
+                        markJoined(account, ws, joinRef);
                     } else {
                         if (BuildVars.LOGS_ENABLED) {
                             FileLog.d("Leemen: realtime join rejected account " + account
@@ -170,7 +208,12 @@ public final class LeemenRealtime {
 
                 if (topic.equals(messageTopic) && "broadcast".equals(event)) {
                     JsonObject payload = m.has("payload") && m.get("payload").isJsonObject() ? m.getAsJsonObject("payload") : null;
-                    if (payload != null && "blob_changed".equals(optStr(payload, "event"))) {
+                    String broadcastEvent = payload != null ? optStr(payload, "event") : null;
+                    if (EVENT_ACCOUNT_GENERATION_INVALIDATED.equals(broadcastEvent)) {
+                        // Never trust a public-channel broadcast as proof of deletion. It only wakes the
+                        // authenticated generation guard, which logs out solely on the backend's 401/404.
+                        LeemenSessionGuard.checkNow(account);
+                    } else if ("blob_changed".equals(broadcastEvent)) {
                         // Supabase broadcast nests the data one level deeper: payload.payload = {table, version}.
                         // Pass them so LeemenSync can ignore the echo of our own write (no push→echo→push loop).
                         JsonObject data = payload.has("payload") && payload.get("payload").isJsonObject()
@@ -224,11 +267,12 @@ public final class LeemenRealtime {
         AndroidUtilities.runOnUIThread(joinTimeouts[account], JOIN_TIMEOUT_MS);
     }
 
-    private static void markJoined(final int account, final WebSocket ws) {
+    private static void markJoined(final int account, final WebSocket ws, final String joinRef) {
         AndroidUtilities.runOnUIThread(() -> {
             if (sockets[account] != ws) return;
             cancel(joinTimeouts, account);
             joined[account] = true;
+            joinRefs[account] = joinRef;
             backoffMs[account] = 0;
             scheduleHeartbeat(account, ws);
             if (BuildVars.LOGS_ENABLED) {
@@ -245,6 +289,7 @@ public final class LeemenRealtime {
             if (sockets[account] != ws) return;
             sockets[account] = null;
             joined[account] = false;
+            joinRefs[account] = null;
             cancel(joinTimeouts, account);
             cancel(heartbeats, account);
             try { ws.cancel(); } catch (Throwable ignore) {}

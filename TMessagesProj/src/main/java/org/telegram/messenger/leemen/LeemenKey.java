@@ -52,6 +52,9 @@ public final class LeemenKey {
         LeemenRestClient.get(LeemenConfig.EP_ACCOUNT_KEY, token, (resp, code, errCode, errMsg) -> {
             boolean delegated = false;
             try {
+                if (!bindingMatches(account, token)) {
+                    return;
+                }
                 if (resp == null || code < 200 || code >= 300) {
                     if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: /account/key failed code=" + code + " err=" + errCode);
                     return;
@@ -94,7 +97,9 @@ public final class LeemenKey {
         body.addProperty("k_master", Base64.encodeToString(k, Base64.NO_WRAP));
         LeemenRestClient.post(LeemenConfig.EP_WRAP_DEFAULT, token, body, (resp, code, errCode, errMsg) -> {
             try {
-                if (resp != null && code >= 200 && code < 300 && resp.has("ok") && resp.get("ok").getAsBoolean()) {
+                if (!bindingMatches(account, token)) {
+                    Arrays.fill(k, (byte) 0);
+                } else if (resp != null && code >= 200 && code < 300 && resp.has("ok") && resp.get("ok").getAsBoolean()) {
                     storeKMaster(account, k, true);
                 } else {
                     if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: /account/wrap-default failed code=" + code + " err=" + errCode);
@@ -145,6 +150,15 @@ public final class LeemenKey {
         } catch (Throwable e) {
             return def;
         }
+    }
+
+    private static boolean bindingMatches(int account, String token) {
+        return account >= 0
+                && account < UserConfig.MAX_ACCOUNT_COUNT
+                && UserConfig.getInstance(account).isClientActivated()
+                && !LeemenAccount.isDisabled(account)
+                && token != null
+                && token.equals(LeemenAccount.getToken(account));
     }
 
     private static void clearInFlight(int account) {

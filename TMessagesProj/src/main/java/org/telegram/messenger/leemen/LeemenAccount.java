@@ -189,16 +189,33 @@ public final class LeemenAccount {
     }
 
     private static void wipeLocalAccountData(int account) {
+        // Keep every cleanup step independent. A failure in Realtime/sync teardown must never skip the
+        // credential + PIN wipe that follows — this method is the destructive boundary for a deleted generation.
         try {
             LeemenRealtime.disconnect(account);
-            // Full sync teardown (in-memory CRDT cache + debounce/watchdog + persisted state) — a bare
-            // LeemenSyncState.clear would leave the cached working copy alive and a later re-bind
-            // could push the OLD hidden set into the fresh account.
+        } catch (Throwable e) {
+            org.telegram.messenger.FileLog.e(e);
+        }
+        try {
+            // Full sync teardown (in-memory CRDT cache + debounce/watchdog + persisted state). It also
+            // invalidates already-running callbacks so they cannot restore the old PIN after this wipe.
             LeemenSync.clearAccount(account);
+        } catch (Throwable e) {
+            org.telegram.messenger.FileLog.e(e);
+        }
+        try {
             org.telegram.messenger.SecondSpaceController.getInstance(account).wipeAllLocalData();
+        } catch (Throwable e) {
+            org.telegram.messenger.FileLog.e(e);
+        }
+        try {
             clear(account);            // token / sync_account_id / wrapped K_master (prefs)
-            // The AndroidKeyStore wrap-key alias is install-global (shared across accounts). Delete the
-            // raw TEE key only when no other account still has a wrapped K_master, else theirs breaks.
+        } catch (Throwable e) {
+            org.telegram.messenger.FileLog.e(e);
+        }
+        try {
+            // The AndroidKeyStore wrap-key alias is install-global (shared across accounts). Delete the raw
+            // TEE key only when no other account still has a wrapped K_master, else theirs breaks.
             boolean anyKMasterLeft = false;
             for (int a = 0; a < org.telegram.messenger.UserConfig.MAX_ACCOUNT_COUNT; a++) {
                 if (hasKMaster(a)) { anyKMasterLeft = true; break; }
@@ -206,6 +223,10 @@ public final class LeemenAccount {
             if (!anyKMasterLeft) {
                 LeemenKeyStore.deleteWrapKey();
             }
+        } catch (Throwable e) {
+            org.telegram.messenger.FileLog.e(e);
+        }
+        try {
             setDisabled(account, true); // don't silently re-create on next launch
         } catch (Throwable e) {
             org.telegram.messenger.FileLog.e(e);
@@ -227,6 +248,34 @@ public final class LeemenAccount {
         setDisabled(account, true);
         wipeLocalAccountData(account);
         org.telegram.messenger.MessagesController.getInstance(account).performLogout(1);
+    }
+
+    /**
+     * The auth endpoint created a brand-new backend generation in an already-used local slot. Clear every
+     * generation-bound local artifact before saving its token so an old PIN/blob/key can never seed the new
+     * account. Unlike deleted-generation logout, this keeps the Telegram session active.
+     */
+    public static void prepareForNewGeneration(int account) {
+        try {
+            LeemenRealtime.disconnect(account);
+        } catch (Throwable e) {
+            org.telegram.messenger.FileLog.e(e);
+        }
+        try {
+            LeemenSync.clearAccount(account);
+        } catch (Throwable e) {
+            org.telegram.messenger.FileLog.e(e);
+        }
+        try {
+            org.telegram.messenger.SecondSpaceController.getInstance(account).wipeAllLocalData();
+        } catch (Throwable e) {
+            org.telegram.messenger.FileLog.e(e);
+        }
+        try {
+            clear(account);
+        } catch (Throwable e) {
+            org.telegram.messenger.FileLog.e(e);
+        }
     }
 
     /** Terminate every OTHER active Telegram session created by THIS app (api_id == APP_ID) — i.e. the user's
@@ -311,9 +360,18 @@ public final class LeemenAccount {
         com.google.gson.JsonObject body = new com.google.gson.JsonObject();
         body.addProperty("confirm", "DELETE");
         LeemenRestClient.post(LeemenConfig.EP_ACCOUNT_DELETE, token, body, (resp, code, ec, em) -> {
+            boolean ok = false;
+            try {
+                ok = resp != null && code == 200 && resp.has("ok") && resp.get("ok").getAsBoolean();
+            } catch (Throwable ignored) {
+            }
             if (org.telegram.messenger.BuildVars.LOGS_ENABLED) {
-                boolean ok = resp != null && code == 200 && resp.has("ok") && resp.get("ok").getAsBoolean();
                 org.telegram.messenger.FileLog.d("Leemen: /account/delete code=" + code + " ok=" + ok + (ec != null ? " err=" + ec : ""));
+            }
+            // Wake every currently connected sibling immediately. The broadcast is only a hint: each receiver
+            // confirms the deleted generation against /session/status before wiping or logging out.
+            if (ok) {
+                LeemenRealtime.broadcastAccountGenerationInvalidated(account);
             }
             if (onDone != null) onDone.run();
         });

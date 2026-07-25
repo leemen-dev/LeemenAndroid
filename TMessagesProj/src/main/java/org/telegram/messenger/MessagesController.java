@@ -15472,14 +15472,12 @@ public class MessagesController extends BaseController implements NotificationCe
             }
         }
 
-        // Leemen: clear THIS account's DEVICE-LOCAL, slot-scoped private-space state on logout —
-        // symmetric to the cross-account cleanup above. The hidden-account list (slot indices) and the
-        // switch password reference this device's account slots; if left behind, the next account to
-        // reuse this slot would inherit them (a stale hide-list silently defeats its auto-hide via the
-        // acyclic guard, and isAccountHiddenByAny would match reused indices). Account-level PS state
-        // (PIN, hidden chats, premium) is deliberately PRESERVED — it follows the account and re-syncs
-        // on the next login. hiddenToLogout was snapshotted above, so the cascade is intact.
-        SecondSpaceController.getInstance(currentAccount).clearLocalAccountHideStateForLogout();
+        // Leemen: a local account slot must never retain ANY private-space state after logout. A normal
+        // same-account login restores account-level state from its encrypted backend blob; a deleted and
+        // recreated generation starts empty. Keeping the old PIN/hidden set in this slot lets a new generation
+        // inherit them, especially when Telegram's own authorization revoke wins the race with our REST guard.
+        // hiddenToLogout was snapshotted above, so the hidden-account cascade is still intact.
+        SecondSpaceController.getInstance(currentAccount).wipeAllLocalData();
 
         // Only the top-level logout may reassign selectedAccount / clear the shared fragment stack. A
         // cascaded PS-account logout must never touch global UI state — it isn't the selected account,

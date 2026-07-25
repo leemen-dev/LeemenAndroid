@@ -218,10 +218,17 @@ public final class LeemenIdentity {
     }
 
     private static void postAuth(int account, long botId, String initData, boolean retried) {
+        final long expectedTelegramUserId = UserConfig.getInstance(account).getClientUserId();
         JsonObject body = new JsonObject();
         body.addProperty("initData", initData);
         LeemenRestClient.post(LeemenConfig.EP_AUTH_TELEGRAM, null, body, (resp, code, errCode, errMsg) -> {
             try {
+                if (!UserConfig.getInstance(account).isClientActivated()
+                        || UserConfig.getInstance(account).getClientUserId() != expectedTelegramUserId
+                        || LeemenAccount.isDisabled(account)) {
+                    clearInFlight(account);
+                    return; // the slot was logged out, reused, or entered deletion while auth was in flight
+                }
                 if (resp != null && code >= 200 && code < 300 && resp.has("token") && resp.has("sync_account_id")) {
                     String token = resp.get("token").getAsString();
                     String syncId = resp.get("sync_account_id").getAsString();
@@ -229,6 +236,11 @@ public final class LeemenIdentity {
                             ? resp.get("master_account_id").getAsString() : null;
                     String privacy = resp.has("privacy_mode") && !resp.get("privacy_mode").isJsonNull()
                             ? resp.get("privacy_mode").getAsString() : null;
+                    boolean created = resp.has("created") && !resp.get("created").isJsonNull()
+                            && resp.get("created").getAsBoolean();
+                    if (created) {
+                        LeemenAccount.prepareForNewGeneration(account);
+                    }
                     LeemenAccount.save(account, token, syncId, masterId, privacy);
                     LeemenKey.ensureKey(account); // chain Phase 2: acquire K_master right after bind
                     // A session token now exists → let the Terms/Privacy acceptance gate run (LaunchActivity).

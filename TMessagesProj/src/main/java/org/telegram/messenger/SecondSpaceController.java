@@ -1263,7 +1263,11 @@ public class SecondSpaceController extends BaseController implements Notificatio
                     e.remove(key);
                 }
             }
-            e.apply();
+            // This is a security-sensitive generation/slot boundary. Persist the wipe before a logout can
+            // hand the same slot to a freshly registered account; an async apply would leave a kill-window.
+            if (!e.commit() && BuildVars.LOGS_ENABLED) {
+                FileLog.d("Leemen: failed to commit private-space local wipe for account " + currentAccount);
+            }
             dialogIds.clear();
             exposedMessages.clear();
             pendingMessages.clear();
@@ -1277,6 +1281,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
             privateSearchDialogs.clear();
             hiddenAccounts.clear();
             tabSequence.clear();
+            entryButtonVisible = true;
             psPinState = "";
             psPinHash = "";
             psPinSalt = "";
@@ -2149,30 +2154,6 @@ public class SecondSpaceController extends BaseController implements Notificatio
     public void onOtherAccountLoggedOut(int otherAccountNum) {
         if (hiddenAccounts.remove(otherAccountNum)) {
             persistHiddenAccounts();
-        }
-    }
-
-    /** Clear the DEVICE-LOCAL, slot-scoped private-space state when THIS account logs out: the
-     *  hidden-account list (slot indices into this device's accounts) and the switch password that
-     *  gates entry into them. Unlike the PS PIN and hidden chats — which are ACCOUNT-level and follow
-     *  the account (re-synced on the next login) — these reference the device's account slots and must
-     *  not survive into the next account that reuses this slot: a stale hide-list would silently defeat
-     *  that account's auto-hide via the acyclic guard ({@link #hasHiddenAccounts}), and
-     *  {@link #isAccountHiddenByAny} would match reused slot indices. This is NOT a full PS wipe —
-     *  account-level state (PIN, hidden chats, premium) is deliberately preserved. */
-    public void clearLocalAccountHideStateForLogout() {
-        // Leaving the account also leaves the private space: drop back to cover mode so a logout→relogin
-        // in the same process can't land straight back inside MODE_REAL (activeMode is in-memory and would
-        // otherwise survive the logout). Also wipes any draft authored inside the space (deniability).
-        // No-op when already in MODE_OFF.
-        setActiveMode(MODE_OFF);
-        if (!hiddenAccounts.isEmpty()) {
-            hiddenAccounts.clear();
-            persistHiddenAccounts();
-        }
-        if (!TextUtils.isEmpty(switchPasswordHash)) {
-            switchPasswordHash = "";
-            getMessagesController().getMainSettings().edit().putString(PREF_SWITCH_PASSWORD_HASH, "").apply();
         }
     }
 

@@ -29,7 +29,10 @@ public final class LeemenSessionGuard {
     /** An open stale session self-terminates within this bound even if it otherwise makes no REST calls. */
     private static final long FOREGROUND_CHECK_INTERVAL_MS = 30_000L;
 
-    private static final Set<Integer> checksInFlight = new HashSet<>();
+    /** Status requests are token-scoped so a newly registered generation reusing the same slot is independent. */
+    private static final Set<String> checksInFlight = new HashSet<>();
+    /** A Realtime deletion hint received during an older status request must force one fresh check afterward. */
+    private static final Set<String> checksPending = new HashSet<>();
     /** Token-scoped rather than account-scoped: a reused slot with a new generation must remain handleable. */
     private static final Set<String> terminatingTokens = new HashSet<>();
 
@@ -63,7 +66,7 @@ public final class LeemenSessionGuard {
                 if (UserConfig.getInstance(account).isClientActivated()
                         && !LeemenAccount.isDisabled(account)
                         && LeemenAccount.hasBinding(account)) {
-                    check(account);
+                    check(account, false);
                 }
             } catch (Throwable e) {
                 FileLog.e(e);
@@ -71,18 +74,47 @@ public final class LeemenSessionGuard {
         }
     }
 
-    private static void check(final int account) {
+    /**
+     * A Realtime event is only a low-trust wake-up hint; this method immediately asks the authenticated REST
+     * endpoint for the authoritative generation state before any destructive action.
+     */
+    public static void checkNow(final int account) {
+        AndroidUtilities.runOnUIThread(() -> {
+            if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return;
+            if (!UserConfig.getInstance(account).isClientActivated()
+                    || LeemenAccount.isDisabled(account)
+                    || !LeemenAccount.hasBinding(account)) {
+                return;
+            }
+            check(account, true);
+        });
+    }
+
+    private static void check(final int account, boolean ensureFreshAfterInFlight) {
         final String token = LeemenAccount.getToken(account);
         if (TextUtils.isEmpty(token)) return;
         synchronized (checksInFlight) {
-            if (!checksInFlight.add(account)) return;
+            if (!checksInFlight.add(token)) {
+                if (ensureFreshAfterInFlight) {
+                    checksPending.add(token);
+                }
+                return;
+            }
         }
         LeemenRestClient.get(LeemenConfig.EP_SESSION_STATUS, token, (resp, code, errorCode, errorMsg) -> {
+            boolean repeat;
             synchronized (checksInFlight) {
-                checksInFlight.remove(account);
+                checksInFlight.remove(token);
+                repeat = checksPending.remove(token);
             }
             // LeemenRestClient routes the authoritative deletion response through onBackendResult before
             // this callback. Everything else is retryable on the next poll/foreground entry.
+            if (repeat
+                    && token.equals(LeemenAccount.getToken(account))
+                    && UserConfig.getInstance(account).isClientActivated()
+                    && !LeemenAccount.isDisabled(account)) {
+                check(account, false);
+            }
         });
     }
 

@@ -54,6 +54,8 @@ public final class LeemenSync {
     private static final LeemenSyncState[] STATES = new LeemenSyncState[N];
     private static final boolean[] busy = new boolean[N];
     private static final boolean[] dirty = new boolean[N];
+    /** Incremented on logout/delete so callbacks captured by the previous slot generation become inert. */
+    private static final long[] lifecycleGeneration = new long[N];
     private static final Runnable[] debounce = new Runnable[N];
     private static final Runnable[] watchdog = new Runnable[N];
     // ===== Anti-leak gate (cache-first, else FAIL-CLOSED) =====
@@ -166,6 +168,7 @@ public final class LeemenSync {
     /** Drop all sync state for an account (call on logout, before the slot is reused). */
     public static void clearAccount(int account) {
         if (!inRange(account)) return;
+        lifecycleGeneration[account]++;
         STATES[account] = null;
         busy[account] = false;
         dirty[account] = false;
@@ -233,19 +236,28 @@ public final class LeemenSync {
     private static void syncAccount(final int account) {
         if (!ready(account)) return;
         if (busy[account]) { dirty[account] = true; return; }
+        final long generation = lifecycleGeneration[account];
         busy[account] = true;
-        scheduleWatchdog(account);
+        scheduleWatchdog(account, generation);
         if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: sync start account " + account);
 
         final byte[] key = LeemenKey.getKMaster(account);
         final String token = LeemenAccount.getToken(account);
-        if (key == null || token == null) { finish(account); return; }
+        if (key == null || token == null) { finish(account, generation); return; }
 
         final LeemenSyncState st = state(account);
 
         // 1. pull both blobs raw (no merge yet), then 2..5
-        pullRaw(LeemenConfig.EP_CONTENT, false, key, token, (rc, cver) ->
+        pullRaw(LeemenConfig.EP_CONTENT, false, key, token, (rc, cver) -> {
+            if (!isCycleCurrent(account, generation, token)) {
+                Arrays.fill(key, (byte) 0);
+                return;
+            }
             pullRaw(LeemenConfig.EP_FILTER, true, key, token, (rf, fver) -> {
+                if (!isCycleCurrent(account, generation, token)) {
+                    Arrays.fill(key, (byte) 0);
+                    return;
+                }
                 try {
                     long remoteLamport = Math.max(
                             rc instanceof LeemenBlob.ContentBlob ? ((LeemenBlob.ContentBlob) rc).lamport : 0,
@@ -272,6 +284,10 @@ public final class LeemenSync {
                     // hidden set is unknown, so we must keep the gate closed instead of revealing everything.
                     final boolean conclusivePull = (rf instanceof LeemenBlob.FilterBlob) || (fver == 0);
                     final Runnable projectAndPush = () -> {
+                        if (!isCycleCurrent(account, generation, token)) {
+                            Arrays.fill(key, (byte) 0);
+                            return;
+                        }
                         if (conclusivePull) {
                             markSyncConfirmed(account); // open the fail-closed gate: the real hidden set is known
                         }
@@ -281,6 +297,10 @@ public final class LeemenSync {
                         projectToController(account, st);
                         st.persist();
                         final Runnable done = () -> {
+                            if (!isCycleCurrent(account, generation, token)) {
+                                Arrays.fill(key, (byte) 0);
+                                return;
+                            }
                             if (BuildVars.LOGS_ENABLED) {
                                 int hidden = 0;
                                 for (LeemenBlob.Reg r : st.filter.hidden_chat_ids.values()) if (LeemenBlob.isLive(r)) hidden++;
@@ -289,7 +309,7 @@ public final class LeemenSync {
                             }
                             Arrays.fill(key, (byte) 0);
                             st.persist();
-                            finish(account);
+                            finish(account, generation);
                         };
                         if (!reconcileChanged) {
                             // Nothing local changed (we just pulled/merged remote state, or it was a no-op
@@ -297,13 +317,17 @@ public final class LeemenSync {
                             done.run();
                         } else if (membershipRemoved) {
                             // removes: filter first (membership gone), then content (cascade)
-                            pushBlob(LeemenConfig.EP_FILTER, true, st, key, token, MAX_CAS_RETRY, () ->
-                                    pushBlob(LeemenConfig.EP_CONTENT, false, st, key, token, MAX_CAS_RETRY, done));
+                            pushBlob(account, generation, LeemenConfig.EP_FILTER, true, st, key, token, MAX_CAS_RETRY, () ->
+                                    pushBlob(account, generation, LeemenConfig.EP_CONTENT, false, st, key, token, MAX_CAS_RETRY, done));
                         } else {
                             // adds/updates: content first (detail), then filter (membership)
-                            pushBlob(LeemenConfig.EP_CONTENT, false, st, key, token, MAX_CAS_RETRY, () -> {
+                            pushBlob(account, generation, LeemenConfig.EP_CONTENT, false, st, key, token, MAX_CAS_RETRY, () -> {
+                                if (!isCycleCurrent(account, generation, token)) {
+                                    done.run();
+                                    return;
+                                }
                                 LeemenMerge.recomputeOffModeVisible(st.filter, st.content);
-                                pushBlob(LeemenConfig.EP_FILTER, true, st, key, token, MAX_CAS_RETRY, done);
+                                pushBlob(account, generation, LeemenConfig.EP_FILTER, true, st, key, token, MAX_CAS_RETRY, done);
                             });
                         }
                     };
@@ -311,6 +335,10 @@ public final class LeemenSync {
                     // making any exposure/membership projection, so we never act on a stale content blob.
                     if (st.filter.lamport > st.content.lamport) {
                         pullRaw(LeemenConfig.EP_CONTENT, false, key, token, (rc2, cver2) -> {
+                            if (!isCycleCurrent(account, generation, token)) {
+                                Arrays.fill(key, (byte) 0);
+                                return;
+                            }
                             if (rc2 instanceof LeemenBlob.ContentBlob) LeemenMerge.mergeContent(st.content, (LeemenBlob.ContentBlob) rc2);
                             if (cver2 >= 0) st.contentVersion = cver2;
                             projectAndPush.run();
@@ -321,12 +349,14 @@ public final class LeemenSync {
                 } catch (Throwable e) {
                     FileLog.e(e);
                     Arrays.fill(key, (byte) 0);
-                    finish(account);
+                    finish(account, generation);
                 }
-            }));
+            });
+        });
     }
 
-    private static void finish(int account) {
+    private static void finish(int account, long generation) {
+        if (lifecycleGeneration[account] != generation) return;
         cancelWatchdog(account);
         busy[account] = false;
         if (dirty[account]) { dirty[account] = false; syncAccount(account); }
@@ -334,11 +364,11 @@ public final class LeemenSync {
 
     /** Safety net: if a sync cycle never completes (a callback that never fires), reset busy so the
      *  account isn't permanently blocked. Timeout is far longer than any legitimate cycle. */
-    private static void scheduleWatchdog(int account) {
+    private static void scheduleWatchdog(int account, long generation) {
         cancelWatchdog(account);
         watchdog[account] = () -> {
             watchdog[account] = null;
-            if (busy[account]) {
+            if (lifecycleGeneration[account] == generation && busy[account]) {
                 if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: sync watchdog reset stuck busy for account " + account);
                 busy[account] = false;
                 if (dirty[account]) { dirty[account] = false; syncAccount(account); }
@@ -382,9 +412,13 @@ public final class LeemenSync {
         });
     }
 
-    private static void pushBlob(String path, boolean isFilter, LeemenSyncState st,
+    private static void pushBlob(int account, long generation, String path, boolean isFilter, LeemenSyncState st,
                                  byte[] key, String token, int retriesLeft, Runnable onDone) {
         try {
+            if (!isCycleCurrent(account, generation, token)) {
+                onDone.run();
+                return;
+            }
             Object blob = isFilter ? st.filter : st.content;
             if (isFilter) padToBucket(st.filter);
             byte[] plain = LeemenBlob.toBytes(blob);
@@ -399,6 +433,10 @@ public final class LeemenSync {
             reqBody.addProperty("prev_version", prev);
 
             LeemenRestClient.put(path, token, reqBody, (body, code, ec, em) -> {
+                if (!isCycleCurrent(account, generation, token)) {
+                    onDone.run();
+                    return;
+                }
                 if (code >= 200 && code < 300 && body != null && body.has("version")) {
                     long v = longField(body, "version");
                     if (isFilter) st.filterVersion = v; else st.contentVersion = v;
@@ -406,6 +444,10 @@ public final class LeemenSync {
                 } else if (code == 409 && retriesLeft > 0) {
                     // CAS conflict: pull latest, merge, retry with the new version
                     pullRaw(path, isFilter, key, token, (rb, ver) -> {
+                        if (!isCycleCurrent(account, generation, token)) {
+                            onDone.run();
+                            return;
+                        }
                         if (rb instanceof LeemenBlob.FilterBlob) {
                             LeemenMerge.mergeFilter(st.filter, (LeemenBlob.FilterBlob) rb);
                             LeemenMerge.recomputeOffModeVisible(st.filter, st.content); // membership changed → refresh cache
@@ -414,7 +456,7 @@ public final class LeemenSync {
                             LeemenMerge.recomputeOffModeVisible(st.filter, st.content);
                         }
                         if (ver >= 0) { if (isFilter) st.filterVersion = ver; else st.contentVersion = ver; }
-                        pushBlob(path, isFilter, st, key, token, retriesLeft - 1, onDone);
+                        pushBlob(account, generation, path, isFilter, st, key, token, retriesLeft - 1, onDone);
                     });
                 } else {
                     if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: PUT " + path + " code=" + code + " err=" + ec + " (giving up this cycle)");
@@ -672,6 +714,13 @@ public final class LeemenSync {
                 && LeemenAccount.hasBinding(account)
                 && LeemenAccount.hasKMaster(account)
                 && !LeemenAccount.isDisabled(account);
+    }
+
+    private static boolean isCycleCurrent(int account, long generation, String token) {
+        return lifecycleGeneration[account] == generation
+                && ready(account)
+                && token != null
+                && token.equals(LeemenAccount.getToken(account));
     }
 
     private static LeemenSyncState state(int account) {
