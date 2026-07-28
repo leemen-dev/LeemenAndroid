@@ -691,12 +691,13 @@ public final class LeemenSync {
 
         // PS PIN (§7.2): apply the synced register to the controller (set → store the Argon2id hash+salt;
         // none → clear). Absent ps_pin leaves the local PIN untouched. Self-guarded against back-push.
+        boolean pinChanged = false;
         if (st.content.ps_pin != null) {
             LeemenBlob.PsPin p = st.content.ps_pin;
             if (LeemenBlob.SET.equals(p.s)) {
-                c.applySyncedPin(LeemenBlob.SET, p.hash, p.salt);
+                pinChanged = c.applySyncedPin(LeemenBlob.SET, p.hash, p.salt);
             } else if (LeemenBlob.NONE.equals(p.s)) {
-                c.applySyncedPin(LeemenBlob.NONE, null, null);
+                pinChanged = c.applySyncedPin(LeemenBlob.NONE, null, null);
             }
         }
 
@@ -706,7 +707,8 @@ public final class LeemenSync {
                 androidState != null ? androidState.tabSequence : null,
                 androidState != null ? androidState.pinInSearch : null,
                 androidState != null ? androidState.entryButtonVisible : null,
-                androidState != null ? androidState.shortcutTested : null);
+                androidState != null ? androidState.shortcutTested : null,
+                pinChanged);
     }
 
     // ===== helpers =====

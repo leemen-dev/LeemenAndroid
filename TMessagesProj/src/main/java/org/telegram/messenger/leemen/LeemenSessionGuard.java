@@ -26,7 +26,7 @@ public final class LeemenSessionGuard {
 
     private LeemenSessionGuard() {}
 
-    /** An open stale session self-terminates within this bound even if it otherwise makes no REST calls. */
+    /** Foreground backstop for deletion plus Premium/privacy-mode events missed while Realtime was offline. */
     private static final long FOREGROUND_CHECK_INTERVAL_MS = 30_000L;
 
     /** Status requests are token-scoped so a newly registered generation reusing the same slot is independent. */
@@ -42,7 +42,7 @@ public final class LeemenSessionGuard {
         @Override
         public void run() {
             if (!foreground) return;
-            checkAllBoundAccounts();
+            refreshAllBoundAccounts();
             AndroidUtilities.runOnUIThread(this, FOREGROUND_CHECK_INTERVAL_MS);
         }
     };
@@ -60,13 +60,15 @@ public final class LeemenSessionGuard {
         AndroidUtilities.cancelRunOnUIThread(foregroundPoll);
     }
 
-    private static void checkAllBoundAccounts() {
+    private static void refreshAllBoundAccounts() {
         for (int account = 0; account < UserConfig.MAX_ACCOUNT_COUNT; account++) {
             try {
                 if (UserConfig.getInstance(account).isClientActivated()
                         && !LeemenAccount.isDisabled(account)
                         && LeemenAccount.hasBinding(account)) {
-                    check(account, false);
+                    // GET /me is authoritative for account existence, privacy mode and entitlements. Its
+                    // deleted-generation errors are still handled centrally by LeemenRestClient below.
+                    LeemenAccountState.refresh(account);
                 }
             } catch (Throwable e) {
                 FileLog.e(e);

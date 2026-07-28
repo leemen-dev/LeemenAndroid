@@ -412,9 +412,8 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
      *  sane date in the paywall. */
     private static final long PERPETUAL_PREMIUM_UNTIL = 4102444800000L;
 
-    /** Reconcile EVERY bound, activated account's local premium with the server (see {@link
-     *  #reconcileEntitlements}). Call on app start — it is the only path that observes a server-side
-     *  revocation (ON_HOLD/EXPIRED/REVOKED delete the entitlement row; nothing is pushed via Realtime). */
+    /** Reconcile every bound, activated account's local premium with the server. Realtime now wakes the same
+     *  GET /me path; this startup call remains the missed-event/offline recovery backstop. */
     public static void reconcileAllEntitlements() {
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             try {
@@ -425,44 +424,36 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
         }
     }
 
-    /** Reconcile local premium with the server's authoritative entitlement set (CONTRACT §7): GET /me and
-     *  set {@code leemenPremiumUntil} to the latest active expiry across ALL sources (play/tribute/promo/…),
-     *  or {@code 0} when no active entitlement remains. This is the ONLY path that LOWERS local premium — it
-     *  is how the client learns of a server-side revocation (a deleted row), which is never pushed over
-     *  Realtime. Applies ONLY on a well-formed 200 carrying an {@code entitlements} array; any error or
-     *  malformed response leaves the cached value untouched, so a transient/offline failure never locks out
-     *  a paid user. The REST callback already runs on the UI thread (LeemenRestClient). */
+    /** Reconcile local premium and privacy mode from the server's authoritative GET /me snapshot. */
     public static void reconcileEntitlements(final int account) {
-        final String token = LeemenAccount.getToken(account);
-        if (token == null || LeemenAccount.isDisabled(account)) {
-            return;
+        LeemenAccountState.refresh(account);
+    }
+
+    /**
+     * Apply only a fully-formed entitlement array from GET /me. Package-visible so
+     * {@link LeemenAccountState} can reconcile Premium and privacy mode in one network round-trip.
+     */
+    static boolean applyEntitlementsFromMe(final int account, JsonObject response) {
+        if (response == null || !response.has("entitlements") || !response.get("entitlements").isJsonArray()) {
+            return false; // untrustworthy/partial answer → keep the offline cache
         }
-        LeemenRestClient.get(LeemenConfig.EP_ME, token, (resp, httpCode, ec, em) -> {
-            if (resp == null || httpCode < 200 || httpCode >= 300
-                    || !resp.has("entitlements") || !resp.get("entitlements").isJsonArray()) {
-                return; // not a trustworthy answer — keep the cache (offline-safe)
+        long until = 0L;
+        try {
+            com.google.gson.JsonArray arr = response.getAsJsonArray("entitlements");
+            long now = System.currentTimeMillis();
+            for (int i = 0; i < arr.size(); i++) {
+                if (!arr.get(i).isJsonObject()) continue;
+                JsonObject e = arr.get(i).getAsJsonObject();
+                long exp = !e.has("expires_at") || e.get("expires_at").isJsonNull()
+                        ? PERPETUAL_PREMIUM_UNTIL
+                        : parseExpiryMs(e.get("expires_at").getAsString());
+                if (exp > now && exp > until) until = exp;
             }
-            long until = 0L;
-            try {
-                com.google.gson.JsonArray arr = resp.getAsJsonArray("entitlements");
-                long now = System.currentTimeMillis();
-                for (int i = 0; i < arr.size(); i++) {
-                    if (!arr.get(i).isJsonObject()) {
-                        continue;
-                    }
-                    JsonObject e = arr.get(i).getAsJsonObject();
-                    long exp = !e.has("expires_at") || e.get("expires_at").isJsonNull()
-                            ? PERPETUAL_PREMIUM_UNTIL                          // null = perpetual entitlement
-                            : parseExpiryMs(e.get("expires_at").getAsString());
-                    if (exp > now && exp > until) {
-                        until = exp;
-                    }
-                }
-            } catch (Throwable ignore) {
-                return; // blew up mid-read — don't act on a half-parsed set
-            }
-            SecondSpaceController.getInstance(account).setLeemenPremiumUntil(until);
-        });
+        } catch (Throwable ignore) {
+            return false;
+        }
+        SecondSpaceController.getInstance(account).setLeemenPremiumUntil(until);
+        return true;
     }
 
     /** POST the purchase token to the backend for server-side verification + entitlement grant.

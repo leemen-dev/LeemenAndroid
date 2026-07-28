@@ -39,12 +39,13 @@ public class PrivateSpacePasscodeActivity extends BaseFragment {
     public static final int MODE_ENTER = 0;
     public static final int MODE_SET = 1;
     public static final int MODE_REMOVE = 2;
+    public static final int MODE_CHANGE = 3;
 
     public static final int TARGET_CURRENT = 0;
     public static final int TARGET_REAL = 1;
 
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({MODE_ENTER, MODE_SET, MODE_REMOVE})
+    @IntDef({MODE_ENTER, MODE_SET, MODE_REMOVE, MODE_CHANGE})
     public @interface Mode {}
 
     @Retention(RetentionPolicy.SOURCE)
@@ -66,6 +67,8 @@ public class PrivateSpacePasscodeActivity extends BaseFragment {
     private boolean openingTransitionFinished;
 
     private String firstStageEntry; // used in MODE_SET — captured after stage 1 to verify stage 2
+    /** MODE_CHANGE: 0=current PIN verification, 1=new PIN, 2=confirm new PIN. */
+    private int changeStage;
 
     public PrivateSpacePasscodeActivity(@Mode int mode) {
         this(mode, TARGET_CURRENT);
@@ -236,6 +239,21 @@ public class PrivateSpacePasscodeActivity extends BaseFragment {
                 subtitleView.setText(LocaleController.getString(R.string.PrivateSpacePinRemoveSubtitle));
                 submitButton.setText(LocaleController.getString(R.string.Remove));
                 break;
+            case MODE_CHANGE:
+                if (changeStage == 0) {
+                    titleView.setText(LocaleController.getString(R.string.PrivateSpacePinChangeVerifyTitle));
+                    subtitleView.setText(LocaleController.getString(R.string.PrivateSpacePinChangeVerifySubtitle));
+                    submitButton.setText(LocaleController.getString(R.string.Next));
+                } else if (changeStage == 1) {
+                    titleView.setText(LocaleController.getString(R.string.PrivateSpacePinSetTitle));
+                    subtitleView.setText(LocaleController.getString(R.string.PrivateSpacePinSetSubtitle));
+                    submitButton.setText(LocaleController.getString(R.string.Next));
+                } else {
+                    titleView.setText(LocaleController.getString(R.string.PrivateSpacePinConfirmTitle));
+                    subtitleView.setText(LocaleController.getString(R.string.PrivateSpacePinConfirmSubtitle));
+                    submitButton.setText(LocaleController.getString(R.string.Save));
+                }
+                break;
         }
     }
 
@@ -301,6 +319,38 @@ public class PrivateSpacePasscodeActivity extends BaseFragment {
                 }
                 break;
             }
+            case MODE_CHANGE:
+                if (changeStage == 0) {
+                    if (!ssc.verifyPassword(pin)) {
+                        showError(LocaleController.getString(R.string.PrivateSpacePinWrong));
+                        pinInput.setText("");
+                        AndroidUtilities.shakeView(pinInput);
+                    } else {
+                        changeStage = 1;
+                        pinInput.setText("");
+                        applyModeTexts(false);
+                    }
+                } else if (changeStage == 1) {
+                    firstStageEntry = pin;
+                    changeStage = 2;
+                    pinInput.setText("");
+                    applyModeTexts(true);
+                } else if (firstStageEntry != null && firstStageEntry.equals(pin)) {
+                    if (target == TARGET_REAL) {
+                        ssc.setRealPassword(pin);
+                    } else {
+                        ssc.setPassword(pin);
+                    }
+                    finishFragmentAndRun();
+                } else {
+                    showError(LocaleController.getString(R.string.PrivateSpacePinMismatch));
+                    firstStageEntry = null;
+                    changeStage = 1;
+                    pinInput.setText("");
+                    AndroidUtilities.shakeView(pinInput);
+                    applyModeTexts(false);
+                }
+                break;
         }
     }
 

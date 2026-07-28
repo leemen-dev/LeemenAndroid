@@ -758,10 +758,17 @@ public class SecondSpaceController extends BaseController implements Notificatio
      *  push. A WELL-FORMED {@code "set"} (32-byte hash, 16-byte salt) stores the synced material; an
      *  explicit {@code "none"} clears the PIN. A MALFORMED {@code "set"} (torn/partial blob) is IGNORED —
      *  we must NOT collapse it to "none", or the next reconcile would tombstone the PIN on every device. */
-    public void applySyncedPin(String state, String hashB64, String saltB64) {
+    public boolean applySyncedPin(String state, String hashB64, String saltB64) {
         boolean wellFormedSet = PIN_SET.equals(state) && isWellFormedPinMaterial(hashB64, saltB64);
         if (!wellFormedSet && !PIN_NONE.equals(state)) {
-            return; // malformed 'set' or unknown state → leave the local PIN untouched
+            return false; // malformed 'set' or unknown state → leave the local PIN untouched
+        }
+        boolean changed = wellFormedSet
+                ? !PIN_SET.equals(psPinState) || !hashB64.equals(psPinHash) || !saltB64.equals(psPinSalt)
+                : !PIN_NONE.equals(psPinState) || !TextUtils.isEmpty(psPinHash) || !TextUtils.isEmpty(psPinSalt);
+        if (!changed) {
+            // A no-op sync (including our own PUT echo) must not invalidate the locally remembered PIN window.
+            return false;
         }
         applyingRemoteSync = true;
         try {
@@ -779,6 +786,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
         } finally {
             applyingRemoteSync = false;
         }
+        return true;
     }
 
     /** True iff the base64 hash/salt decode to the exact Argon2id lengths (32 / 16). Keeps malformed
@@ -1071,7 +1079,8 @@ public class SecondSpaceController extends BaseController implements Notificatio
                                  java.util.List<TabStep> tabSeq,
                                  Boolean pinInSearchVal,
                                  Boolean entryButtonVisibleVal,
-                                 Boolean shortcutTestedVal) {
+                                 Boolean shortcutTestedVal,
+                                 boolean pinChanged) {
         // Keep the rendered-chat portion of the old state so a no-op pull (including our own PUT echo) does
         // not force every open OFF-mode chat to reload. Local mutations are already present in the controller;
         // only an actually different merged projection needs the cross-device UI event below.
@@ -1079,10 +1088,13 @@ public class SecondSpaceController extends BaseController implements Notificatio
         Map<Long, Set<Integer>> previousExposed = copyMsgMap(exposedMessages);
         Map<Long, Set<Integer>> previousPending = copyMsgMap(pendingMessages);
         Map<Long, Set<Integer>> previousSelfPinned = copyMsgMap(selfPinnedMessages);
+        Set<Long> previousPrivateSearch = new HashSet<>(privateSearchDialogs);
         java.util.List<TabStep> previousTabSequence = new java.util.ArrayList<>(tabSequence);
         boolean previousPinInSearch = pinInSearchEnabled;
         boolean previousEntryButtonVisible = entryButtonVisible;
         boolean previousShortcutTested = shortcutTested;
+        int previousPinTimeout = pinTimeoutMinutes;
+        boolean previousAllowScreenshots = allowScreenshots;
         applyingRemoteSync = true;
         try {
             // Tier-P: the Android entry config is one LWW block. Apply it atomically so changing the gesture
@@ -1172,14 +1184,29 @@ public class SecondSpaceController extends BaseController implements Notificatio
         if (renderedChatStateChanged) {
             getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceSyncApplied);
         }
+        if (!previousPrivateSearch.equals(privateSearchDialogs)) {
+            // Recent-search visibility is mode-scoped. Reload an already-open search surface immediately.
+            getNotificationCenter().postNotificationName(NotificationCenter.needReloadRecentDialogsSearch);
+        }
         boolean platformEntryStateChanged =
                 !sameSequence(previousTabSequence, tabSequence)
                 || previousPinInSearch != pinInSearchEnabled
                 || previousEntryButtonVisible != entryButtonVisible
                 || previousShortcutTested != shortcutTested;
-        if (platformEntryStateChanged) {
-            // Settings/Privacy rebuild the explicit entry row from this event.
+        boolean settingsStateChanged = pinChanged
+                || previousPinTimeout != pinTimeoutMinutes
+                || previousAllowScreenshots != allowScreenshots;
+        if (platformEntryStateChanged || settingsStateChanged) {
+            // Settings/Privacy rebuild PIN, timeout, screenshot and explicit-entry rows from this event.
             getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceModeChanged);
+        }
+        if (previousAllowScreenshots != allowScreenshots) {
+            // The policy is already applied in the controller; make the active window re-evaluate FLAG_SECURE.
+            try {
+                org.telegram.ui.LaunchActivity la = org.telegram.ui.LaunchActivity.instance;
+                if (la != null) la.invalidateFlagSecure();
+            } catch (Throwable ignored) {
+            }
         }
     }
 

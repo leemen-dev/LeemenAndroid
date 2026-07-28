@@ -2361,6 +2361,10 @@
     <string name="PrivateSpacePinConfirmSubtitle">Type the PIN once more to confirm.</string>
     <string name="PrivateSpacePinRemoveTitle">Remove PIN</string>
     <string name="PrivateSpacePinRemoveSubtitle">Enter your current PIN. Protected Space will no longer require a password.</string>
+    <string name="PrivateSpacePinManageMessage">Change the current PIN or remove it.</string>
+    <string name="PrivateSpacePinChange">Change PIN</string>
+    <string name="PrivateSpacePinChangeVerifyTitle">Enter current PIN</string>
+    <string name="PrivateSpacePinChangeVerifySubtitle">Confirm your current PIN before choosing a new one.</string>
     <string name="PrivateSpacePinEnter">Enter</string>
     <string name="PrivateSpacePinHint">PIN</string>
     <string name="PrivateSpacePinWrong">Wrong PIN. Try again.</string>

@@ -425,6 +425,10 @@
     <string name="PrivateSpacePinConfirmSubtitle">Введите PIN ещё раз для подтверждения.</string>
     <string name="PrivateSpacePinRemoveTitle">Удалить PIN</string>
     <string name="PrivateSpacePinRemoveSubtitle">Введите текущий PIN. Защищённое пространство перестанет требовать пароль.</string>
+    <string name="PrivateSpacePinManageMessage">Смените текущий PIN или удалите его.</string>
+    <string name="PrivateSpacePinChange">Сменить PIN</string>
+    <string name="PrivateSpacePinChangeVerifyTitle">Введите текущий PIN</string>
+    <string name="PrivateSpacePinChangeVerifySubtitle">Подтвердите текущий PIN, прежде чем выбрать новый.</string>
     <string name="PrivateSpacePinEnter">Войти</string>
     <string name="PrivateSpacePinHint">PIN</string>
     <string name="PrivateSpacePinWrong">Неверный PIN. Попробуйте ещё раз.</string>

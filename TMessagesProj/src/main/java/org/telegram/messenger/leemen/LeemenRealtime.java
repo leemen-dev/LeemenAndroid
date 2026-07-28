@@ -260,6 +260,9 @@ public final class LeemenRealtime {
                         // Never trust a public-channel broadcast as proof of deletion. It only wakes the
                         // authenticated generation guard, which logs out solely on the backend's 401/404.
                         LeemenSessionGuard.checkNow(account);
+                    } else if ("account_state_changed".equals(broadcastEvent)) {
+                        // Notify-only: confirm Premium/privacy mode with one authenticated GET /me.
+                        LeemenAccountState.onRemoteChanged(account);
                     } else if ("blob_changed".equals(broadcastEvent)) {
                         // Supabase broadcast nests the data one level deeper: payload.payload = {table, version}.
                         // Pass them so LeemenSync can ignore the echo of our own write (no push→echo→push loop).

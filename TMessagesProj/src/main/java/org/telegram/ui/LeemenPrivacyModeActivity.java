@@ -25,6 +25,7 @@ import android.widget.Toast;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.leemen.LeemenAccount;
 import org.telegram.messenger.leemen.LeemenMaxPrivacy;
@@ -43,7 +44,7 @@ import org.telegram.ui.Components.LayoutHelper;
  * lives in {@link LeemenMaxPrivacy} (off-UI Argon2id). {@link #promptForUnwrap} is the new-device flow the app
  * triggers on {@code leemenMaxKeyNeeded} — enter the passphrase (or recovery phrase, or reset) to recover K_master.
  */
-public class LeemenPrivacyModeActivity extends BaseFragment {
+public class LeemenPrivacyModeActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
 
     private static final int MIN_PASSPHRASE = 8;
     private static final long RECOVERY_CLIPBOARD_TTL_MS = 60_000L;
@@ -51,6 +52,25 @@ public class LeemenPrivacyModeActivity extends BaseFragment {
     private LinearLayout container;
 
     private interface OnText { void run(String text); }
+
+    @Override
+    public boolean onFragmentCreate() {
+        getNotificationCenter().addObserver(this, NotificationCenter.secondSpaceModeChanged);
+        return super.onFragmentCreate();
+    }
+
+    @Override
+    public void onFragmentDestroy() {
+        getNotificationCenter().removeObserver(this, NotificationCenter.secondSpaceModeChanged);
+        super.onFragmentDestroy();
+    }
+
+    @Override
+    public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.secondSpaceModeChanged) {
+            rebuild();
+        }
+    }
 
     @Override
     public View createView(Context context) {

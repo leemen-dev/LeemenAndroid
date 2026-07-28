@@ -379,8 +379,17 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         if (ssc.hasPassword()) {
             AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
             b.setTitle(LocaleController.getString(R.string.PrivateSpacePinTitle));
-            b.setMessage(LocaleController.getString(R.string.PrivateSpacePinRemoveConfirm));
-            b.setPositiveButton(LocaleController.getString(R.string.Remove), (d, w) -> {
+            b.setMessage(LocaleController.getString(R.string.PrivateSpacePinManageMessage));
+            b.setPositiveButton(LocaleController.getString(R.string.PrivateSpacePinChange), (d, w) -> {
+                boolean wasVisible = ssc.isEntryButtonVisible();
+                presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_CHANGE)
+                        .setOnSuccess(() -> {
+                            updateRows();
+                            if (adapter != null) adapter.notifyDataSetChanged();
+                            if (!wasVisible) notifyEntryMethodChanged();
+                        }));
+            });
+            b.setNeutralButton(LocaleController.getString(R.string.Remove), (d, w) -> {
                 boolean wasVisible = ssc.isEntryButtonVisible();
                 presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_REMOVE)
                         .setOnSuccess(() -> {
@@ -394,7 +403,10 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
             AlertDialog alert = b.create();
             showDialog(alert);
-            alert.redPositive();
+            View removeButton = alert.getButton(android.content.DialogInterface.BUTTON_NEUTRAL);
+            if (removeButton instanceof TextView) {
+                ((TextView) removeButton).setTextColor(Theme.getColor(Theme.key_text_RedBold));
+            }
         } else {
             boolean wasVisible = ssc.isEntryButtonVisible();
             presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_SET)

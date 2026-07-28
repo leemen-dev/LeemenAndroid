@@ -88,9 +88,19 @@ public final class LeemenAccount {
         return "max".equals(getPrivacyMode(account));
     }
 
-    /** Locally update the cached privacy mode after a successful upgrade/downgrade. */
-    public static void setPrivacyMode(int account, String mode) {
+    /** Update the cached server-authoritative privacy mode and refresh any already-open settings screen. */
+    public static boolean setPrivacyMode(int account, String mode) {
+        String previous = getPrivacyMode(account);
+        if (TextUtils.equals(previous, mode)) {
+            return false;
+        }
         prefs().edit().putString("privacy_" + account, mode).apply();
+        try {
+            org.telegram.messenger.NotificationCenter.getInstance(account)
+                    .postNotificationName(org.telegram.messenger.NotificationCenter.secondSpaceModeChanged);
+        } catch (Throwable ignored) {
+        }
+        return true;
     }
 
     /** CAS counter for the max-mode wraps (returned by upgrade/wrap-pw/account-key); 0 until known. */
