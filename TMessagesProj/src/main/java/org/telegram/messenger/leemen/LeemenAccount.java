@@ -278,6 +278,16 @@ public final class LeemenAccount {
         }
     }
 
+    /**
+     * An explicit Telegram login is the only operation allowed to re-arm an account after deletion.
+     * Clear every persisted remnant of the previous local generation before /auth/telegram starts. This
+     * deliberately also handles an interrupted remote-logout cleanup: a stale token or disabled flag can
+     * otherwise make bindIfNeeded() return forever and leave the chat list fail-closed.
+     */
+    public static void prepareForTelegramLogin(int account) {
+        prepareForNewGeneration(account);
+    }
+
     /** Terminate every OTHER active Telegram session created by THIS app (api_id == APP_ID) — i.e. the user's
      *  other Leemen installs — leaving official Telegram clients (different api_id) and the Telegram account
      *  intact. The current session is excluded by its `current` flag (its api_id is also APP_ID) and is logged
@@ -379,7 +389,7 @@ public final class LeemenAccount {
 
     /** Drop this account's Leemen identity (call on Telegram logout of the account). */
     public static void clear(int account) {
-        prefs().edit()
+        boolean committed = prefs().edit()
                 .remove("token_" + account)
                 .remove("sync_" + account)
                 .remove("master_" + account)
@@ -393,7 +403,10 @@ public final class LeemenAccount {
                 .remove("consent_pending_" + account + "_" + LeemenConsent.TYPE_KZ_CROSS_BORDER)
                 .remove("consent_pending_" + account + "_" + LeemenConsent.TYPE_ANALYTICS)
                 .remove("consent_pending_" + account + "_" + LeemenConsent.TYPE_ATTRIBUTION)
-                .apply();
+                .commit();
+        if (!committed && org.telegram.messenger.BuildVars.LOGS_ENABLED) {
+            org.telegram.messenger.FileLog.d("Leemen: failed to synchronously clear account slot " + account);
+        }
         LeemenConsent.clearAccount(account);
         // Run after the token removal: an old in-flight register callback now fails its token check, while
         // this final removal also wins if that callback completed in the narrow window above.

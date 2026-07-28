@@ -1711,7 +1711,13 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         }
         MediaDataController.getInstance(currentAccount).loadStickersByEmojiOrName(AndroidUtilities.STICKERS_PLACEHOLDER_PACK_NAME, false, true);
 
-        // Leemen: analytics signup funnel + gate the chat list until the first PS sync resolves, then bind.
+        // Leemen: an explicit Telegram auth starts a fresh LOCAL generation boundary. Remote account deletion
+        // can leave a persisted disabled flag/stale binding if its cleanup was interrupted; neither may suppress
+        // creation of the new backend generation the user just explicitly requested.
+        org.telegram.messenger.leemen.LeemenIdentity.resetAccountLifecycle(currentAccount);
+        org.telegram.messenger.leemen.LeemenAccount.prepareForTelegramLogin(currentAccount);
+
+        // Analytics signup funnel + gate the chat list until the first PS sync resolves, then bind.
         if (afterSignup) org.telegram.messenger.leemen.LeemenAnalytics.track("signup_completed");
         org.telegram.messenger.leemen.LeemenSync.markSyncPending(currentAccount);
         // Retry, not one-shot: if the bind/sync chain fails transiently right after login (e.g. server still

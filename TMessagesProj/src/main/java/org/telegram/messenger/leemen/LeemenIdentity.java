@@ -36,6 +36,10 @@ public final class LeemenIdentity {
     private LeemenIdentity() {}
 
     private static final Set<Integer> inFlight = new HashSet<>();
+    /** Invalidates async bind callbacks when a local Telegram account slot is logged out and reused. */
+    private static final long[] lifecycleGeneration = new long[UserConfig.MAX_ACCOUNT_COUNT];
+    /** Generation owning the current inFlight entry; prevents an old callback from clearing a newer bind. */
+    private static final long[] inFlightGeneration = new long[UserConfig.MAX_ACCOUNT_COUNT];
 
     // Post-login self-healing retry: the bind+key+sync chain can fail transiently right after a login (server
     // still settling a just-deleted identity, username resolver not warm yet, key fetch hiccup). Without it the
@@ -57,29 +61,47 @@ public final class LeemenIdentity {
     public static void bindWithRetry(int account) {
         if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return;
         cancelRetry(account);
+        final long generation = getLifecycleGeneration(account);
         bindIfNeeded(account);
-        scheduleRetry(account, 0, SystemClock.elapsedRealtime());
+        scheduleRetry(account, 0, SystemClock.elapsedRealtime(), generation);
     }
 
-    private static void scheduleRetry(final int account, final int attempt, final long startedAt) {
+    private static void scheduleRetry(final int account, final int attempt, final long startedAt,
+                                      final long generation) {
+        if (!isLifecycleCurrent(account, generation)) return;
         if (SystemClock.elapsedRealtime() - startedAt > RETRY_CEILING_MS) {
             return; // gave up after the ceiling; a cold start / foreground rearmPendingSync() retries
         }
         final Runnable r = () -> {
             retryRunnable[account] = null;
-            if (!UserConfig.getInstance(account).isClientActivated()
+            if (!isLifecycleCurrent(account, generation)
+                    || !UserConfig.getInstance(account).isClientActivated()
                     || LeemenAccount.isDisabled(account)
                     || LeemenSync.hasInitialSyncCompleted(account)) {
-                return; // logged out / deleted / sync already landed — nothing more to do
+                return; // slot reused / logged out / deleted / sync already landed — nothing more to do
             }
             if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: bind retry #" + (attempt + 1) + " account " + account);
             bindIfNeeded(account);   // idempotent: binds, or (if bound) re-fetches the key
             LeemenSync.syncAll();    // and (if bound+keyed) drives the sync that opens the gate
-            scheduleRetry(account, attempt + 1, startedAt);
+            scheduleRetry(account, attempt + 1, startedAt, generation);
         };
         retryRunnable[account] = r;
         long delay = Math.min(RETRY_MAX_MS, RETRY_BASE_MS << Math.min(attempt, 5));
         AndroidUtilities.runOnUIThread(r, delay);
+    }
+
+    /**
+     * End every bind/retry owned by the previous occupant of this local Telegram account slot.
+     * Call both on logout and on explicit login: the latter is the authoritative point at which a stale
+     * persisted deletion flag/binding is allowed to be replaced by a newly authenticated generation.
+     */
+    public static void resetAccountLifecycle(int account) {
+        if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return;
+        cancelRetry(account);
+        synchronized (inFlight) {
+            lifecycleGeneration[account]++;
+            inFlight.remove(account);
+        }
     }
 
     /** Re-arm the post-login self-heal for any activated account whose initial sync hasn't landed yet.
@@ -120,6 +142,7 @@ public final class LeemenIdentity {
     /** Idempotent, best-effort bind for one account. Safe to call repeatedly. */
     public static void bindIfNeeded(int account) {
         if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return;
+        long generation = -1;
         try {
             if (!UserConfig.getInstance(account).isClientActivated()) return;
             if (LeemenAccount.isDisabled(account)) return; // user deleted their Leemen account
@@ -130,45 +153,65 @@ public final class LeemenIdentity {
             synchronized (inFlight) {
                 if (inFlight.contains(account)) return;
                 inFlight.add(account);
+                generation = lifecycleGeneration[account];
+                inFlightGeneration[account] = generation;
             }
-            resolveBotThenBind(account);
+            resolveBotThenBind(account, generation);
         } catch (Throwable e) {
             FileLog.e(e);
-            clearInFlight(account);
+            if (generation >= 0) clearInFlight(account, generation);
         }
     }
 
-    private static void clearInFlight(int account) {
+    private static void clearInFlight(int account, long generation) {
         synchronized (inFlight) {
-            inFlight.remove(account);
+            if (inFlight.contains(account) && inFlightGeneration[account] == generation) {
+                inFlight.remove(account);
+            }
         }
     }
 
-    private static void resolveBotThenBind(int account) {
+    private static long getLifecycleGeneration(int account) {
+        synchronized (inFlight) {
+            return lifecycleGeneration[account];
+        }
+    }
+
+    private static boolean isLifecycleCurrent(int account, long generation) {
+        synchronized (inFlight) {
+            return lifecycleGeneration[account] == generation;
+        }
+    }
+
+    private static void resolveBotThenBind(int account, long generation) {
         MessagesController.getInstance(account).getUserNameResolver().resolve(LeemenConfig.AUTH_BOT_USERNAME, peerId -> {
             try {
-                if (peerId == null || peerId <= 0) {
-                    if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: auth-bot resolve failed (peerId=" + peerId + ")");
-                    clearInFlight(account);
+                if (!isLifecycleCurrent(account, generation)) {
+                    clearInFlight(account, generation);
                     return;
                 }
-                requestInitData(account, peerId);
+                if (peerId == null || peerId <= 0) {
+                    if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: auth-bot resolve failed (peerId=" + peerId + ")");
+                    clearInFlight(account, generation);
+                    return;
+                }
+                requestInitData(account, peerId, generation);
             } catch (Throwable e) {
                 FileLog.e(e);
-                clearInFlight(account);
+                clearInFlight(account, generation);
             }
         });
     }
 
-    private static void requestInitData(int account, long botId) {
-        requestInitData(account, botId, false);
+    private static void requestInitData(int account, long botId, long generation) {
+        requestInitData(account, botId, generation, false);
     }
 
     /** Fetch a FRESH, single-use initData via headless requestWebView, then POST it. CONTRACT §2: the backend
      *  accepts each initData exactly once and only within 1h of its auth_date — so every call obtains a
      *  brand-new signed string; a string is never cached or reused. {@code retried} caps the replay/expired
      *  self-retry at exactly one. */
-    private static void requestInitData(int account, long botId, boolean retried) {
+    private static void requestInitData(int account, long botId, long generation, boolean retried) {
         MessagesController mc = MessagesController.getInstance(account);
         TLRPC.TL_messages_requestWebView req = new TLRPC.TL_messages_requestWebView();
         req.peer = mc.getInputPeer(botId);
@@ -178,20 +221,24 @@ public final class LeemenIdentity {
         req.flags |= 2; // url is flags.1
 
         ConnectionsManager.getInstance(account).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+            if (!isLifecycleCurrent(account, generation)) {
+                clearInFlight(account, generation);
+                return;
+            }
             if (!(response instanceof TLRPC.TL_webViewResultUrl)) {
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("Leemen: requestWebView failed: " + (error != null ? error.text : "null response"));
                 }
-                clearInFlight(account);
+                clearInFlight(account, generation);
                 return;
             }
             String initData = extractInitData(((TLRPC.TL_webViewResultUrl) response).url);
             if (TextUtils.isEmpty(initData)) {
                 if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: no tgWebAppData in requestWebView result url");
-                clearInFlight(account);
+                clearInFlight(account, generation);
                 return;
             }
-            postAuth(account, botId, initData, retried);
+            postAuth(account, botId, initData, generation, retried);
         }));
     }
 
@@ -217,16 +264,17 @@ public final class LeemenIdentity {
         return null;
     }
 
-    private static void postAuth(int account, long botId, String initData, boolean retried) {
+    private static void postAuth(int account, long botId, String initData, long generation, boolean retried) {
         final long expectedTelegramUserId = UserConfig.getInstance(account).getClientUserId();
         JsonObject body = new JsonObject();
         body.addProperty("initData", initData);
         LeemenRestClient.post(LeemenConfig.EP_AUTH_TELEGRAM, null, body, (resp, code, errCode, errMsg) -> {
             try {
-                if (!UserConfig.getInstance(account).isClientActivated()
+                if (!isLifecycleCurrent(account, generation)
+                        || !UserConfig.getInstance(account).isClientActivated()
                         || UserConfig.getInstance(account).getClientUserId() != expectedTelegramUserId
                         || LeemenAccount.isDisabled(account)) {
-                    clearInFlight(account);
+                    clearInFlight(account, generation);
                     return; // the slot was logged out, reused, or entered deletion while auth was in flight
                 }
                 if (resp != null && code >= 200 && code < 300 && resp.has("token") && resp.has("sync_account_id")) {
@@ -252,7 +300,7 @@ public final class LeemenIdentity {
                         FileLog.d("Leemen: bound account " + account
                                 + " mode=" + privacy + " created=" + (resp.has("created") ? resp.get("created") : "?"));
                     }
-                    clearInFlight(account);
+                    clearInFlight(account, generation);
                     return;
                 }
                 // CONTRACT §2: initData is FRESH + SINGLE-USE (accepted once, within 1h of auth_date). On a
@@ -262,16 +310,16 @@ public final class LeemenIdentity {
                         && ((code == 401 && "init_data_replayed".equals(errCode))
                             || (code == 400 && "init_data_expired".equals(errCode)))) {
                     if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: /auth/telegram " + errCode + " — refetch fresh initData, retry once");
-                    requestInitData(account, botId, true); // keeps the in-flight guard; single retry with fresh initData
+                    requestInitData(account, botId, generation, true); // keeps the in-flight guard; fresh initData
                     return;
                 }
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("Leemen: /auth/telegram failed code=" + code + " err=" + errCode + " " + errMsg);
                 }
-                clearInFlight(account);
+                clearInFlight(account, generation);
             } catch (Throwable e) {
                 FileLog.e(e);
-                clearInFlight(account);
+                clearInFlight(account, generation);
             }
         });
     }

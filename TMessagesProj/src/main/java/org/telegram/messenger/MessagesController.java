@@ -15429,6 +15429,7 @@ public class MessagesController extends BaseController implements NotificationCe
         java.util.HashSet<Integer> hiddenToLogout = new java.util.HashSet<>(
                 SecondSpaceController.getInstance(currentAccount).getHiddenAccounts());
         // Leemen: drop this account's backend identity + sync state on logout, before the slot is reused.
+        org.telegram.messenger.leemen.LeemenIdentity.resetAccountLifecycle(currentAccount);
         org.telegram.messenger.leemen.LeemenRealtime.disconnect(currentAccount);
         org.telegram.messenger.leemen.LeemenSync.clearAccount(currentAccount);
         org.telegram.messenger.leemen.LeemenAccount.clear(currentAccount);
