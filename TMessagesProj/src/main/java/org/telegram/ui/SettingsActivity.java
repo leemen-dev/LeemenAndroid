@@ -857,7 +857,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
         items.add(UItem.asShadow(null));
 
-        if (!getMessagesController().premiumFeaturesBlocked()) {
+        if (ssc.isActive()) {
+            items.add(SettingCell.Factory.of(101, 0xFFB659FF, 0xFF617CFF, R.drawable.settings_premium, getString(R.string.LeemenPremium)));
+        } else if (!getMessagesController().premiumFeaturesBlocked()) {
             items.add(SettingCell.Factory.of(11, 0xFFB659FF, 0xFF617CFF, R.drawable.settings_premium, getString(R.string.TelegramPremium)));
         }
         if (getMessagesController().starsPurchaseAvailable()) {
@@ -962,6 +964,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 break;
             case 100:
                 presentFragment(new SecondSpaceSettingsActivity());
+                break;
+            case 101:
+                presentFragment(new LeemenPremiumActivity("settings"));
                 break;
             case 5:
                 presentFragment(new NotificationsSettingsActivity());

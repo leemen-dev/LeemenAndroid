@@ -380,7 +380,10 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
             b.setTitle(LocaleController.getString(R.string.PrivateSpacePinTitle));
             b.setMessage(LocaleController.getString(R.string.PrivateSpacePinManageMessage));
-            b.setPositiveButton(LocaleController.getString(R.string.PrivateSpacePinChange), (d, w) -> {
+            b.forceVerticalButtons();
+            // AlertDialog inserts negative at the top and neutral in the middle when buttons are
+            // vertical. Map the actions accordingly to keep Change first and Remove last.
+            b.setNegativeButton(LocaleController.getString(R.string.PrivateSpacePinChange), (d, w) -> {
                 boolean wasVisible = ssc.isEntryButtonVisible();
                 presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_CHANGE)
                         .setOnSuccess(() -> {
@@ -389,7 +392,8 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                             if (!wasVisible) notifyEntryMethodChanged();
                         }));
             });
-            b.setNeutralButton(LocaleController.getString(R.string.Remove), (d, w) -> {
+            b.setNeutralButton(LocaleController.getString(R.string.Cancel), null);
+            b.setPositiveButton(LocaleController.getString(R.string.Remove), (d, w) -> {
                 boolean wasVisible = ssc.isEntryButtonVisible();
                 presentFragment(new PrivateSpacePasscodeActivity(PrivateSpacePasscodeActivity.MODE_REMOVE)
                         .setOnSuccess(() -> {
@@ -400,10 +404,9 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                             if (!wasVisible) notifyEntryMethodChanged();
                         }));
             });
-            b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
             AlertDialog alert = b.create();
             showDialog(alert);
-            View removeButton = alert.getButton(android.content.DialogInterface.BUTTON_NEUTRAL);
+            View removeButton = alert.getButton(android.content.DialogInterface.BUTTON_POSITIVE);
             if (removeButton instanceof TextView) {
                 ((TextView) removeButton).setTextColor(Theme.getColor(Theme.key_text_RedBold));
             }
