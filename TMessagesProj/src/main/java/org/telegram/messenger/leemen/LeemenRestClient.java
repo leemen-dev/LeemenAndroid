@@ -109,6 +109,13 @@ public final class LeemenRestClient {
                 final int fCode = code;
                 final String fErrCode = errCode, fErrMsg = errMsg;
                 AndroidUtilities.runOnUIThread(() -> {
+                    // GET /me is the authoritative global account snapshot. Apply it before any
+                    // request-specific callback so no caller can accidentally consume the response
+                    // without updating Premium/privacy state for the whole account.
+                    if (LeemenConfig.EP_ME.equals(path)
+                            && fBody != null && fCode >= 200 && fCode < 300) {
+                        LeemenAccountState.applyMeSnapshot(bearer, fBody);
+                    }
                     // Account deletion hard-revokes the JWT's master-account generation server-side.
                     // Observe the dedicated response in one central place so an already-open stale
                     // Leemen session logs itself out on whichever protected request sees it first.

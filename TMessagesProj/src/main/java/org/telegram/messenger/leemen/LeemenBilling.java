@@ -435,24 +435,39 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
      */
     static boolean applyEntitlementsFromMe(final int account, JsonObject response) {
         if (response == null || !response.has("entitlements") || !response.get("entitlements").isJsonArray()) {
+            if (BuildVars.LOGS_ENABLED) {
+                FileLog.d("Leemen: entitlement snapshot ignored account " + account + " missing array");
+            }
             return false; // untrustworthy/partial answer → keep the offline cache
         }
         long until = 0L;
+        int count = 0;
         try {
             com.google.gson.JsonArray arr = response.getAsJsonArray("entitlements");
+            count = arr.size();
             long now = System.currentTimeMillis();
             for (int i = 0; i < arr.size(); i++) {
                 if (!arr.get(i).isJsonObject()) continue;
                 JsonObject e = arr.get(i).getAsJsonObject();
+                String kind = e.has("kind") && !e.get("kind").isJsonNull()
+                        ? e.get("kind").getAsString() : null;
+                if (!"premium".equals(kind)) continue;
                 long exp = !e.has("expires_at") || e.get("expires_at").isJsonNull()
                         ? PERPETUAL_PREMIUM_UNTIL
                         : parseExpiryMs(e.get("expires_at").getAsString());
                 if (exp > now && exp > until) until = exp;
             }
         } catch (Throwable ignore) {
+            if (BuildVars.LOGS_ENABLED) {
+                FileLog.d("Leemen: entitlement snapshot parse failed account " + account);
+            }
             return false;
         }
         SecondSpaceController.getInstance(account).setLeemenPremiumUntil(until);
+        if (BuildVars.LOGS_ENABLED) {
+            FileLog.d("Leemen: entitlement snapshot applied account " + account
+                    + " count=" + count + " premium=" + (until > System.currentTimeMillis()));
+        }
         return true;
     }
 

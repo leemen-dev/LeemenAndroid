@@ -2,8 +2,12 @@ package org.telegram.messenger.leemen;
 
 import android.text.TextUtils;
 
+import androidx.annotation.Nullable;
+
 import com.google.gson.JsonObject;
 
+import org.telegram.messenger.BuildVars;
+import org.telegram.messenger.FileLog;
 import org.telegram.messenger.UserConfig;
 
 import java.util.HashSet;
@@ -54,9 +58,10 @@ public final class LeemenAccountState {
             if (token.equals(LeemenAccount.getToken(account))
                     && UserConfig.getInstance(account).isClientActivated()
                     && !LeemenAccount.isDisabled(account)
-                    && resp != null && code >= 200 && code < 300) {
-                applyPrivacyMode(account, resp);
-                LeemenBilling.applyEntitlementsFromMe(account, resp);
+                    && (resp == null || code < 200 || code >= 300)
+                    && BuildVars.LOGS_ENABLED) {
+                FileLog.d("Leemen: account state refresh failed account " + account
+                        + " code=" + code + " err=" + errorCode);
             }
             if (repeat
                     && token.equals(LeemenAccount.getToken(account))
@@ -65,6 +70,25 @@ public final class LeemenAccountState {
                 refresh(account, false);
             }
         });
+    }
+
+    /**
+     * Apply every successful authenticated GET /me snapshot before its request-specific callback.
+     * Keeping this at the REST boundary makes Premium/privacy global account state: a paywall check,
+     * foreground poll, startup reconcile and Realtime wake-up all update the same controller cache.
+     */
+    static void applyMeSnapshot(@Nullable String bearer, JsonObject response) {
+        if (TextUtils.isEmpty(bearer) || response == null) return;
+        for (int account = 0; account < UserConfig.MAX_ACCOUNT_COUNT; account++) {
+            if (!bearer.equals(LeemenAccount.getToken(account))
+                    || !UserConfig.getInstance(account).isClientActivated()
+                    || LeemenAccount.isDisabled(account)) {
+                continue;
+            }
+            applyPrivacyMode(account, response);
+            LeemenBilling.applyEntitlementsFromMe(account, response);
+            return;
+        }
     }
 
     private static void applyPrivacyMode(int account, JsonObject response) {
