@@ -95,8 +95,8 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
         linearLayout.addView(f1, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 20, 0, 0));
 
         FrameLayout fAccount = new FeatureCell(context, R.drawable.msg_limit_accounts,
-                LocaleController.getString(R.string.LeemenPremiumFeatAccountTitle),
-                LocaleController.getString(R.string.LeemenPremiumFeatAccountDesc));
+                LocaleController.getString(R.string.PrivateSpacePaywallFeature2Title),
+                LocaleController.getString(R.string.PrivateSpacePaywallFeature2Text));
         linearLayout.addView(fAccount, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 16, 0, 0));
 
         TextView button = new TextView(context);
