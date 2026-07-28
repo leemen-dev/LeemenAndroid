@@ -594,6 +594,16 @@ public class SecondSpaceController extends BaseController implements Notificatio
         boolean changed = !sameSequence(tabSequence, steps);
         tabSequence.clear();
         if (steps != null) tabSequence.addAll(steps);
+        persistTabSequence();
+        // Entry method changed → user must re-verify before the entry button can be hidden.
+        if (changed) {
+            clearShortcutTested();
+            // Tier-P: propagate the gesture to same-platform devices. Suppressed while applying a remote sync.
+            notifyLeemenSync();
+        }
+    }
+
+    private void persistTabSequence() {
         try {
             JSONArray arr = new JSONArray();
             for (TabStep s : tabSequence) {
@@ -604,12 +614,6 @@ public class SecondSpaceController extends BaseController implements Notificatio
             }
             getMessagesController().getMainSettings().edit().putString(PREF_TAB_SEQUENCE, arr.toString()).apply();
         } catch (Exception ignored) {
-        }
-        // Entry method changed → user must re-verify before the entry button can be hidden.
-        if (changed) {
-            clearShortcutTested();
-            // Tier-P: propagate the gesture to same-platform devices. Suppressed while applying a remote sync.
-            notifyLeemenSync();
         }
     }
 
@@ -635,6 +639,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
         getMessagesController().getMainSettings().edit().putBoolean(PREF_PIN_IN_SEARCH, value).apply();
         if (changed) {
             clearShortcutTested();
+            notifyLeemenSync();
         }
     }
 
@@ -651,6 +656,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
         if (!shortcutTested) {
             shortcutTested = true;
             getMessagesController().getMainSettings().edit().putBoolean(PREF_SHORTCUT_TESTED, true).apply();
+            notifyLeemenSync();
         }
     }
 
@@ -678,6 +684,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
         if (changed) {
             editor.apply();
             getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceModeChanged);
+            notifyLeemenSync();
         }
         return changed;
     }
@@ -1052,8 +1059,8 @@ public class SecondSpaceController extends BaseController implements Notificatio
         return new HashSet<>(privateSearchDialogs);
     }
 
-    /** Replace Core PS state from a merged sync blob (LeemenSync projection): persist + one reload,
-     *  guarded so these writes don't re-trigger a push. PIN is NOT synced yet (§7.2 migration). */
+    /** Replace Core + Android-scoped PS state from a merged sync blob: persist + one reload,
+     *  guarded so these writes don't re-trigger a push. */
     public void applySyncedState(Set<Long> members,
                                  Map<Long, Set<Integer>> exposed,
                                  Map<Long, Set<Integer>> pending,
@@ -1061,7 +1068,10 @@ public class SecondSpaceController extends BaseController implements Notificatio
                                  Set<Long> privateSearch,
                                  Integer pinTimeout,
                                  Boolean allowScreenshotsVal,
-                                 java.util.List<TabStep> tabSeq) {
+                                 java.util.List<TabStep> tabSeq,
+                                 Boolean pinInSearchVal,
+                                 Boolean entryButtonVisibleVal,
+                                 Boolean shortcutTestedVal) {
         // Keep the rendered-chat portion of the old state so a no-op pull (including our own PUT echo) does
         // not force every open OFF-mode chat to reload. Local mutations are already present in the controller;
         // only an actually different merged projection needs the cross-device UI event below.
@@ -1069,11 +1079,23 @@ public class SecondSpaceController extends BaseController implements Notificatio
         Map<Long, Set<Integer>> previousExposed = copyMsgMap(exposedMessages);
         Map<Long, Set<Integer>> previousPending = copyMsgMap(pendingMessages);
         Map<Long, Set<Integer>> previousSelfPinned = copyMsgMap(selfPinnedMessages);
+        java.util.List<TabStep> previousTabSequence = new java.util.ArrayList<>(tabSequence);
+        boolean previousPinInSearch = pinInSearchEnabled;
+        boolean previousEntryButtonVisible = entryButtonVisible;
+        boolean previousShortcutTested = shortcutTested;
         applyingRemoteSync = true;
         try {
-            // Tier-P: apply our platform's synced tab gesture under the SAME guard (no spurious back-push).
-            if (tabSeq != null && !sameSequence(tabSequence, tabSeq)) {
-                setTabSequence(tabSeq);
+            // Tier-P: the Android entry config is one LWW block. Apply it atomically so changing the gesture
+            // cannot temporarily force the button visible and overwrite newer synced button/tested flags.
+            if (tabSeq != null) {
+                tabSequence.clear();
+                tabSequence.addAll(tabSeq);
+                pinInSearchEnabled = Boolean.TRUE.equals(pinInSearchVal) && hasPassword();
+                boolean hasShortcut = !tabSequence.isEmpty() || pinInSearchEnabled;
+                shortcutTested = hasShortcut && Boolean.TRUE.equals(shortcutTestedVal);
+                entryButtonVisible = !hasShortcut || !shortcutTested
+                        || entryButtonVisibleVal == null || entryButtonVisibleVal;
+                persistTabSequence();
             }
             dialogIds.clear();
             if (members != null) {
@@ -1099,10 +1121,16 @@ public class SecondSpaceController extends BaseController implements Notificatio
             persistSelfPinned();
             persistLastDecided();
             persistPrivateSearches();
-            getMessagesController().getMainSettings().edit()
+            SharedPreferences.Editor settingsEditor = getMessagesController().getMainSettings().edit()
                     .putInt(PREF_PIN_TIMEOUT_MIN, pinTimeoutMinutes)
-                    .putBoolean(PREF_ALLOW_SCREENSHOTS, allowScreenshots)
-                    .apply();
+                    .putBoolean(PREF_ALLOW_SCREENSHOTS, allowScreenshots);
+            if (tabSeq != null) {
+                settingsEditor
+                        .putBoolean(PREF_PIN_IN_SEARCH, pinInSearchEnabled)
+                        .putBoolean(PREF_SHOW_ENTRY_BUTTON, entryButtonVisible)
+                        .putBoolean(PREF_SHORTCUT_TESTED, shortcutTested);
+            }
+            settingsEditor.apply();
         } finally {
             applyingRemoteSync = false;
         }
@@ -1143,6 +1171,15 @@ public class SecondSpaceController extends BaseController implements Notificatio
                 || !previousSelfPinned.equals(selfPinnedMessages);
         if (renderedChatStateChanged) {
             getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceSyncApplied);
+        }
+        boolean platformEntryStateChanged =
+                !sameSequence(previousTabSequence, tabSequence)
+                || previousPinInSearch != pinInSearchEnabled
+                || previousEntryButtonVisible != entryButtonVisible
+                || previousShortcutTested != shortcutTested;
+        if (platformEntryStateChanged) {
+            // Settings/Privacy rebuild the explicit entry row from this event.
+            getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceModeChanged);
         }
     }
 
@@ -1418,6 +1455,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
         entryButtonVisible = value;
         getMessagesController().getMainSettings().edit().putBoolean(PREF_SHOW_ENTRY_BUTTON, value).apply();
         getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceModeChanged);
+        notifyLeemenSync();
         return true;
     }
 

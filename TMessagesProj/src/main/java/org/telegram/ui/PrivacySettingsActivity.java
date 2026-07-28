@@ -211,6 +211,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         getNotificationCenter().addObserver(this, NotificationCenter.blockedUsersDidLoad);
         getNotificationCenter().addObserver(this, NotificationCenter.didSetOrRemoveTwoStepPassword);
         getNotificationCenter().addObserver(this, NotificationCenter.didUpdateGlobalAutoDeleteTimer);
+        getNotificationCenter().addObserver(this, NotificationCenter.secondSpaceModeChanged);
 
         getUserConfig().loadGlobalTTl();
 
@@ -243,6 +244,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         getNotificationCenter().removeObserver(this, NotificationCenter.blockedUsersDidLoad);
         getNotificationCenter().removeObserver(this, NotificationCenter.didSetOrRemoveTwoStepPassword);
         getNotificationCenter().removeObserver(this, NotificationCenter.didUpdateGlobalAutoDeleteTimer);
+        getNotificationCenter().removeObserver(this, NotificationCenter.secondSpaceModeChanged);
         boolean save = false;
         if (currentSync != newSync) {
             getUserConfig().syncContacts = newSync;
@@ -719,10 +721,14 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                 loadPasswordSettings();
                 updateRows();
             }
-        } if (id == NotificationCenter.didUpdateGlobalAutoDeleteTimer) {
+        } else if (id == NotificationCenter.didUpdateGlobalAutoDeleteTimer) {
             if (listAdapter != null) {
                 listAdapter.notifyItemChanged(autoDeleteMesages);
             }
+        } else if (id == NotificationCenter.secondSpaceModeChanged) {
+            // The Android entry configuration is synced across active devices. Recalculate row positions so
+            // an already-open Privacy screen immediately adds/removes the Protected Space entry button.
+            updateRows();
         }
     }
 
@@ -1255,9 +1261,8 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
     @Override
     public void onResume() {
         super.onResume();
-        if (listAdapter != null) {
-            listAdapter.notifyDataSetChanged();
-        }
+        // Entry visibility may have changed remotely while another fragment covered this one.
+        updateRows();
     }
 
     private class ListAdapter extends RecyclerListView.SelectionAdapter {

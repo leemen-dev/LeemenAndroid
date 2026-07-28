@@ -37,9 +37,8 @@ import java.util.Set;
  *
  * Pushes are debounced (~500 ms) and coalesced; a mutation mid-cycle sets a dirty bit and re-runs at the end.
  *
- * Deferred (intentional, v1): Tier-P platform settings and ps_pin are PRESERVED verbatim by the merge but
- * not yet reconciled/projected — ps_pin waits on the SHA-256→Argon2id PIN re-enrollment (§7.2); platform
- * sync is a follow-up. Neither is dropped on round-trip.
+ * Core state, ps_pin, and this client's Tier-P Android entry settings are reconciled/projected. Unknown
+ * platform sections are preserved verbatim so another client platform's settings survive round-trips.
  */
 public final class LeemenSync {
 
@@ -624,16 +623,21 @@ public final class LeemenSync {
             }
         }
 
-        // Tier-P (platform-specific) — synced ONLY between same-platform devices. We own only the "android"
-        // sub-object; mergePlatform preserves other platforms' sections. Write a fresh register (lamport "c")
-        // iff the local tab gesture differs from what the blob already holds for android.
-        java.util.List<SecondSpaceController.TabStep> localSeq = c.getTabSequence();
-        if (platformTabSeqDiffers(st.content.platform, localSeq)) {
+        // Tier-P (platform-specific) — synced ONLY between same-platform devices. The complete Android entry
+        // config is one LWW block: gesture + PIN-in-search + fallback-button + verified gate.
+        AndroidPlatformState localPlatformState = canonicalLocalAndroidPlatformState(c);
+        if (platformAndroidStateDiffers(st.content.platform, localPlatformState)) {
             if (st.content.platform == null) st.content.platform = new JsonObject();
-            JsonObject android = new JsonObject();
+            JsonObject android = st.content.platform.has(PLATFORM_ANDROID)
+                    && st.content.platform.get(PLATFORM_ANDROID).isJsonObject()
+                    ? st.content.platform.getAsJsonObject(PLATFORM_ANDROID).deepCopy()
+                    : new JsonObject();
             android.addProperty("c", lam(st, lam));
             android.addProperty("dev", dev);
-            android.add("tab_sequence", tabSequenceToJson(localSeq));
+            android.add("tab_sequence", tabSequenceToJson(localPlatformState.tabSequence));
+            android.addProperty("pin_in_search", localPlatformState.pinInSearch);
+            android.addProperty("entry_button_visible", localPlatformState.entryButtonVisible);
+            android.addProperty("shortcut_tested", localPlatformState.shortcutTested);
             st.content.platform.add(PLATFORM_ANDROID, android);
         }
 
@@ -696,10 +700,13 @@ public final class LeemenSync {
             }
         }
 
-        // Tier-P: our own platform's synced tab gesture (same-platform only) is applied inside applySyncedState
-        // under its single applyingRemoteSync guard (no spurious back-push).
+        // Tier-P: apply the complete same-platform entry block under one remote-sync guard.
+        AndroidPlatformState androidState = platformAndroidStateFromBlob(st.content.platform);
         c.applySyncedState(members, exposed, pending, selfPinned, privateSearch, pinTimeout, allowSs,
-                platformTabSeqFromBlob(st.content.platform));
+                androidState != null ? androidState.tabSequence : null,
+                androidState != null ? androidState.pinInSearch : null,
+                androidState != null ? androidState.entryButtonVisible : null,
+                androidState != null ? androidState.shortcutTested : null);
     }
 
     // ===== helpers =====
@@ -733,8 +740,15 @@ public final class LeemenSync {
         return holder[0];
     }
 
-    // ---- Tier-P: the tab gesture, synced only within this platform's blob sub-object ----
+    // ---- Tier-P: Android entry config, synced only within this platform's blob sub-object ----
     private static final String PLATFORM_ANDROID = "android";
+
+    private static final class AndroidPlatformState {
+        java.util.List<SecondSpaceController.TabStep> tabSequence = new java.util.ArrayList<>();
+        boolean pinInSearch;
+        boolean entryButtonVisible = true;
+        boolean shortcutTested;
+    }
 
     private static JsonArray tabSequenceToJson(java.util.List<SecondSpaceController.TabStep> seq) {
         JsonArray arr = new JsonArray();
@@ -749,31 +763,60 @@ public final class LeemenSync {
         return arr;
     }
 
-    /** Parse the android tab_sequence out of the blob's platform section, or null if absent/malformed. */
-    private static java.util.List<SecondSpaceController.TabStep> platformTabSeqFromBlob(JsonObject platform) {
+    /** Parse Android's platform block. Missing fields use the anti-lockout defaults from schema §6.6. */
+    private static AndroidPlatformState platformAndroidStateFromBlob(JsonObject platform) {
         try {
             if (platform == null || !platform.has(PLATFORM_ANDROID)) return null;
             JsonObject android = platform.getAsJsonObject(PLATFORM_ANDROID);
-            if (android == null || !android.has("tab_sequence")) return null;
-            JsonArray arr = android.getAsJsonArray("tab_sequence");
-            java.util.List<SecondSpaceController.TabStep> out = new java.util.ArrayList<>();
-            for (JsonElement el : arr) {
-                JsonObject o = el.getAsJsonObject();
-                out.add(new SecondSpaceController.TabStep(o.get("t").getAsInt(), o.get("l").getAsBoolean()));
+            if (android == null) return null;
+            AndroidPlatformState out = new AndroidPlatformState();
+            if (android.has("tab_sequence") && android.get("tab_sequence").isJsonArray()) {
+                JsonArray arr = android.getAsJsonArray("tab_sequence");
+                for (JsonElement el : arr) {
+                    JsonObject o = el.getAsJsonObject();
+                    out.tabSequence.add(new SecondSpaceController.TabStep(
+                            o.get("t").getAsInt(), o.get("l").getAsBoolean()));
+                }
             }
+            out.pinInSearch = boolField(android, "pin_in_search", false);
+            out.entryButtonVisible = boolField(android, "entry_button_visible", true);
+            out.shortcutTested = boolField(android, "shortcut_tested", false);
             return out;
         } catch (Throwable e) {
             return null;
         }
     }
 
-    /** True iff the local tab gesture differs from the one stored in the blob's android section. Compares
-     *  SEMANTICALLY (TabStep t/l) via sameSequence — never JsonArray.equals — so a serialize/round-trip can
-     *  never cause false-positive lamport churn (spurious re-push every cycle). */
-    private static boolean platformTabSeqDiffers(JsonObject platform, java.util.List<SecondSpaceController.TabStep> localSeq) {
-        java.util.List<SecondSpaceController.TabStep> blobSeq = platformTabSeqFromBlob(platform);
-        if (blobSeq == null) return localSeq != null && !localSeq.isEmpty();
-        return !SecondSpaceController.sameSequence(blobSeq, localSeq);
+    private static AndroidPlatformState canonicalLocalAndroidPlatformState(SecondSpaceController controller) {
+        AndroidPlatformState out = new AndroidPlatformState();
+        out.tabSequence.addAll(controller.getTabSequence());
+        out.pinInSearch = controller.isPinInSearchEnabled() && controller.hasPassword();
+        boolean hasShortcut = !out.tabSequence.isEmpty() || out.pinInSearch;
+        out.shortcutTested = hasShortcut && controller.isShortcutTested();
+        out.entryButtonVisible = !hasShortcut || !out.shortcutTested || controller.isEntryButtonVisible();
+        return out;
+    }
+
+    /** Semantic comparison prevents a serialize/round-trip from causing lamport churn every sync cycle. */
+    private static boolean platformAndroidStateDiffers(JsonObject platform, AndroidPlatformState local) {
+        AndroidPlatformState blob = platformAndroidStateFromBlob(platform);
+        if (blob == null) {
+            return !local.tabSequence.isEmpty() || local.pinInSearch
+                    || !local.entryButtonVisible || local.shortcutTested;
+        }
+        return !SecondSpaceController.sameSequence(blob.tabSequence, local.tabSequence)
+                || blob.pinInSearch != local.pinInSearch
+                || blob.entryButtonVisible != local.entryButtonVisible
+                || blob.shortcutTested != local.shortcutTested;
+    }
+
+    private static boolean boolField(JsonObject object, String key, boolean fallback) {
+        try {
+            return object.has(key) && !object.get(key).isJsonNull()
+                    ? object.get(key).getAsBoolean() : fallback;
+        } catch (Throwable e) {
+            return fallback;
+        }
     }
 
     private static LeemenBlob.PerChat perChat(LeemenSyncState st, String dialogKey) {
