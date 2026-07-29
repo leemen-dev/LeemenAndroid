@@ -620,7 +620,37 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
      *  login leaves nothing behind. */
     private void addNewPrivateSpaceAccount(int slot) {
         if (slot < 0) return;
-        presentFragment(new LoginActivity(slot).setPrivateSpaceHideForOwner(currentAccount));
+        final int ownerAccount = currentAccount;
+        final LaunchActivity launchActivity = getParentActivity() instanceof LaunchActivity
+                ? (LaunchActivity) getParentActivity()
+                : LaunchActivity.instance;
+        if (launchActivity == null || launchActivity.isFinishing()) return;
+
+        Runnable openLogin = () -> {
+            // The account/slot may have changed while the PS navigation stack was being reset.
+            if (LaunchActivity.instance != launchActivity
+                    || launchActivity.isFinishing()
+                    || UserConfig.selectedAccount != ownerAccount
+                    || !UserConfig.isValidAccount(ownerAccount)
+                    || UserConfig.getInstance(slot).isClientActivated()) {
+                return;
+            }
+            launchActivity.presentFragment(
+                    new LoginActivity(slot).setPrivateSpaceHideForOwner(ownerAccount));
+        };
+
+        SecondSpaceController ownerSpace = SecondSpaceController.getInstance(ownerAccount);
+        if (ownerSpace.isActive()) {
+            // LoginActivity immediately probes Android Credential Manager for a passkey. That system
+            // surface pauses LaunchActivity. If PS is still active, the deniability auto-exit pops and
+            // destroys LoginActivity, which cancels Credential Manager and produces Android's
+            // "login request was cancelled by Leemen" message. Exit first, let navigation reset, then
+            // open login from the activity-owned root stack.
+            ownerSpace.setActive(false);
+            AndroidUtilities.runOnUIThread(openLogin);
+        } else {
+            openLogin.run();
+        }
     }
 
     private void confirmRemoveAccount(int account) {
