@@ -75,6 +75,8 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
     /** Non-null when /me shows an active paid subscription on a DIFFERENT platform — the buy button +
      *  plan cards are then hidden (one subscription across platforms, CONTRACT §7/§10). */
     private String otherPlatformSource;
+    /** Purchase sheet stays fail-closed until the latest authoritative /me snapshot arrives. */
+    private boolean purchaseGateReady;
     private LinearLayout plansContainer;
     private final String placement;
 
@@ -318,8 +320,11 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         // Re-read the authoritative server snapshot whenever this existing screen becomes visible
         // again (for example after an operator grant while the app was backgrounded). The helper also
         // applies every active entitlement source to the local Premium cache before invoking us.
-        LeemenBilling.checkOtherPlatformSubscription(currentAccount, source -> {
+        purchaseGateReady = false;
+        updateState();
+        LeemenBilling.checkOtherPlatformSubscription(currentAccount, (source, authoritative) -> {
             otherPlatformSource = source;
+            purchaseGateReady = authoritative;
             updateState();
         });
     }
@@ -415,8 +420,8 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         if (getParentActivity() == null) {
             return;
         }
-        if (otherPlatformSource != null) {
-            return; // one active subscription across platforms — don't start a Play purchase here
+        if (!purchaseGateReady || otherPlatformSource != null) {
+            return; // unconfirmed or subscribed elsewhere — never open a potentially duplicate purchase
         }
         String basePlan = selectedMonths == 12
                 ? org.telegram.messenger.leemen.LeemenConfig.PLAY_BASE_PLAN_YEARLY
@@ -448,6 +453,14 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
             subscribeButton.setVisibility(View.GONE);
             if (plansContainer != null) {
                 plansContainer.setVisibility(View.GONE);
+            }
+            return;
+        }
+        if (!purchaseGateReady) {
+            statusView.setVisibility(View.GONE);
+            subscribeButton.setVisibility(View.GONE);
+            if (plansContainer != null) {
+                plansContainer.setVisibility(View.VISIBLE);
             }
             return;
         }

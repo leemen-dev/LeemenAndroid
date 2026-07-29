@@ -368,6 +368,10 @@ public final class LeemenIdentity {
                     // for the next startup/foreground poll leaves Premium and privacy stale after first bind
                     // and makes a recovered expired/rotated session appear broken until another app cycle.
                     LeemenAccountState.refresh(account);
+                    // Binding is asynchronous, so the startup-wide Play restore may have run before this
+                    // identity existed. Re-enter the shared/coalesced restore path now that routing by the
+                    // exact master_account_id is possible.
+                    LeemenBilling.getInstance().restore(account);
                     // A session token now exists → let the Terms/Privacy acceptance gate run (LaunchActivity).
                     try {
                         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.leemenBindCompleted, account);

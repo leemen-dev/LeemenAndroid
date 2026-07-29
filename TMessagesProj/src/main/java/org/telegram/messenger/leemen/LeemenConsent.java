@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.UserConfig;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -23,7 +24,7 @@ import java.util.Map;
  *  - local: a per-account mirror in {@link LeemenAccount} prefs, so repeat launches need no /me round-trip.
  *
  * The reprompt decision is SERVER-AUTHORITATIVE (survives reinstall / shows once across devices): GET /v1/me
- * returns account.consents.terms {granted, version}; we re-prompt iff it is not granted at the CURRENT
+ * returns consents.terms {granted, version}; we re-prompt iff it is not granted at the CURRENT
  * version. The local mirror is only a fast-path cache for "already accepted on THIS install".
  */
 public final class LeemenConsent {
@@ -72,6 +73,11 @@ public final class LeemenConsent {
             return;
         }
         LeemenRestClient.get(LeemenConfig.EP_ME, token, (resp, code, ec, em) -> {
+            if (!token.equals(LeemenAccount.getToken(account))
+                    || !UserConfig.getInstance(account).isClientActivated()
+                    || LeemenAccount.isDisabled(account)) {
+                return;
+            }
             try {
                 if (resp != null && code >= 200 && code < 300 && resp.has("account") && resp.get("account").isJsonObject()) {
                     JsonObject acc = resp.getAsJsonObject("account");
@@ -79,8 +85,8 @@ public final class LeemenConsent {
 
                     boolean serverGranted = false;
                     String serverVersion = null;
-                    if (acc.has("consents") && acc.get("consents").isJsonObject()) {
-                        JsonObject consents = acc.getAsJsonObject("consents");
+                    if (resp.has("consents") && resp.get("consents").isJsonObject()) {
+                        JsonObject consents = resp.getAsJsonObject("consents");
                         if (consents.has(TYPE_TERMS) && consents.get(TYPE_TERMS).isJsonObject()) {
                             JsonObject terms = consents.getAsJsonObject(TYPE_TERMS);
                             serverGranted = boolField(terms, "granted");

@@ -1,6 +1,9 @@
 package org.telegram.messenger;
 
 import android.content.SharedPreferences;
+import android.os.Build;
+import android.os.SystemClock;
+import android.provider.Settings;
 import android.text.TextUtils;
 
 import org.json.JSONArray;
@@ -40,6 +43,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private static final String PREF_PIN_IN_SEARCH = "second_space_pin_in_search";
     private static final String PREF_SHORTCUT_TESTED = "second_space_shortcut_tested";
     private static final String PREF_PIN_TIMEOUT_MIN = "second_space_pin_timeout_min";
+    /** Legacy wall-clock anchor, removed on load. */
     private static final String PREF_PIN_LAST_OK_MS = "second_space_pin_last_ok_ms";
     // Storage key kept as "entry_password" for backward compatibility; semantics are now
     // the main account's single switch password (see the switch-password section below).
@@ -53,18 +57,19 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private static final String PREF_ONBOARDING_DONE = "second_space_onboarding_done";
     private static final String PREF_INTRO_SHOWN = "second_space_intro_shown";
     private static final String PREF_PAYWALL_SHOWN = "second_space_paywall_shown";
-    /** Leemen Premium expiry, epoch ms. {@code 0} = never subscribed. Local-only for now:
-     *  set by {@link #activateLeemenPremiumLocally(int)} until real billing is wired. */
+    /** Leemen Premium expiry, epoch ms, retained for display only. */
     private static final String PREF_PREMIUM_UNTIL = "second_space_premium_until";
+    private static final String PREF_PREMIUM_DEADLINE_ELAPSED_MS =
+            "second_space_premium_deadline_elapsed_ms";
+    private static final String PREF_PREMIUM_DEADLINE_BOOT_COUNT =
+            "second_space_premium_deadline_boot_count";
 
     public static final int MODE_OFF = 0;
     public static final int MODE_REAL = 1;
 
     /** Free tier: how many chats a user may hide without a Leemen Premium subscription.
      *  Hard-enforced at every add-chat site via {@link #canAddChats(int)} (the picker, the
-     *  long-press preview menu, and multi-select), which blocks the add and offers the paywall.
-     *  Billing itself is still a local stub ({@link #activateLeemenPremiumLocally(int)}) until
-     *  real Leemen billing is wired. */
+     *  long-press preview menu, and multi-select), which blocks the add and offers the paywall. */
     public static final int MAX_HIDDEN_CHATS_FREE = 1;
 
     /** Hiding a whole account is a Leemen Premium feature — none are free (free allowance = 0).
@@ -149,7 +154,8 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private boolean pinInSearchEnabled;
     private boolean shortcutTested;
     private int pinTimeoutMinutes;
-    private long pinLastVerifiedAt;
+    /** Monotonic and process-local: process death/reboot intentionally requires the PIN again. */
+    private long pinLastVerifiedElapsedMs;
     /** Active mode: {@link #MODE_OFF} or {@link #MODE_REAL}.
      *  Non-persistent — always {@code MODE_OFF} on next launch (deniability). */
     private int activeMode = MODE_OFF;
@@ -168,13 +174,26 @@ public class SecondSpaceController extends BaseController implements Notificatio
      *  local-change → sync-push hook so remote application doesn't echo back as a push. */
     private boolean applyingRemoteSync;
 
-    /** Leemen Premium expiry (epoch ms); {@code 0} = no subscription. */
+    /** Server expiry for display plus a trusted same-boot monotonic access deadline. */
     private long leemenPremiumUntil;
+    private long leemenPremiumDeadlineElapsedMs;
+    private int leemenPremiumDeadlineBootCount;
+    private boolean leemenPremiumDeadlineTrusted;
+    /** A process cannot survive a reboot, so read this once and keep every deadline decision consistent. */
+    private final int processBootCount;
 
     private boolean entryButtonVisible;
 
+    private final Runnable premiumExpiryRunnable = () -> {
+        if (!hasLeemenPremium()) {
+            getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceModeChanged);
+            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+        }
+    };
+
     private SecondSpaceController(int num) {
         super(num);
+        processBootCount = currentBootCount();
         SharedPreferences prefs = getMessagesController().getMainSettings();
         // activeMode is intentionally non-persistent: always starts MODE_OFF on app launch (deniability)
         entryButtonVisible = prefs.getBoolean(PREF_SHOW_ENTRY_BUTTON, true);
@@ -216,10 +235,19 @@ public class SecondSpaceController extends BaseController implements Notificatio
         pinInSearchEnabled = prefs.getBoolean(PREF_PIN_IN_SEARCH, false);
         shortcutTested = prefs.getBoolean(PREF_SHORTCUT_TESTED, false);
         pinTimeoutMinutes = prefs.getInt(PREF_PIN_TIMEOUT_MIN, 0);
-        pinLastVerifiedAt = prefs.getLong(PREF_PIN_LAST_OK_MS, 0L);
+        if (prefs.contains(PREF_PIN_LAST_OK_MS)) {
+            prefs.edit().remove(PREF_PIN_LAST_OK_MS).apply();
+        }
+        pinLastVerifiedElapsedMs = 0L;
         switchPasswordHash = prefs.getString(PREF_SWITCH_PASSWORD_HASH, "");
         allowScreenshots = prefs.getBoolean(PREF_ALLOW_SCREENSHOTS, DEFAULT_ALLOW_SCREENSHOTS);
         leemenPremiumUntil = prefs.getLong(PREF_PREMIUM_UNTIL, 0L);
+        leemenPremiumDeadlineElapsedMs = prefs.getLong(PREF_PREMIUM_DEADLINE_ELAPSED_MS, 0L);
+        leemenPremiumDeadlineBootCount = prefs.getInt(PREF_PREMIUM_DEADLINE_BOOT_COUNT, -1);
+        leemenPremiumDeadlineTrusted = leemenPremiumDeadlineElapsedMs > 0L
+                && processBootCount >= 0
+                && processBootCount == leemenPremiumDeadlineBootCount;
+        schedulePremiumExpiryRefresh();
         loadHiddenAccounts(hiddenAccounts, prefs.getString(PREF_HIDDEN_ACCOUNTS, ""), num);
         // Hold the OFF-mode list until the INITIAL preview warmup settles — set SYNCHRONOUSLY here, before the
         // first dialog-list render, so a hidden chat with a not-yet-loaded exposed preview never flashes empty.
@@ -531,25 +559,26 @@ public class SecondSpaceController extends BaseController implements Notificatio
     }
 
     public void setPinTimeoutMinutes(int minutes) {
-        pinTimeoutMinutes = Math.max(0, minutes);
+        int normalized = Math.max(0, minutes);
+        if (pinTimeoutMinutes == normalized) return;
+        pinTimeoutMinutes = normalized;
+        clearPinVerified();
         getMessagesController().getMainSettings().edit().putInt(PREF_PIN_TIMEOUT_MIN, pinTimeoutMinutes).apply();
         notifyLeemenSync();
     }
 
     public boolean isPinPromptSkippable() {
-        if (pinTimeoutMinutes <= 0 || pinLastVerifiedAt <= 0) return false;
-        long deadlineMs = pinLastVerifiedAt + pinTimeoutMinutes * 60_000L;
-        return System.currentTimeMillis() < deadlineMs;
+        if (pinTimeoutMinutes <= 0 || pinLastVerifiedElapsedMs <= 0L) return false;
+        long elapsedMs = SystemClock.elapsedRealtime() - pinLastVerifiedElapsedMs;
+        return elapsedMs >= 0L && elapsedMs < pinTimeoutMinutes * 60_000L;
     }
 
     public void recordPinVerified() {
-        pinLastVerifiedAt = System.currentTimeMillis();
-        getMessagesController().getMainSettings().edit().putLong(PREF_PIN_LAST_OK_MS, pinLastVerifiedAt).apply();
+        pinLastVerifiedElapsedMs = SystemClock.elapsedRealtime();
     }
 
     public void clearPinVerified() {
-        if (pinLastVerifiedAt == 0L) return;
-        pinLastVerifiedAt = 0L;
+        pinLastVerifiedElapsedMs = 0L;
         getMessagesController().getMainSettings().edit().remove(PREF_PIN_LAST_OK_MS).apply();
     }
 
@@ -1125,7 +1154,15 @@ public class SecondSpaceController extends BaseController implements Notificatio
             if (psDraftDialogs.retainAll(dialogIds)) {
                 persistLongCsv(psDraftDialogs, PREF_PS_DRAFTS);
             }
-            if (pinTimeout != null) pinTimeoutMinutes = Math.max(0, pinTimeout);
+            if (pinTimeout != null) {
+                int normalizedPinTimeout = Math.max(0, pinTimeout);
+                if (pinTimeoutMinutes != normalizedPinTimeout) {
+                    pinTimeoutMinutes = normalizedPinTimeout;
+                    // A remembered verification belongs to the policy under which it was granted.
+                    // In particular, a remotely increased timeout must not retroactively extend it.
+                    clearPinVerified();
+                }
+            }
             if (allowScreenshotsVal != null) allowScreenshots = allowScreenshotsVal;
             persistDialogIds();
             persistExposed();
@@ -1353,9 +1390,13 @@ public class SecondSpaceController extends BaseController implements Notificatio
             pinInSearchEnabled = false;
             shortcutTested = false;
             pinTimeoutMinutes = 0;
-            pinLastVerifiedAt = 0;
+            pinLastVerifiedElapsedMs = 0;
             allowScreenshots = DEFAULT_ALLOW_SCREENSHOTS;
             leemenPremiumUntil = 0;
+            leemenPremiumDeadlineElapsedMs = 0;
+            leemenPremiumDeadlineBootCount = -1;
+            leemenPremiumDeadlineTrusted = false;
+            AndroidUtilities.cancelRunOnUIThread(premiumExpiryRunnable);
             activeMode = MODE_OFF;
         } finally {
             applyingRemoteSync = false;
@@ -1669,11 +1710,16 @@ public class SecondSpaceController extends BaseController implements Notificatio
         return dialogIds.size() > MAX_HIDDEN_CHATS_FREE;
     }
 
-    // --- Leemen Premium subscription (local stub until real billing) ---
+    // --- Leemen Premium subscription ---
 
-    /** True while a Leemen Premium subscription is active (unlimited hidden chats). */
+    /** True while the last server-confirmed subscription remains active on this boot. */
     public boolean hasLeemenPremium() {
-        return leemenPremiumUntil > System.currentTimeMillis();
+        if (!leemenPremiumDeadlineTrusted || leemenPremiumDeadlineElapsedMs <= 0L) return false;
+        if (leemenPremiumDeadlineBootCount >= 0
+                && processBootCount != leemenPremiumDeadlineBootCount) {
+            return false;
+        }
+        return SystemClock.elapsedRealtime() < leemenPremiumDeadlineElapsedMs;
     }
 
     /** Subscription expiry as epoch ms; {@code 0} when never subscribed. */
@@ -1681,24 +1727,61 @@ public class SecondSpaceController extends BaseController implements Notificatio
         return leemenPremiumUntil;
     }
 
-    /** Set the subscription expiry directly (epoch ms). Fires UI refresh so paywall / limit
-     *  state and the dialog list re-evaluate. */
-    public void setLeemenPremiumUntil(long whenMs) {
-        if (leemenPremiumUntil == whenMs) {
+    /**
+     * Apply one trusted server snapshot. The absolute expiry is display-only; access is measured from
+     * {@code serverNowMs} with {@link SystemClock#elapsedRealtime()}, so changing device wall time cannot
+     * extend or prematurely end Premium. A reboot invalidates the deadline until the next /me.
+     */
+    public void setLeemenPremiumSnapshot(long whenMs, long serverNowMs) {
+        boolean wasActive = hasLeemenPremium();
+        long oldUntil = leemenPremiumUntil;
+        long remainingMs = whenMs > serverNowMs ? whenMs - serverNowMs : 0L;
+        long nowElapsedMs = SystemClock.elapsedRealtime();
+        long deadlineElapsedMs = remainingMs > Long.MAX_VALUE - nowElapsedMs
+                ? Long.MAX_VALUE
+                : nowElapsedMs + remainingMs;
+
+        leemenPremiumUntil = whenMs;
+        leemenPremiumDeadlineElapsedMs = remainingMs > 0L ? deadlineElapsedMs : 0L;
+        leemenPremiumDeadlineBootCount = processBootCount;
+        leemenPremiumDeadlineTrusted = true;
+        getMessagesController().getMainSettings().edit()
+                .putLong(PREF_PREMIUM_UNTIL, whenMs)
+                .putLong(PREF_PREMIUM_DEADLINE_ELAPSED_MS, leemenPremiumDeadlineElapsedMs)
+                .putInt(PREF_PREMIUM_DEADLINE_BOOT_COUNT, leemenPremiumDeadlineBootCount)
+                .apply();
+        schedulePremiumExpiryRefresh();
+
+        boolean isActive = hasLeemenPremium();
+        if (oldUntil == whenMs && wasActive == isActive) {
             return;
         }
-        leemenPremiumUntil = whenMs;
-        getMessagesController().getMainSettings().edit().putLong(PREF_PREMIUM_UNTIL, whenMs).apply();
         NotificationCenter nc = getNotificationCenter();
         nc.postNotificationName(NotificationCenter.secondSpaceModeChanged);
         nc.postNotificationName(NotificationCenter.dialogsNeedReload);
     }
 
-    /** Grant {@code months} of Leemen Premium locally, extending from now (or current expiry if
-     *  still active). TODO(billing): replace with Google Play / backend-verified entitlement. */
-    public void activateLeemenPremiumLocally(int months) {
-        long base = Math.max(leemenPremiumUntil, System.currentTimeMillis());
-        setLeemenPremiumUntil(base + (long) months * 31L * 24L * 60L * 60L * 1000L);
+    private void schedulePremiumExpiryRefresh() {
+        AndroidUtilities.cancelRunOnUIThread(premiumExpiryRunnable);
+        if (!hasLeemenPremium()) return;
+        long delayMs = leemenPremiumDeadlineElapsedMs - SystemClock.elapsedRealtime();
+        if (delayMs > 0L) {
+            long delayWithSlackMs = delayMs > Long.MAX_VALUE - 50L ? Long.MAX_VALUE : delayMs + 50L;
+            AndroidUtilities.runOnUIThread(premiumExpiryRunnable, delayWithSlackMs);
+        }
+    }
+
+    private static int currentBootCount() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return -1;
+        try {
+            return Settings.Global.getInt(
+                    ApplicationLoader.applicationContext.getContentResolver(),
+                    Settings.Global.BOOT_COUNT,
+                    -1
+            );
+        } catch (Throwable ignored) {
+            return -1;
+        }
     }
 
     /** Whether {@code n} more chats can be hidden under the current entitlement. Premium = always. */

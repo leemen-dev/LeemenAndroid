@@ -741,6 +741,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 org.telegram.messenger.leemen.LeemenDevice.ensureRegisteredAll();
                 org.telegram.messenger.leemen.LeemenRealtime.connectAll();
                 org.telegram.messenger.leemen.LeemenBilling.reconcileAllEntitlements(); // pull entitlement state down (hold/expire/revoke)
+                org.telegram.messenger.leemen.LeemenBilling.getInstance().restoreAllBoundAccounts(); // one Play query, routed by exact master account id
                 // One public policy fetch unlocks analytics, heartbeat and attribution. Until its strict
                 // response validates, all three remain fail-closed regardless of local consent.
                 org.telegram.messenger.leemen.LeemenTelemetryPolicy.refresh();

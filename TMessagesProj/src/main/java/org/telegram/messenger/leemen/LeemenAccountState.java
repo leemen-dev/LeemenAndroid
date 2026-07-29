@@ -26,6 +26,29 @@ public final class LeemenAccountState {
     private static final Set<String> inFlight = new HashSet<>();
     /** A Realtime event racing an older GET must force one fresh snapshot after that GET settles. */
     private static final Set<String> pending = new HashSet<>();
+    /** Every GET /me, including Consent/Billing callers, is ordered per local account slot. */
+    private static final Object requestOrderLock = new Object();
+    private static final String[] latestIssuedBearer = new String[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final long[] latestIssuedRequest = new long[UserConfig.MAX_ACCOUNT_COUNT];
+    private static long nextRequestId;
+
+    static long beginMeRequest(@Nullable String bearer) {
+        if (TextUtils.isEmpty(bearer)) return 0L;
+        for (int account = 0; account < UserConfig.MAX_ACCOUNT_COUNT; account++) {
+            if (!bearer.equals(LeemenAccount.getToken(account))
+                    || !UserConfig.getInstance(account).isClientActivated()
+                    || LeemenAccount.isDisabled(account)) {
+                continue;
+            }
+            synchronized (requestOrderLock) {
+                long requestId = ++nextRequestId;
+                latestIssuedBearer[account] = bearer;
+                latestIssuedRequest[account] = requestId;
+                return requestId;
+            }
+        }
+        return 0L;
+    }
 
     public static void refresh(final int account) {
         refresh(account, false);
@@ -77,17 +100,50 @@ public final class LeemenAccountState {
      * Keeping this at the REST boundary makes Premium/privacy global account state: a paywall check,
      * foreground poll, startup reconcile and Realtime wake-up all update the same controller cache.
      */
-    static void applyMeSnapshot(@Nullable String bearer, JsonObject response) {
-        if (TextUtils.isEmpty(bearer) || response == null) return;
+    static void applyMeSnapshot(@Nullable String bearer, long requestId, JsonObject response) {
+        if (TextUtils.isEmpty(bearer) || requestId <= 0L || response == null) return;
         for (int account = 0; account < UserConfig.MAX_ACCOUNT_COUNT; account++) {
             if (!bearer.equals(LeemenAccount.getToken(account))
                     || !UserConfig.getInstance(account).isClientActivated()
                     || LeemenAccount.isDisabled(account)) {
                 continue;
             }
+            long serverNowMs = parseServerNow(response);
+            if (serverNowMs <= 0L) {
+                if (BuildVars.LOGS_ENABLED) {
+                    FileLog.d("Leemen: ignored invalid /me snapshot account " + account);
+                }
+                return;
+            }
+            synchronized (requestOrderLock) {
+                // A response from an older request must never overwrite a snapshot requested later.
+                // server_now cannot order these safely: an older request can finish last after reading
+                // part of its data before the newer request.
+                if (!bearer.equals(latestIssuedBearer[account])
+                        || requestId != latestIssuedRequest[account]) {
+                    if (BuildVars.LOGS_ENABLED) {
+                        FileLog.d("Leemen: ignored stale /me snapshot account " + account);
+                    }
+                    return;
+                }
+            }
+            if (!LeemenBilling.applyEntitlementsFromMe(account, response, serverNowMs)) {
+                if (BuildVars.LOGS_ENABLED) {
+                    FileLog.d("Leemen: ignored invalid /me snapshot account " + account);
+                }
+                return;
+            }
             applyPrivacyMode(account, response);
-            LeemenBilling.applyEntitlementsFromMe(account, response);
             return;
+        }
+    }
+
+    private static long parseServerNow(JsonObject response) {
+        try {
+            if (!response.has("server_now") || response.get("server_now").isJsonNull()) return 0L;
+            return LeemenBilling.parseExpiryMs(response.get("server_now").getAsString());
+        } catch (Throwable ignored) {
+            return 0L;
         }
     }
 

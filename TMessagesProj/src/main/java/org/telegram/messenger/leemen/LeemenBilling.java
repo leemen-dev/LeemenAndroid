@@ -27,19 +27,20 @@ import org.telegram.messenger.UserConfig;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Google Play Billing for Leemen Premium (a single SUBS product with monthly/yearly base plans).
  *
  * Flow: {@link #queryProduct} → show localized price → {@link #launchPurchase} → Play →
  * {@link #onPurchasesUpdated} → verify the purchase token on OUR backend
- * (POST /v1/entitlements/play) → backend grants the entitlement → we mirror expires_at into
- * {@link SecondSpaceController#setLeemenPremiumUntil(long)} and acknowledge the purchase.
+ * (POST /v1/entitlements/play) → backend grants the entitlement → acknowledge the purchase →
+ * refresh the trusted {@code GET /me} snapshot.
  *
  * The SERVER is the source of truth: a real purchase never grants premium client-side, only after
- * the backend verifies the token with the Google Play Developer API. (DEBUG builds keep a local
- * fallback for when the endpoint isn't deployed yet, so the dev UI can be exercised.)
+ * the backend verifies the token with the Google Play Developer API.
  *
  * TWO EXTERNAL DEPENDENCIES before this works in production:
  *   1. Play Console — subscription {@link LeemenConfig#PLAY_PRODUCT_PREMIUM} with base plans
@@ -81,12 +82,15 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
     // No locks are needed as long as that confinement holds.
     private BillingClient client;
     private boolean connected;
+    private boolean connecting;
     private final List<Pending> whenReady = new ArrayList<>();
     private ProductDetails cachedProduct;
+    private boolean restoreQueryInFlight;
+    private final Set<Integer> pendingRestoreAccounts = new HashSet<>();
+    private final Set<String> processingPurchaseTokens = new HashSet<>();
 
     // Identity of the in-flight LIVE purchase, set on launch; onPurchasesUpdated fires asynchronously.
     private int pendingAccount = -1;
-    private int pendingMonths = 1;
     private FlowListener flowListener;
 
     private static final class Pending {
@@ -125,10 +129,12 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
                     .enablePendingPurchases()
                     .build();
         }
-        if (!connected) {
+        if (!connected && !connecting) {
+            connecting = true;
             try {
                 client.startConnection(this);
             } catch (Throwable e) {
+                connecting = false;
                 FileLog.e(e);
                 drainReady(false);
             }
@@ -150,6 +156,7 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
 
     @Override
     public void onBillingSetupFinished(@NonNull BillingResult result) {
+        connecting = false;
         connected = result.getResponseCode() == BillingClient.BillingResponseCode.OK;
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d("Leemen: billing setup code=" + result.getResponseCode());
@@ -160,6 +167,7 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
     @Override
     public void onBillingServiceDisconnected() {
         connected = false;
+        connecting = false;
     }
 
     // ---- products / price ----------------------------------------------------------------------
@@ -254,32 +262,45 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
 
     // ---- purchase ------------------------------------------------------------------------------
 
-    /** Launch the Play purchase sheet for the given base plan. Returns false if it can't start
-     *  (product not yet available) — caller should keep the local fallback / show an error. */
+    /** Launch the Play purchase sheet for the given base plan. Returns false when the account is not
+     *  currently bound; asynchronous Play/connect failures are delivered through the flow listener. */
     public boolean launchPurchase(final Activity activity, final int account, final String basePlanId) {
-        if (activity == null) {
+        final String expectedToken = LeemenAccount.getToken(account);
+        final String expectedMasterId = obfuscatedAccountId(account);
+        if (activity == null || TextUtils.isEmpty(expectedToken) || TextUtils.isEmpty(expectedMasterId)
+                || !isCurrentIdentity(account, expectedToken, expectedMasterId)) {
             return false;
         }
-        pendingAccount = account;
-        pendingMonths = LeemenConfig.PLAY_BASE_PLAN_YEARLY.equals(basePlanId) ? 12 : 1;
         ensureConnected(() -> queryProduct(details -> {
             ProductDetails.SubscriptionOfferDetails offer = offerFor(details, basePlanId);
             if (details == null || offer == null) {
                 notifyFlow(false, "product_unavailable");
                 return;
             }
+            if (!isCurrentIdentity(account, expectedToken, expectedMasterId)) {
+                notifyFlow(false, "account_changed");
+                return;
+            }
             BillingFlowParams.ProductDetailsParams pdp = BillingFlowParams.ProductDetailsParams.newBuilder()
                     .setProductDetails(details)
                     .setOfferToken(offer.getOfferToken())
                     .build();
-            BillingFlowParams.Builder flow = BillingFlowParams.newBuilder()
-                    .setProductDetailsParamsList(Collections.singletonList(pdp));
-            String obf = obfuscatedAccountId(account);
-            if (obf != null) {
-                flow.setObfuscatedAccountId(obf);
+            BillingFlowParams flow = BillingFlowParams.newBuilder()
+                    .setProductDetailsParamsList(Collections.singletonList(pdp))
+                    .setObfuscatedAccountId(expectedMasterId)
+                    .build();
+            pendingAccount = account;
+            final BillingResult r;
+            try {
+                r = client.launchBillingFlow(activity, flow);
+            } catch (Throwable e) {
+                pendingAccount = -1;
+                FileLog.e(e);
+                notifyFlow(false, "launch_failed");
+                return;
             }
-            BillingResult r = client.launchBillingFlow(activity, flow.build());
             if (r.getResponseCode() != BillingClient.BillingResponseCode.OK) {
+                pendingAccount = -1;
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("Leemen: launchBillingFlow code=" + r.getResponseCode());
                 }
@@ -291,6 +312,8 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
 
     @Override
     public void onPurchasesUpdated(@NonNull BillingResult result, @Nullable List<Purchase> purchases) {
+        final int account = pendingAccount;
+        pendingAccount = -1;
         int code = result.getResponseCode();
         if (code == BillingClient.BillingResponseCode.USER_CANCELED) {
             notifyFlow(false, "canceled");
@@ -300,54 +323,128 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
             notifyFlow(false, "billing_error");
             return;
         }
-        int account = pendingAccount >= 0 ? pendingAccount : UserConfig.selectedAccount;
+        boolean matched = false;
         for (Purchase purchase : purchases) {
-            handlePurchase(account, purchase, pendingMonths, true);
+            if (isLeemenPremiumPurchase(purchase) && purchaseBelongsToAccount(purchase, account)) {
+                matched = true;
+                handlePurchase(account, purchase, true);
+            }
+        }
+        if (!matched) {
+            notifyFlow(false, "purchase_account_mismatch");
         }
     }
 
     /** Re-verify any active subscription purchases for {@code account} (cross-device restore +
      *  acknowledgement retry). Safe to call on app start / paywall open; backend verify is idempotent. */
     public void restore(final int account) {
-        ensureConnected(() -> client.queryPurchasesAsync(
-                QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build(),
-                (billingResult, list) -> {
-                    if (billingResult.getResponseCode() != BillingClient.BillingResponseCode.OK || list == null) {
-                        return;
-                    }
-                    for (Purchase purchase : list) {
-                        handlePurchase(account, purchase, 12, false);
-                    }
-                }));
+        if (!isRestorableAccount(account)) {
+            return;
+        }
+        pendingRestoreAccounts.add(account);
+        ensureConnected(this::runRestoreQuery);
     }
 
-    private void handlePurchase(final int account, final Purchase purchase, final int fallbackMonths, final boolean live) {
+    /** Restore purchases once for all local Leemen identities. Play returns a user-wide list, so every
+     *  purchase is routed only by its exact obfuscatedAccountId instead of being replayed into each slot. */
+    public void restoreAllBoundAccounts() {
+        for (int account = 0; account < UserConfig.MAX_ACCOUNT_COUNT; account++) {
+            if (isRestorableAccount(account)) {
+                pendingRestoreAccounts.add(account);
+            }
+        }
+        if (!pendingRestoreAccounts.isEmpty()) {
+            ensureConnected(this::runRestoreQuery);
+        }
+    }
+
+    private void runRestoreQuery() {
+        if (restoreQueryInFlight || pendingRestoreAccounts.isEmpty() || client == null || !client.isReady()) {
+            return;
+        }
+        final Set<Integer> requestedAccounts = new HashSet<>(pendingRestoreAccounts);
+        pendingRestoreAccounts.clear();
+        restoreQueryInFlight = true;
+        try {
+            client.queryPurchasesAsync(
+                    QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build(),
+                    (billingResult, list) -> {
+                        restoreQueryInFlight = false;
+                        if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK && list != null) {
+                            for (Purchase purchase : list) {
+                                int account = restoredPurchaseAccount(purchase, requestedAccounts);
+                                if (account >= 0) {
+                                    handlePurchase(account, purchase, false);
+                                }
+                            }
+                        } else if (BuildVars.LOGS_ENABLED) {
+                            FileLog.d("Leemen: restore query code=" + billingResult.getResponseCode());
+                        }
+                        if (!pendingRestoreAccounts.isEmpty()) {
+                            runRestoreQuery();
+                        }
+                    });
+        } catch (Throwable e) {
+            restoreQueryInFlight = false;
+            FileLog.e(e);
+        }
+    }
+
+    private void handlePurchase(final int account, final Purchase purchase, final boolean live) {
         if (purchase.getPurchaseState() != Purchase.PurchaseState.PURCHASED) {
             // PENDING (e.g. cash/voucher) — wait for a later update; never grant here.
             if (live) notifyFlow(false, "pending");
             return;
         }
-        verifyOnBackend(account, purchase, fallbackMonths, live, (granted, expiresMs) -> {
-            // Server is the source of truth: grant ONLY for a confirmed, still-valid future expiry.
-            if (!granted || expiresMs <= System.currentTimeMillis()) {
-                if (live) notifyFlow(false, "verify_failed");
+        if (!isLeemenPremiumPurchase(purchase) || !purchaseBelongsToAccount(purchase, account)) {
+            if (live) notifyFlow(false, "purchase_account_mismatch");
+            return;
+        }
+        final String purchaseToken = purchase.getPurchaseToken();
+        final String expectedToken = LeemenAccount.getToken(account);
+        final String expectedMasterId = LeemenAccount.getMasterAccountId(account);
+        if (TextUtils.isEmpty(purchaseToken) || TextUtils.isEmpty(expectedToken)
+                || TextUtils.isEmpty(expectedMasterId)
+                || !isCurrentIdentity(account, expectedToken, expectedMasterId)) {
+            if (live) notifyFlow(false, "account_changed");
+            return;
+        }
+        if (!processingPurchaseTokens.add(purchaseToken)) {
+            return;
+        }
+        verifyOnBackend(expectedToken, purchase, (granted, reason) -> {
+            if (!isCurrentIdentity(account, expectedToken, expectedMasterId)) {
+                finishPurchaseProcessing(purchaseToken);
+                if (live) notifyFlow(false, "account_changed");
                 return;
             }
-            final Runnable grant = () -> {
-                SecondSpaceController.getInstance(account).setLeemenPremiumUntil(expiresMs);
+            if (!granted) {
+                finishPurchaseProcessing(purchaseToken);
+                if (live) notifyFlow(false, reason);
+                return;
+            }
+            final Runnable complete = () -> {
+                if (!isCurrentIdentity(account, expectedToken, expectedMasterId)) {
+                    finishPurchaseProcessing(purchaseToken);
+                    if (live) notifyFlow(false, "account_changed");
+                    return;
+                }
+                finishPurchaseProcessing(purchaseToken);
+                // Pull server_now + the full entitlement set. Never derive access from the device clock
+                // or from a single store response. If another /me is already running, force a follow-up
+                // because it may have read the database before this grant.
+                LeemenAccountState.onRemoteChanged(account);
                 if (live) notifyFlow(true, null);
             };
             if (purchase.isAcknowledged()) {
-                grant.run(); // already past Google's refund window — safe to grant
+                complete.run();
             } else {
-                // New purchase: acknowledge FIRST. Only mirror the entitlement once the ack lands, so a
-                // failed ack (→ Google auto-refunds in 3 days) never leaves the user with free premium.
-                // If ack fails, restore() re-attempts ack+grant on the next app start.
                 acknowledge(purchase, ackOk -> {
                     if (ackOk) {
-                        grant.run();
-                    } else if (live) {
-                        notifyFlow(false, "ack_failed");
+                        complete.run();
+                    } else {
+                        finishPurchaseProcessing(purchaseToken);
+                        if (live) notifyFlow(false, "ack_failed");
                     }
                 });
             }
@@ -357,27 +454,39 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
     /** Result of {@link #checkOtherPlatformSubscription}: the {@code source} of an active paid
      *  subscription on a platform OTHER than Google Play, or {@code null} if there is none. */
     public interface OtherPlatformCallback {
-        void onResult(@Nullable String otherPlatformSource);
+        void onResult(@Nullable String otherPlatformSource, boolean authoritative);
     }
 
     /** One-subscription-across-platforms gate (CONTRACT §7/§10): inspect {@code /me.entitlements} for an
      *  active paid subscription whose {@code source} is a DIFFERENT billing platform — anything other than
      *  Google Play (this platform) or a {@code promo}/{@code manual} grant (not a store sub). The caller must NOT start a
-     *  Play purchase while one exists. Callback on the UI thread; {@code null} = clear to purchase. Fails
-     *  OPEN (null) on any error — the server additionally rejects a redundant Play purchase. */
+     *  Play purchase while one exists. Callback on the UI thread. Errors are reported as
+     *  {@code authoritative=false}, and the caller must fail closed until /me is confirmed. */
     public static void checkOtherPlatformSubscription(final int account, final OtherPlatformCallback cb) {
         final String token = LeemenAccount.getToken(account);
-        if (token == null) {
-            cb.onResult(null);
+        final String masterId = LeemenAccount.getMasterAccountId(account);
+        if (TextUtils.isEmpty(token) || TextUtils.isEmpty(masterId)
+                || !isCurrentIdentity(account, token, masterId)) {
+            cb.onResult(null, false);
             return;
         }
         LeemenRestClient.get(LeemenConfig.EP_ME, token, (resp, httpCode, ec, em) -> {
+            if (!isCurrentIdentity(account, token, masterId)) {
+                cb.onResult(null, false);
+                return;
+            }
             String src = null;
+            boolean authoritative = false;
             try {
                 if (resp != null && httpCode >= 200 && httpCode < 300
+                        && resp.has("server_now") && !resp.get("server_now").isJsonNull()
                         && resp.has("entitlements") && resp.get("entitlements").isJsonArray()) {
+                    long serverNowMs = parseExpiryMs(resp.get("server_now").getAsString());
+                    if (serverNowMs <= 0L) {
+                        cb.onResult(null, false);
+                        return;
+                    }
                     com.google.gson.JsonArray arr = resp.getAsJsonArray("entitlements");
-                    long now = System.currentTimeMillis();
                     for (int i = 0; i < arr.size(); i++) {
                         if (!arr.get(i).isJsonObject()) {
                             continue;
@@ -392,24 +501,31 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
                         if (!e.has("expires_at") || e.get("expires_at").isJsonNull()) {
                             active = true; // perpetual entitlement
                         } else {
-                            active = parseExpiryMs(e.get("expires_at").getAsString()) > now;
+                            long expiresMs = parseExpiryMs(e.get("expires_at").getAsString());
+                            if (expiresMs <= 0L) {
+                                cb.onResult(null, false);
+                                return;
+                            }
+                            active = expiresMs > serverNowMs;
                         }
                         if (active) {
                             src = source;
                             break;
                         }
                     }
+                    authoritative = true;
                 }
             } catch (Throwable ignore) {
                 src = null;
+                authoritative = false;
             }
-            cb.onResult(src);
+            cb.onResult(src, authoritative);
         });
     }
 
     /** Sentinel "premium until" for a perpetual entitlement (server returns expires_at = null, e.g. a
      *  lifetime promo). A FIXED far-future epoch (2100-01-01) keeps {@link SecondSpaceController#
-     *  setLeemenPremiumUntil} stable across reconciles (no notification churn) and still formats as a
+     *  setLeemenPremiumSnapshot} stable across reconciles (no notification churn) and still formats as a
      *  sane date in the paywall. */
     private static final long PERPETUAL_PREMIUM_UNTIL = 4102444800000L;
 
@@ -434,7 +550,7 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
      * Apply only a fully-formed entitlement array from GET /me. Package-visible so
      * {@link LeemenAccountState} can reconcile Premium and privacy mode in one network round-trip.
      */
-    static boolean applyEntitlementsFromMe(final int account, JsonObject response) {
+    static boolean applyEntitlementsFromMe(final int account, JsonObject response, long serverNowMs) {
         if (response == null || !response.has("entitlements") || !response.get("entitlements").isJsonArray()) {
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("Leemen: entitlement snapshot ignored account " + account + " missing array");
@@ -446,7 +562,6 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
         try {
             com.google.gson.JsonArray arr = response.getAsJsonArray("entitlements");
             count = arr.size();
-            long now = System.currentTimeMillis();
             for (int i = 0; i < arr.size(); i++) {
                 if (!arr.get(i).isJsonObject()) continue;
                 JsonObject e = arr.get(i).getAsJsonObject();
@@ -456,7 +571,13 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
                 long exp = !e.has("expires_at") || e.get("expires_at").isJsonNull()
                         ? PERPETUAL_PREMIUM_UNTIL
                         : parseExpiryMs(e.get("expires_at").getAsString());
-                if (exp > now && exp > until) until = exp;
+                if (exp <= 0L) {
+                    if (BuildVars.LOGS_ENABLED) {
+                        FileLog.d("Leemen: entitlement snapshot rejected invalid expiry account " + account);
+                    }
+                    return false;
+                }
+                if (exp > serverNowMs && exp > until) until = exp;
             }
         } catch (Throwable ignore) {
             if (BuildVars.LOGS_ENABLED) {
@@ -464,56 +585,40 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
             }
             return false;
         }
-        SecondSpaceController.getInstance(account).setLeemenPremiumUntil(until);
+        SecondSpaceController.getInstance(account).setLeemenPremiumSnapshot(until, serverNowMs);
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d("Leemen: entitlement snapshot applied account " + account
-                    + " count=" + count + " premium=" + (until > System.currentTimeMillis()));
+                    + " count=" + count + " premium=" + (until > serverNowMs));
         }
         return true;
     }
 
     /** POST the purchase token to the backend for server-side verification + entitlement grant.
-     *  result(granted, expiresMs) — expiresMs is the backend-confirmed expiry (epoch ms). A DEBUG build
-     *  may, for a LIVE purchase only, fall back to a local grant when the endpoint isn't deployed yet
-     *  (404 / network) so dev QA can exercise the UI; this NEVER happens in release nor during restore. */
-    private void verifyOnBackend(final int account, final Purchase purchase, final int fallbackMonths,
-                                 final boolean live, final VerifyResult result) {
-        final String token = LeemenAccount.getToken(account);
-        if (token == null) {
-            result.onResult(false, 0);
-            return;
-        }
+     *  Access is never applied from this response; after acknowledgement we refresh {@code GET /me},
+     *  whose {@code server_now} anchors the trusted monotonic Premium deadline. */
+    private void verifyOnBackend(final String expectedToken, final Purchase purchase, final VerifyResult result) {
         JsonObject body = new JsonObject();
         body.addProperty("purchase_token", purchase.getPurchaseToken());
         body.addProperty("product_id", LeemenConfig.PLAY_PRODUCT_PREMIUM);
-        LeemenRestClient.post(LeemenConfig.EP_ENTITLEMENTS_PLAY, token, body, (respBody, httpCode, errCode, errMsg) -> {
+        LeemenRestClient.post(LeemenConfig.EP_ENTITLEMENTS_PLAY, expectedToken, body,
+                (respBody, httpCode, errCode, errMsg) -> {
             boolean ok = respBody != null && httpCode == 200
-                    && respBody.has("ok") && respBody.get("ok").getAsBoolean();
+                    && respBody.has("ok") && respBody.get("ok").getAsBoolean()
+                    && respBody.has("granted") && respBody.get("granted").getAsBoolean();
             if (ok) {
-                long expires = respBody.has("expires_at") && !respBody.get("expires_at").isJsonNull()
-                        ? parseExpiryMs(respBody.get("expires_at").getAsString()) : 0;
-                // grant iff the server returned a valid future expiry (handlePurchase re-checks too)
-                result.onResult(expires > System.currentTimeMillis(), expires);
+                result.onResult(true, null);
                 return;
             }
-            boolean notDeployed = httpCode == 404 || httpCode == -1;
-            if (BuildVars.DEBUG_VERSION && live && notDeployed) {
-                if (BuildVars.LOGS_ENABLED) {
-                    FileLog.d("Leemen: /entitlements/play not deployed (code=" + httpCode + ") — DEBUG local grant");
-                }
-                long exp = System.currentTimeMillis() + (long) fallbackMonths * 31L * 24L * 60L * 60L * 1000L;
-                result.onResult(true, exp);
-            } else {
-                if (BuildVars.LOGS_ENABLED) {
-                    FileLog.d("Leemen: /entitlements/play verify failed code=" + httpCode + " err=" + errCode);
-                }
-                result.onResult(false, 0);
+            if (BuildVars.LOGS_ENABLED) {
+                FileLog.d("Leemen: /entitlements/play verify failed code=" + httpCode + " err=" + errCode);
             }
+            result.onResult(false, "paid_platform_conflict".equals(errCode)
+                    ? "paid_platform_conflict" : "verify_failed");
         });
     }
 
     private interface VerifyResult {
-        void onResult(boolean granted, long expiresMs);
+        void onResult(boolean granted, @Nullable String reason);
     }
 
     private interface AckResult {
@@ -532,13 +637,18 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
         AcknowledgePurchaseParams params = AcknowledgePurchaseParams.newBuilder()
                 .setPurchaseToken(purchase.getPurchaseToken())
                 .build();
-        client.acknowledgePurchase(params, billingResult -> {
-            boolean ok = billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK;
-            if (BuildVars.LOGS_ENABLED) {
-                FileLog.d("Leemen: acknowledge code=" + billingResult.getResponseCode());
-            }
-            cb.onAck(ok);
-        });
+        try {
+            client.acknowledgePurchase(params, billingResult -> {
+                boolean ok = billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK;
+                if (BuildVars.LOGS_ENABLED) {
+                    FileLog.d("Leemen: acknowledge code=" + billingResult.getResponseCode());
+                }
+                cb.onAck(ok);
+            });
+        } catch (Throwable e) {
+            FileLog.e(e);
+            cb.onAck(false);
+        }
     }
 
     private void notifyFlow(boolean ok, @Nullable String reason) {
@@ -547,6 +657,81 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
             return;
         }
         org.telegram.messenger.AndroidUtilities.runOnUIThread(() -> l.onPurchaseResult(ok, reason));
+    }
+
+    private void finishPurchaseProcessing(String purchaseToken) {
+        processingPurchaseTokens.remove(purchaseToken);
+    }
+
+    private static boolean isLeemenPremiumPurchase(@Nullable Purchase purchase) {
+        return purchase != null && purchase.getProducts() != null
+                && purchase.getProducts().contains(LeemenConfig.PLAY_PRODUCT_PREMIUM);
+    }
+
+    @Nullable
+    private static String purchaseObfuscatedAccountId(@Nullable Purchase purchase) {
+        try {
+            return purchase == null || purchase.getAccountIdentifiers() == null
+                    ? null : purchase.getAccountIdentifiers().getObfuscatedAccountId();
+        } catch (Throwable ignore) {
+            return null;
+        }
+    }
+
+    private static boolean purchaseBelongsToAccount(@Nullable Purchase purchase, int account) {
+        String purchaseAccountId = purchaseObfuscatedAccountId(purchase);
+        String masterAccountId = account >= 0 && account < UserConfig.MAX_ACCOUNT_COUNT
+                ? LeemenAccount.getMasterAccountId(account) : null;
+        return !TextUtils.isEmpty(purchaseAccountId) && purchaseAccountId.equals(masterAccountId)
+                && isRestorableAccount(account);
+    }
+
+    /** Route a restored Play purchase to exactly one requested local account. Duplicate local bindings
+     *  are rejected too: silently choosing a slot could apply a callback after that slot was reused. */
+    private static int restoredPurchaseAccount(@Nullable Purchase purchase, Set<Integer> requestedAccounts) {
+        if (!isLeemenPremiumPurchase(purchase)) {
+            return -1;
+        }
+        String purchaseAccountId = purchaseObfuscatedAccountId(purchase);
+        if (TextUtils.isEmpty(purchaseAccountId)) {
+            return -1;
+        }
+        int match = -1;
+        for (Integer candidate : requestedAccounts) {
+            if (candidate == null || !isRestorableAccount(candidate)) {
+                continue;
+            }
+            if (purchaseAccountId.equals(LeemenAccount.getMasterAccountId(candidate))) {
+                if (match >= 0) {
+                    return -1;
+                }
+                match = candidate;
+            }
+        }
+        return match;
+    }
+
+    private static boolean isRestorableAccount(int account) {
+        if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) {
+            return false;
+        }
+        try {
+            return UserConfig.getInstance(account).isClientActivated()
+                    && !LeemenAccount.isDisabled(account)
+                    && LeemenAccount.hasBinding(account)
+                    && !TextUtils.isEmpty(LeemenAccount.getMasterAccountId(account));
+        } catch (Throwable ignore) {
+            return false;
+        }
+    }
+
+    private static boolean isCurrentIdentity(int account, @Nullable String expectedToken,
+                                             @Nullable String expectedMasterId) {
+        return isRestorableAccount(account)
+                && !TextUtils.isEmpty(expectedToken)
+                && !TextUtils.isEmpty(expectedMasterId)
+                && expectedToken.equals(LeemenAccount.getToken(account))
+                && expectedMasterId.equals(LeemenAccount.getMasterAccountId(account));
     }
 
     /** Play's obfuscatedAccountId — MUST be the raw master_account_id UUID exactly as /v1/auth/telegram

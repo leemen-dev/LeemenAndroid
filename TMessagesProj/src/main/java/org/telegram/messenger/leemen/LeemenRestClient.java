@@ -64,6 +64,9 @@ public final class LeemenRestClient {
     }
 
     private static void request(String method, String path, @Nullable String bearer, @Nullable Object jsonBody, Callback cb) {
+        final long meRequestId = "GET".equals(method) && LeemenConfig.EP_ME.equals(path)
+                ? LeemenAccountState.beginMeRequest(bearer)
+                : 0L;
         IO.execute(() -> {
             HttpURLConnection conn = null;
             try {
@@ -114,7 +117,7 @@ public final class LeemenRestClient {
                     // without updating Premium/privacy state for the whole account.
                     if (LeemenConfig.EP_ME.equals(path)
                             && fBody != null && fCode >= 200 && fCode < 300) {
-                        LeemenAccountState.applyMeSnapshot(bearer, fBody);
+                        LeemenAccountState.applyMeSnapshot(bearer, meRequestId, fBody);
                     }
                     // Account deletion hard-revokes the JWT's master-account generation server-side.
                     // Observe the dedicated response in one central place so an already-open stale
