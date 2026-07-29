@@ -10656,7 +10656,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
         // Notifications can reach the underlying dialogs fragment while Settings/Premium is on top.
         // Wait for its next onResume instead of placing the gate over the management screen itself.
-        if (isPaused() || !isLastFragment()) {
+        // With MainTabs this fragment is embedded inside MainTabsActivity, so it can never itself be
+        // parentLayout's last fragment. Its resumed state is the authoritative visibility signal there.
+        if (isPaused() || (!hasMainTabs && !isLastFragment())) {
             return true;
         }
         if (privateSpaceOverLimitDialog != null && privateSpaceOverLimitDialog.isShowing()) {
