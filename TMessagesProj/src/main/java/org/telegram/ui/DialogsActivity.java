@@ -7332,6 +7332,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             storyHint.show();
         }
         AndroidUtilities.runOnUIThread(this::createSearchViewPager, 200);
+        // onResume can run while a child Settings/Premium fragment is still closing, when this fragment is not
+        // yet the stack owner and showDialog is rejected. Fully-visible is the definitive return point: re-check
+        // the invariant so Back can never leave an expired over-limit Protected Space usable without the gate.
+        ensurePrivateSpaceOverLimitGate();
     }
 
     private void showArchiveHelp() {
@@ -10638,7 +10642,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     /**
      * Keep an expired over-limit Private Space behind a modal gate until the user renews or reveals enough
-     * chats/accounts. Returning from either child screen re-enters here through onResume().
+     * chats/accounts. Returning from either child screen re-enters here through resume/full-visibility hooks.
      *
      * @return true when the over-limit state owns the UI, even if showing must retry after a transition.
      */
