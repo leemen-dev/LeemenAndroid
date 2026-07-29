@@ -72,6 +72,8 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
     private String yearlyPriceText;
     private String monthlyPriceText;
     private TextView statusView;
+    private ScrollView scrollView;
+    private FrameLayout buttonContainer;
     /** Non-null when /me shows an active paid subscription on a DIFFERENT platform — the buy button +
      *  plan cards are then hidden (one subscription across platforms, CONTRACT §7/§10). */
     private String otherPlatformSource;
@@ -119,7 +121,7 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         FrameLayout root = new FrameLayout(context);
         root.setBackgroundColor(BG);
 
-        ScrollView scrollView = new ScrollView(context);
+        scrollView = new ScrollView(context);
         scrollView.setFillViewport(true);
 
         LinearLayout content = new LinearLayout(context);
@@ -221,7 +223,7 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         root.addView(scrollView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP, 0, 0, 0, 76));
 
         // --- bottom gradient Subscribe button ---
-        FrameLayout buttonContainer = new FrameLayout(context);
+        buttonContainer = new FrameLayout(context);
         buttonContainer.setBackgroundColor(BG);
         subscribeButton = new PremiumButtonView(context, true, getResourceProvider());
         subscribeButton.setButton(LocaleController.getString(R.string.LeemenPremiumSubscribe), v -> onSubscribeClick());
@@ -411,6 +413,27 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         subscribeButton.setButton(label, v -> onSubscribeClick());
     }
 
+    /**
+     * The purchase bar overlays the bottom of the scrollable content. For an active subscription, remove
+     * the whole bar and its reserved margin; hiding only the button leaves an empty 76dp strip that clips
+     * the last feature description. During the entitlement check the space stays reserved to avoid a jump.
+     */
+    private void setSubscribeAreaState(boolean buttonVisible, boolean spaceReserved) {
+        if (subscribeButton == null || buttonContainer == null || scrollView == null) {
+            return;
+        }
+        subscribeButton.setVisibility(buttonVisible ? View.VISIBLE : View.GONE);
+        buttonContainer.setVisibility(spaceReserved ? View.VISIBLE : View.GONE);
+        if (scrollView.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+            FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) scrollView.getLayoutParams();
+            int bottomMargin = spaceReserved ? dp(76) : 0;
+            if (params.bottomMargin != bottomMargin) {
+                params.bottomMargin = bottomMargin;
+                scrollView.setLayoutParams(params);
+            }
+        }
+    }
+
     private void onSubscribeClick() {
         HashMap<String, String> props = new HashMap<>();
         props.put("plan", selectedMonths == 12 ? "yearly" : "monthly");
@@ -450,7 +473,7 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
                         .format(new Date(ssc.getLeemenPremiumUntil()));
                 statusView.setText(LocaleController.formatString(R.string.LeemenPremiumActiveUntil, date));
             }
-            subscribeButton.setVisibility(View.GONE);
+            setSubscribeAreaState(false, false);
             if (plansContainer != null) {
                 plansContainer.setVisibility(View.GONE);
             }
@@ -458,7 +481,9 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         }
         if (!purchaseGateReady) {
             statusView.setVisibility(View.GONE);
-            subscribeButton.setVisibility(View.GONE);
+            // Preserve the eventual CTA footprint while /me is in flight so the screen does not jump
+            // when the purchase button becomes available.
+            setSubscribeAreaState(false, true);
             if (plansContainer != null) {
                 plansContainer.setVisibility(View.VISIBLE);
             }
@@ -466,7 +491,7 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         }
         // Not subscribed — show the plan selector + Subscribe button.
         statusView.setVisibility(View.GONE);
-        subscribeButton.setVisibility(View.VISIBLE);
+        setSubscribeAreaState(true, true);
         if (plansContainer != null) {
             plansContainer.setVisibility(View.VISIBLE);
         }
