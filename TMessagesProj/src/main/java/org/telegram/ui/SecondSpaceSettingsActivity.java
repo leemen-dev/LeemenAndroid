@@ -583,6 +583,7 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         }
         AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
         b.setTitle(LocaleController.getString(R.string.HiddenAccountsAddAccount));
+        final boolean[] loginToNewAccountAfterDismiss = {false};
         b.setItems(names, (d, which) -> {
             if (which < addable.size()) {
                 SecondSpaceController.getInstance(currentAccount).setAccountHidden(addable.get(which), true);
@@ -590,11 +591,19 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
                 updateRows();
                 if (adapter != null) adapter.notifyDataSetChanged();
             } else {
-                addNewPrivateSpaceAccount(freeSlot);
+                // AlertDialog invokes this listener before dismissing itself. Starting the passkey
+                // flow here races the dialog/window teardown with the Private Space navigation
+                // reset, and Android reports that Leemen cancelled the login request. Defer the
+                // transition until BaseFragment confirms that the picker is fully dismissed.
+                loginToNewAccountAfterDismiss[0] = true;
             }
         });
         b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
-        showDialog(b.create());
+        showDialog(b.create(), dialog -> {
+            if (loginToNewAccountAfterDismiss[0]) {
+                AndroidUtilities.runOnUIThread(() -> addNewPrivateSpaceAccount(freeSlot));
+            }
+        });
     }
 
     /** A free (non-activated) account slot for logging into a brand-new account, or -1 if none is
