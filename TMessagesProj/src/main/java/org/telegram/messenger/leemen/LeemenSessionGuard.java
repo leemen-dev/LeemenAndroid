@@ -126,16 +126,30 @@ public final class LeemenSessionGuard {
      */
     static void onBackendResult(@Nullable String bearer, int httpCode, @Nullable String errorCode) {
         if (TextUtils.isEmpty(bearer) || TextUtils.isEmpty(errorCode)) return;
+        final boolean rejectedSession =
+                httpCode == 401 && ("auth_invalid".equals(errorCode) || "auth_malformed".equals(errorCode));
         final boolean deletedGeneration =
                 httpCode == 401 && ("auth_account_deleted".equals(errorCode) || "account_deleted".equals(errorCode));
         // Compatibility with a backend rolling deployment: /me and account/key historically exposed the
         // same authoritative missing-master condition as 404 account_not_found.
         final boolean legacyMissingMaster = httpCode == 404 && "account_not_found".equals(errorCode);
-        if (!deletedGeneration && !legacyMissingMaster) return;
+        if (!rejectedSession && !deletedGeneration && !legacyMissingMaster) return;
 
         for (int account = 0; account < UserConfig.MAX_ACCOUNT_COUNT; account++) {
             if (!bearer.equals(LeemenAccount.getToken(account))) continue;
             if (!UserConfig.getInstance(account).isClientActivated()) return;
+            if (rejectedSession) {
+                // Expiry/key rotation is recoverable and must never wipe local protected-space data. Obtain a
+                // fresh Telegram-backed Leemen JWT in place; the successful bind immediately retries GET /me,
+                // which restores Premium/privacy. Concurrent 401s are deduplicated inside LeemenIdentity.
+                if (!LeemenAccount.isDisabled(account)) {
+                    if (BuildVars.LOGS_ENABLED) {
+                        FileLog.d("Leemen: backend session rejected; renewing account " + account);
+                    }
+                    LeemenIdentity.renewRejectedSession(account, bearer);
+                }
+                return;
+            }
             // The initiating delete flow sets disabled before calling /account/delete and owns its
             // revoke → wipe → logout ordering. Do not let a concurrent request pre-empt that sequence.
             if (LeemenAccount.isDisabled(account)) return;

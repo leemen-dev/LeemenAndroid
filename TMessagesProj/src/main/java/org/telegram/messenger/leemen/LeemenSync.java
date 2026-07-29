@@ -183,6 +183,28 @@ public final class LeemenSync {
         LeemenSyncState.clear(account);
     }
 
+    /**
+     * A backend session JWT was replaced in-place for the same account generation.
+     * Invalidate only the transport cycle captured with the rejected token; keep the CRDT working copy,
+     * anti-leak gate, PIN and every protected-space setting intact, then restart with the fresh token.
+     */
+    public static void onSessionRenewed(final int account) {
+        if (!inRange(account)) return;
+        AndroidUtilities.runOnUIThread(() -> {
+            lifecycleGeneration[account]++;
+            busy[account] = false;
+            dirty[account] = false;
+            if (debounce[account] != null) {
+                AndroidUtilities.cancelRunOnUIThread(debounce[account]);
+                debounce[account] = null;
+            }
+            cancelWatchdog(account);
+            if (ready(account)) {
+                syncAccount(account);
+            }
+        });
+    }
+
     /** Called at onAuthSuccess: force the fail-closed gate closed for this freshly-logged-in account RIGHT
      *  NOW, before the first sync (and even before isClientActivated may have flipped true), so a server-hidden
      *  chat can't show in the gap between login and the first conclusive sync. Cleared by markEverSynced. */

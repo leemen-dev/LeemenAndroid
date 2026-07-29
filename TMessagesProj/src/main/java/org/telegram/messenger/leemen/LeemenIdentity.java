@@ -41,6 +41,19 @@ public final class LeemenIdentity {
     /** Generation owning the current inFlight entry; prevents an old callback from clearing a newer bind. */
     private static final long[] inFlightGeneration = new long[UserConfig.MAX_ACCOUNT_COUNT];
 
+    /** Exact generation that a rejected session is allowed to renew. */
+    private static final class Renewal {
+        final String rejectedToken;
+        final String masterAccountId;
+        final String syncAccountId;
+
+        Renewal(String rejectedToken, String masterAccountId, String syncAccountId) {
+            this.rejectedToken = rejectedToken;
+            this.masterAccountId = masterAccountId;
+            this.syncAccountId = syncAccountId;
+        }
+    }
+
     // Post-login self-healing retry: the bind+key+sync chain can fail transiently right after a login (server
     // still settling a just-deleted identity, username resolver not warm yet, key fetch hiccup). Without it the
     // OFF-mode list stays fail-closed ("only the system chat") until the next app launch re-runs
@@ -141,14 +154,50 @@ public final class LeemenIdentity {
 
     /** Idempotent, best-effort bind for one account. Safe to call repeatedly. */
     public static void bindIfNeeded(int account) {
+        bind(account, false);
+    }
+
+    /**
+     * Replace a rejected backend session JWT without touching the account's local protected-space state.
+     *
+     * The backend session has a finite TTL and can also become unverifiable after a signing-key rotation.
+     * Keeping the old token makes every protected request (including GET /me) fail forever because a normal
+     * {@link #bindIfNeeded(int)} deliberately skips an account that still has a persisted binding. The
+     * rejected-token comparison makes a late 401 harmless after another request has already refreshed the
+     * session, while the regular in-flight guard deduplicates concurrent 401 responses.
+     */
+    static void renewRejectedSession(int account, String rejectedToken) {
+        if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT
+                || TextUtils.isEmpty(rejectedToken)
+                || !rejectedToken.equals(LeemenAccount.getToken(account))) {
+            return;
+        }
+        bind(account, true);
+    }
+
+    private static void bind(int account, boolean forceSessionRenewal) {
         if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return;
         long generation = -1;
         try {
             if (!UserConfig.getInstance(account).isClientActivated()) return;
             if (LeemenAccount.isDisabled(account)) return; // user deleted their Leemen account
-            if (LeemenAccount.hasBinding(account)) {
+            if (!forceSessionRenewal && LeemenAccount.hasBinding(account)) {
                 LeemenKey.ensureKey(account); // bound already; make sure the key was fetched too
                 return;
+            }
+            final Renewal renewal;
+            if (forceSessionRenewal) {
+                String masterAccountId = LeemenAccount.getMasterAccountId(account);
+                String syncAccountId = LeemenAccount.getSyncAccountId(account);
+                String rejectedToken = LeemenAccount.getToken(account);
+                if (TextUtils.isEmpty(rejectedToken)
+                        || TextUtils.isEmpty(masterAccountId)
+                        || TextUtils.isEmpty(syncAccountId)) {
+                    return; // cannot prove which existing generation is safe to renew
+                }
+                renewal = new Renewal(rejectedToken, masterAccountId, syncAccountId);
+            } else {
+                renewal = null;
             }
             synchronized (inFlight) {
                 if (inFlight.contains(account)) return;
@@ -156,7 +205,7 @@ public final class LeemenIdentity {
                 generation = lifecycleGeneration[account];
                 inFlightGeneration[account] = generation;
             }
-            resolveBotThenBind(account, generation);
+            resolveBotThenBind(account, generation, renewal);
         } catch (Throwable e) {
             FileLog.e(e);
             if (generation >= 0) clearInFlight(account, generation);
@@ -183,7 +232,7 @@ public final class LeemenIdentity {
         }
     }
 
-    private static void resolveBotThenBind(int account, long generation) {
+    private static void resolveBotThenBind(int account, long generation, Renewal renewal) {
         MessagesController.getInstance(account).getUserNameResolver().resolve(LeemenConfig.AUTH_BOT_USERNAME, peerId -> {
             try {
                 if (!isLifecycleCurrent(account, generation)) {
@@ -195,7 +244,7 @@ public final class LeemenIdentity {
                     clearInFlight(account, generation);
                     return;
                 }
-                requestInitData(account, peerId, generation);
+                requestInitData(account, peerId, generation, renewal);
             } catch (Throwable e) {
                 FileLog.e(e);
                 clearInFlight(account, generation);
@@ -203,15 +252,15 @@ public final class LeemenIdentity {
         });
     }
 
-    private static void requestInitData(int account, long botId, long generation) {
-        requestInitData(account, botId, generation, false);
+    private static void requestInitData(int account, long botId, long generation, Renewal renewal) {
+        requestInitData(account, botId, generation, false, renewal);
     }
 
     /** Fetch a FRESH, single-use initData via headless requestWebView, then POST it. CONTRACT §2: the backend
      *  accepts each initData exactly once and only within 1h of its auth_date — so every call obtains a
      *  brand-new signed string; a string is never cached or reused. {@code retried} caps the replay/expired
      *  self-retry at exactly one. */
-    private static void requestInitData(int account, long botId, long generation, boolean retried) {
+    private static void requestInitData(int account, long botId, long generation, boolean retried, Renewal renewal) {
         MessagesController mc = MessagesController.getInstance(account);
         TLRPC.TL_messages_requestWebView req = new TLRPC.TL_messages_requestWebView();
         req.peer = mc.getInputPeer(botId);
@@ -238,7 +287,7 @@ public final class LeemenIdentity {
                 clearInFlight(account, generation);
                 return;
             }
-            postAuth(account, botId, initData, generation, retried);
+            postAuth(account, botId, initData, generation, retried, renewal);
         }));
     }
 
@@ -264,10 +313,18 @@ public final class LeemenIdentity {
         return null;
     }
 
-    private static void postAuth(int account, long botId, String initData, long generation, boolean retried) {
+    private static void postAuth(int account, long botId, String initData, long generation,
+                                 boolean retried, Renewal renewal) {
         final long expectedTelegramUserId = UserConfig.getInstance(account).getClientUserId();
         JsonObject body = new JsonObject();
         body.addProperty("initData", initData);
+        if (renewal != null) {
+            // Lookup-only mode: the backend may mint a replacement JWT only for this exact still-existing
+            // generation. It must never create a new master account while healing a rejected session.
+            body.addProperty("mode", "renew");
+            body.addProperty("expected_master_account_id", renewal.masterAccountId);
+            body.addProperty("expected_sync_account_id", renewal.syncAccountId);
+        }
         LeemenRestClient.post(LeemenConfig.EP_AUTH_TELEGRAM, null, body, (resp, code, errCode, errMsg) -> {
             try {
                 if (!isLifecycleCurrent(account, generation)
@@ -286,11 +343,31 @@ public final class LeemenIdentity {
                             ? resp.get("privacy_mode").getAsString() : null;
                     boolean created = resp.has("created") && !resp.get("created").isJsonNull()
                             && resp.get("created").getAsBoolean();
-                    if (created) {
+                    if (renewal != null) {
+                        // Defense in depth for a rolling backend deploy (or a compromised/misbehaving
+                        // endpoint): never let session recovery cross generations or invoke a local wipe.
+                        if (!renewal.rejectedToken.equals(LeemenAccount.getToken(account))
+                                || created
+                                || !renewal.masterAccountId.equals(masterId)
+                                || !renewal.syncAccountId.equals(syncId)) {
+                            if (BuildVars.LOGS_ENABLED) {
+                                FileLog.d("Leemen: rejected unsafe session renewal account " + account);
+                            }
+                            clearInFlight(account, generation);
+                            return;
+                        }
+                    } else if (created) {
                         LeemenAccount.prepareForNewGeneration(account);
                     }
                     LeemenAccount.save(account, token, syncId, masterId, privacy);
                     LeemenKey.ensureKey(account); // chain Phase 2: acquire K_master right after bind
+                    if (renewal != null) {
+                        LeemenSync.onSessionRenewed(account);
+                    }
+                    // A fresh/replacement token must immediately consume the authoritative snapshot. Waiting
+                    // for the next startup/foreground poll leaves Premium and privacy stale after first bind
+                    // and makes a recovered expired/rotated session appear broken until another app cycle.
+                    LeemenAccountState.refresh(account);
                     // A session token now exists → let the Terms/Privacy acceptance gate run (LaunchActivity).
                     try {
                         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.leemenBindCompleted, account);
@@ -310,7 +387,18 @@ public final class LeemenIdentity {
                         && ((code == 401 && "init_data_replayed".equals(errCode))
                             || (code == 400 && "init_data_expired".equals(errCode)))) {
                     if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: /auth/telegram " + errCode + " — refetch fresh initData, retry once");
-                    requestInitData(account, botId, generation, true); // keeps the in-flight guard; fresh initData
+                    requestInitData(account, botId, generation, true, renewal); // keeps the in-flight guard; fresh initData
+                    return;
+                }
+                if (renewal != null
+                        && code == 401
+                        && "auth_account_deleted".equals(errCode)
+                        && renewal.rejectedToken.equals(LeemenAccount.getToken(account))
+                        && !LeemenAccount.isDisabled(account)) {
+                    // Fresh Telegram proof plus the backend's lookup-only renewal confirms that the exact
+                    // stored generation no longer exists. Preserve the established destructive ordering.
+                    clearInFlight(account, generation);
+                    LeemenAccount.logoutDeletedGeneration(account);
                     return;
                 }
                 if (BuildVars.LOGS_ENABLED) {
