@@ -24,14 +24,10 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.UserConfig;
 
-import java.text.SimpleDateFormat;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
 import java.util.List;
-import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Google Play Billing for Leemen Premium (a single SUBS product with monthly/yearly base plans).
@@ -416,9 +412,6 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
      *  setLeemenPremiumUntil} stable across reconciles (no notification churn) and still formats as a
      *  sane date in the paywall. */
     private static final long PERPETUAL_PREMIUM_UNTIL = 4102444800000L;
-    private static final Pattern ISO_EXPIRY_PATTERN = Pattern.compile(
-            "^(\\d{4}-\\d{2}-\\d{2})[Tt ](\\d{2}:\\d{2}:\\d{2})(?:\\.(\\d{1,9}))?([Zz]|[+-]\\d{2}:?\\d{2})$"
-    );
 
     /** Reconcile every bound, activated account's local premium with the server. Realtime now wakes the same
      *  GET /me path; this startup call remains the missed-event/offline recovery backstop. */
@@ -568,49 +561,14 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
         return TextUtils.isEmpty(masterId) ? null : masterId;
     }
 
-    /** Parse a backend expires_at (epoch ms / epoch s / ISO-8601) → epoch ms, or 0 if unknown. */
-    public static long parseExpiryMs(@Nullable String s) {
-        if (s == null || s.trim().isEmpty()) {
+    /** Parse the backend's canonical UTC ISO-8601 expires_at → epoch ms, or 0 if invalid. */
+    public static long parseExpiryMs(@Nullable String value) {
+        if (value == null) {
             return 0;
         }
-        String value = s.trim();
         try {
-            if (value.matches("\\d+")) {
-                long v = Long.parseLong(value);
-                return v > 1_000_000_000_000L ? v : v * 1000L;
-            }
-        } catch (Throwable ignore) {
-            return 0;
-        }
-
-        // Supabase/Postgres serializes timestamptz as e.g. 2026-08-29T15:15:20.166+00:00.
-        // Some Android runtimes (reproduced on BlueStacks Android 13) reject that valid offset form at the
-        // '+' in Instant.parse even though desktop Java accepts it. Parse the stable wire shape ourselves so
-        // Premium works identically on every supported API; truncate sub-ms precision because epoch ms is our model.
-        try {
-            Matcher matcher = ISO_EXPIRY_PATTERN.matcher(value);
-            if (matcher.matches()) {
-                String fraction = matcher.group(3);
-                String millis = fraction == null ? "000" : (fraction + "000").substring(0, 3);
-                String offset = matcher.group(4);
-                offset = "Z".equalsIgnoreCase(offset) ? "+0000" : offset.replace(":", "");
-
-                SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US);
-                format.setLenient(false);
-                Date parsed = format.parse(
-                        matcher.group(1) + "T" + matcher.group(2) + "." + millis + offset
-                );
-                if (parsed != null) {
-                    return parsed.getTime();
-                }
-            }
-        } catch (Throwable ignore) {
-        }
-
-        // Keep compatibility with other ISO_INSTANT forms should a billing provider return one.
-        try {
-            return java.time.Instant.parse(value).toEpochMilli();
-        } catch (Throwable ignore) {
+            return Instant.parse(value.trim()).toEpochMilli();
+        } catch (RuntimeException ignore) {
             return 0;
         }
     }
