@@ -26,6 +26,14 @@ public class UserNameResolver {
 
     LruCache<String, CachedPeer> resolvedCache = new LruCache<>(100);
     HashMap<String, ArrayList<Consumer<Long>>> resolvingConsumers = new HashMap<>();
+    private int lifecycleGeneration;
+
+    /** Forget slot-owned peers and make callbacks from the previous Telegram account generation inert. */
+    void cleanup() {
+        lifecycleGeneration++;
+        resolvedCache.evictAll();
+        resolvingConsumers.clear();
+    }
 
     public Runnable resolve(String username, Consumer<Long> resolveConsumer) {
         return resolve(username, null, resolveConsumer);
@@ -39,11 +47,18 @@ public class UserNameResolver {
         if (TextUtils.isEmpty(referrer) && !force) {
             CachedPeer cachedPeer = resolvedCache.get(username);
             if (cachedPeer != null) {
-                if (System.currentTimeMillis() - cachedPeer.time < CACHE_TIME) {
+                MessagesController messagesController = MessagesController.getInstance(currentAccount);
+                boolean peerStillLoaded = cachedPeer.peerId > 0
+                        ? messagesController.getUser(cachedPeer.peerId) != null
+                        : cachedPeer.peerId < 0 && messagesController.getChat(-cachedPeer.peerId) != null;
+                if (System.currentTimeMillis() - cachedPeer.time < CACHE_TIME && peerStillLoaded) {
                     resolveConsumer.accept(cachedPeer.peerId);
                     FileLog.d("resolve username from cache " + username + " " + cachedPeer.peerId);
                     return null;
                 } else {
+                    // Account cleanup clears Telegram's in-memory users/chats but this resolver instance can
+                    // survive. A bare cached id would then produce inputPeer/inputUser with access_hash=0 and
+                    // make headless bot auth fail until the one-hour cache entry expired.
                     resolvedCache.remove(username);
                 }
             }
@@ -57,6 +72,7 @@ public class UserNameResolver {
         consumers = new ArrayList<>();
         consumers.add(resolveConsumer);
         resolvingConsumers.put(username, consumers);
+        final int requestGeneration = lifecycleGeneration;
 
 
         TLObject req;
@@ -74,6 +90,9 @@ public class UserNameResolver {
             req = resolveUsername;
         }
         final int reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+            if (requestGeneration != lifecycleGeneration) {
+                return;
+            }
             ArrayList<Consumer<Long>> finalConsumers = resolvingConsumers.remove(username);
             if (finalConsumers == null) {
                 return;
@@ -110,6 +129,9 @@ public class UserNameResolver {
             }
         }, ConnectionsManager.RequestFlagFailOnServerErrors));
         return () -> {
+            if (requestGeneration != lifecycleGeneration) {
+                return;
+            }
             resolvingConsumers.remove(username);
             ConnectionsManager.getInstance(currentAccount).cancelRequest(reqId, true);
         };

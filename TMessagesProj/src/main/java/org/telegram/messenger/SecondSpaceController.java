@@ -134,15 +134,12 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private final Map<Long, Map<Integer, MessageObject>> safePreviewCache = new HashMap<>();
     /** Stable class-guid for the dialog-list preview warmup loads (results route through messagesDidLoad). */
     private int previewWarmGuid = 0;
-    /** Count of in-flight warmup tasks (DB loads + server fetches). The launch gate holds while this is > 0 and
-     *  lifts REACTIVELY (no timer) the moment the last task settles — every task settles (DB always returns,
-     *  every network request completes or errors), so it can't hang. UI-thread only. */
+    /** Count of in-flight warmup tasks (DB loads + server fetches). UI-thread only. */
     private int warmupInFlight = 0;
-    /** While true, the OFF-mode list is held fail-closed (only the system chat shows) until the INITIAL preview
-     *  warmup settles — so chats never appear with empty previews. Armed once per session (at startup if hidden
-     *  chats are persisted, else on the first sync that populates them) and never re-armed, so mid-session syncs
-     *  don't blank the list. Read by {@link org.telegram.messenger.leemen.LeemenSync#isInitialSyncPending}. */
-    private volatile boolean warmupGateActive = false; // read cross-thread from LeemenSync.isInitialSyncPending
+    /** Tracks the initial preview-warmup batch so its completion can trigger one consolidated UI refresh. This is
+     *  NOT a visibility gate: {@link #isVisibleInCurrentView(long)} checks each hidden row's safe preview directly,
+     *  including mid-session state changes and warmup failures. */
+    private boolean initialWarmupBatchActive = false;
     private boolean initialWarmupDone = false;
     private final Set<Long> privateSearchDialogs = new HashSet<>();
     /** Private-space entry PIN — ACCOUNT-level, synced via the content blob's ps_pin register (§7.2).
@@ -249,11 +246,9 @@ public class SecondSpaceController extends BaseController implements Notificatio
                 && processBootCount == leemenPremiumDeadlineBootCount;
         schedulePremiumExpiryRefresh();
         loadHiddenAccounts(hiddenAccounts, prefs.getString(PREF_HIDDEN_ACCOUNTS, ""), num);
-        // Hold the OFF-mode list until the INITIAL preview warmup settles — set SYNCHRONOUSLY here, before the
-        // first dialog-list render, so a hidden chat with a not-yet-loaded exposed preview never flashes empty.
-        // Lifted reactively when the warmup (kicked off in the deferred block below) settles. Only the system chat
-        // shows in the meantime (isHiddenFromCurrentView exempts it). No hidden-exposed chats → nothing to hold.
-        warmupGateActive = hasAnySafePreviewToWarm();
+        // Record the initial warmup batch synchronously. Visibility itself is fail-closed per hidden row, so a
+        // not-yet-loaded safe preview remains absent without delaying ordinary chats.
+        initialWarmupBatchActive = hasAnySafePreviewToWarm();
         // We need to track placeholder-id → server-id renames globally, not just while a
         // ChatActivity for that dialog happens to be open. Otherwise: user sends in off
         // mode, exits chat before the round-trip completes, server confirms → ChatActivity
@@ -289,12 +284,11 @@ public class SecondSpaceController extends BaseController implements Notificatio
             if (!dialogIds.isEmpty()) {
                 if (org.telegram.messenger.BuildVars.LOGS_ENABLED) {
                     org.telegram.messenger.FileLog.d("Leemen: startup preview warmup, hiddenChats=" + dialogIds.size()
-                            + " gateActive=" + warmupGateActive);
+                            + " batchActive=" + initialWarmupBatchActive);
                 }
                 warmSafePreviews();
-                // Edge: the gate was armed (above) but warmup issued no tasks (everything already resolvable) →
-                // lift now so the list can't stay stuck hidden.
-                if (warmupGateActive && warmupInFlight == 0) liftWarmupGate();
+                // Edge: the batch was armed but everything was already resolvable.
+                if (initialWarmupBatchActive && warmupInFlight == 0) finishInitialWarmup();
             }
         });
     }
@@ -422,13 +416,6 @@ public class SecondSpaceController extends BaseController implements Notificatio
         if (m.isEmpty()) safePreviewCache.remove(dialogId);
     }
 
-    /** While true the OFF-mode list is held fail-closed (only the system chat shows) until the INITIAL preview
-     *  warmup settles — so chats never appear with empty previews. Read by
-     *  {@link org.telegram.messenger.leemen.LeemenSync#isInitialSyncPending}. OFF-mode only. */
-    public boolean isWarmupGateActive() {
-        return activeMode == MODE_OFF && warmupGateActive;
-    }
-
     /** Any hidden chat with a positive exposed/pending id — i.e. a preview that must be warmed before it can
      *  render. (At launch nothing is in the in-memory cache yet, so such a preview is by definition not ready.) */
     private boolean hasAnySafePreviewToWarm() {
@@ -462,20 +449,19 @@ public class SecondSpaceController extends BaseController implements Notificatio
         settleWarmupTask();
     }
 
-    /** One warmup task (a DB load or a server fetch) settled. When the last one settles, lift the launch gate. */
+    /** One warmup task (a DB load or a server fetch) settled. */
     private void settleWarmupTask() {
         if (warmupInFlight > 0) warmupInFlight--;
-        if (warmupInFlight == 0) liftWarmupGate();
+        if (warmupInFlight == 0) finishInitialWarmup();
     }
 
-    /** The initial warmup has settled: reveal the list (lift the gate) and never re-arm for this session, so
-     *  mid-session syncs that re-warm a preview don't blank the whole list. */
-    private void liftWarmupGate() {
+    /** The initial batch settled. Per-row visibility remains fail-closed for any unresolved safe preview. */
+    private void finishInitialWarmup() {
         initialWarmupDone = true;
-        if (warmupGateActive) {
-            warmupGateActive = false;
+        if (initialWarmupBatchActive) {
+            initialWarmupBatchActive = false;
             if (org.telegram.messenger.BuildVars.LOGS_ENABLED) {
-                org.telegram.messenger.FileLog.d("Leemen: preview warmup settled — lifting launch gate");
+                org.telegram.messenger.FileLog.d("Leemen: initial preview warmup settled");
             }
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
             getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceSyncApplied);
@@ -972,19 +958,22 @@ public class SecondSpaceController extends BaseController implements Notificatio
         return false;
     }
 
-    /** Visible in the CURRENT OFF-mode list? Use this for list/preview filtering instead of open-coding
-     *  {@code !isHiddenFromCurrentView || hasExposedMessages || hasPendingOffModeWork} — those OR clauses must
-     *  obey the fail-closed gate too, or the most sensitive row (an exposed chat) would be the ONE left visible
-     *  during the pre-sync/warmup window while innocent chats are correctly hidden (deniability inversion).
-     *  FAIL-CLOSED: while the OFF-mode initial-sync/warmup gate is up, ONLY the service chat shows — exposed and
-     *  pending chats are hidden too. Once it lifts, exposed/pending chats stay reachable exactly as before. */
+    /** Visible in the CURRENT OFF-mode list? Before membership is known this remains globally FAIL-CLOSED.
+     *  Afterwards ordinary chats render immediately; a hidden exposed/pending row remains absent only until its
+     *  safe preview body is available, so it can never flash with Telegram's private top-message preview. */
     public boolean isVisibleInCurrentView(long dialogId) {
         if (activeMode == MODE_OFF && org.telegram.messenger.leemen.LeemenSync.isInitialSyncPending(currentAccount)) {
             return UserObject.isService(dialogId);
         }
-        return !isHiddenFromCurrentView(dialogId)
-                || hasExposedMessages(dialogId)
-                || hasPendingOffModeWork(dialogId);
+        if (!isHiddenFromCurrentView(dialogId)) {
+            return true;
+        }
+        boolean hasSafeMessages = hasExposedMessages(dialogId) || hasPendingOffModeWork(dialogId);
+        // Positive ids came from Telegram/server state and need a resolved, explicitly safe body before the row
+        // can exist. A non-positive id is a local outgoing placeholder; allowing its (possibly blank) row is safe
+        // because DialogCell still masks every non-pending Telegram preview.
+        return hasSafeMessages
+                && (getLatestSafeMessageId(dialogId) <= 0 || resolveLatestSafePreview(dialogId) != null);
     }
 
     /** Record the authoring context of a freshly-saved dialog-level draft. A draft typed inside the private
@@ -1185,17 +1174,15 @@ public class SecondSpaceController extends BaseController implements Notificatio
         }
         // Drop preview-cache entries that are no longer exposed/pending after this apply.
         pruneSafePreviewCache();
-        // Arm the launch gate on the FIRST sync that brings hidden chats (covers fresh install, where the
-        // constructor saw no persisted set yet). Set BEFORE the reload below so the list is already held — not
-        // re-armed after the initial warmup, so mid-session syncs that re-warm a preview don't blank the list.
-        if (!initialWarmupDone && hasAnySafePreviewToWarm()) warmupGateActive = true;
+        // Track the first warmup batch brought by sync (fresh install may have had no persisted members yet).
+        if (!initialWarmupDone && hasAnySafePreviewToWarm()) initialWarmupBatchActive = true;
         // Reactive warmup: load the exposed/pending bodies that aren't resolvable yet — DB-first, then network for
         // whatever the DB is missing. Each task lands via messagesDidLoad / replaceMessagesObjects → cacheSafePreview
-        // → a fresh dialogsNeedReload, so the preview fills in exactly when the data is ready. Run BEFORE the reload
-        // below so it already sees the gate as held. Works even when the exposed message isn't the dialog's top.
+        // → a fresh dialogsNeedReload, so the row appears exactly when its safe body is ready. Works even when the
+        // exposed message isn't the dialog's top.
         warmSafePreviews();
-        // Edge: armed but nothing to warm (all already resolvable) → lift now so the list isn't stuck hidden.
-        if (warmupGateActive && warmupInFlight == 0) liftWarmupGate();
+        // Edge: batch marked active but everything was already resolvable.
+        if (initialWarmupBatchActive && warmupInFlight == 0) finishInitialWarmup();
         getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         if (org.telegram.messenger.BuildVars.LOGS_ENABLED) {
             int ex = 0, pe = 0;
@@ -1375,7 +1362,7 @@ public class SecondSpaceController extends BaseController implements Notificatio
             selfPinnedMessages.clear();
             psDraftDialogs.clear();
             safePreviewCache.clear();
-            warmupGateActive = false;
+            initialWarmupBatchActive = false;
             initialWarmupDone = false;
             warmupInFlight = 0;
             lastDecidedMessageId.clear();

@@ -66,8 +66,8 @@ public final class LeemenSync {
     private static final boolean[] everSynced = new boolean[N];      // in-memory cache of the persisted flag
     private static final boolean[] everSyncedLoaded = new boolean[N];
     private static final boolean[] loginPending = new boolean[N];    // forced gate from onAuthSuccess until 1st sync
-    // The preview-warmup launch gate (hold the OFF-mode list until exposed previews are warmed) lives in
-    // SecondSpaceController (isWarmupGateActive) — it owns the warmup state. isInitialSyncPending just ORs it in.
+    // Safe-preview warmup is deliberately separate from this security gate. Once membership is known, ordinary
+    // chats may render immediately; SecondSpaceController keeps only unresolved hidden rows out of the list.
     private static final int[] gateLogState = new int[N];            // debug: last-logged gate state per account
     static { java.util.Arrays.fill(gateLogState, -1); }
 
@@ -114,6 +114,9 @@ public final class LeemenSync {
 
 
     private interface RawCb { void on(Object blob, long version); }
+    private interface RawPairCb {
+        void on(Object content, long contentVersion, Object filter, long filterVersion);
+    }
 
     // ===== public entry points =====
 
@@ -222,18 +225,11 @@ public final class LeemenSync {
         if (!inRange(account)) return false;
         boolean activated = loginPending[account] || UserConfig.getInstance(account).isClientActivated();
         boolean pending = activated && !hasEverSynced(account);
-        if (!pending && SecondSpaceController.getInstance(account).isWarmupGateActive()) {
-            // Security gate open (hidden set known) — but hold the list until the INITIAL preview warmup settles,
-            // so chats never appear with empty previews. SecondSpaceController owns that state and lifts it
-            // reactively the moment the warmup completes (no timer). The system chat stays visible throughout.
-            pending = true;
-        }
         if (BuildVars.LOGS_ENABLED && gateLogState[account] != (pending ? 1 : 0)) {
             gateLogState[account] = pending ? 1 : 0;
             FileLog.d("Leemen: gate pending=" + pending + " (loginPending=" + loginPending[account]
                     + " activated=" + UserConfig.getInstance(account).isClientActivated()
-                    + " everSynced=" + hasEverSynced(account)
-                    + " warmupGate=" + SecondSpaceController.getInstance(account).isWarmupGateActive() + ") account " + account);
+                    + " everSynced=" + hasEverSynced(account) + ") account " + account);
         }
         return pending;
     }
@@ -268,111 +264,112 @@ public final class LeemenSync {
 
         final LeemenSyncState st = state(account);
 
-        // 1. pull both blobs raw (no merge yet), then 2..5
-        pullRaw(LeemenConfig.EP_CONTENT, false, key, token, (rc, cver) -> {
+        // 1. Pull both independent blobs concurrently, but keep the existing atomic merge/project barrier:
+        // nothing becomes visible until BOTH callbacks have settled and filter membership is conclusive.
+        pullRawPair(key, token, (rc, cver, rf, fver) -> {
             if (!isCycleCurrent(account, generation, token)) {
                 Arrays.fill(key, (byte) 0);
                 return;
             }
-            pullRaw(LeemenConfig.EP_FILTER, true, key, token, (rf, fver) -> {
-                if (!isCycleCurrent(account, generation, token)) {
-                    Arrays.fill(key, (byte) 0);
-                    return;
-                }
-                try {
-                    long remoteLamport = Math.max(
-                            rc instanceof LeemenBlob.ContentBlob ? ((LeemenBlob.ContentBlob) rc).lamport : 0,
-                            rf instanceof LeemenBlob.FilterBlob ? ((LeemenBlob.FilterBlob) rf).lamport : 0);
-                    st.observeLamport(remoteLamport);
+            try {
+                long remoteLamport = Math.max(
+                        rc instanceof LeemenBlob.ContentBlob ? ((LeemenBlob.ContentBlob) rc).lamport : 0,
+                        rf instanceof LeemenBlob.FilterBlob ? ((LeemenBlob.FilterBlob) rf).lamport : 0);
+                st.observeLamport(remoteLamport);
 
-                    final long[] reconcileLam = {0};
-                    boolean membershipRemoved = reconcileFromController(account, st, reconcileLam);
-                    // reconcile consumes a lamport ONLY when it stamps a local change. Still 0 ⇒ nothing local
-                    // to propagate ⇒ skip the push, so a no-op sync doesn't bump the blob version + broadcast
-                    // (that unconditional push is what created the realtime push→echo→push loop, and a
-                    // cross-device variant where two online devices ping-pong no-op pushes forever).
-                    final boolean reconcileChanged = reconcileLam[0] != 0;
+                final long[] reconcileLam = {0};
+                boolean membershipRemoved = reconcileFromController(account, st, reconcileLam);
+                // reconcile consumes a lamport ONLY when it stamps a local change. Still 0 ⇒ nothing local
+                // to propagate ⇒ skip the push, so a no-op sync doesn't bump the blob version + broadcast
+                // (that unconditional push is what created the realtime push→echo→push loop, and a
+                // cross-device variant where two online devices ping-pong no-op pushes forever).
+                final boolean reconcileChanged = reconcileLam[0] != 0;
 
-                    if (rc instanceof LeemenBlob.ContentBlob) LeemenMerge.mergeContent(st.content, (LeemenBlob.ContentBlob) rc);
-                    if (rf instanceof LeemenBlob.FilterBlob) LeemenMerge.mergeFilter(st.filter, (LeemenBlob.FilterBlob) rf);
-                    if (cver >= 0) st.contentVersion = cver;
-                    if (fver >= 0) st.filterVersion = fver;
+                if (rc instanceof LeemenBlob.ContentBlob) LeemenMerge.mergeContent(st.content, (LeemenBlob.ContentBlob) rc);
+                if (rf instanceof LeemenBlob.FilterBlob) LeemenMerge.mergeFilter(st.filter, (LeemenBlob.FilterBlob) rf);
+                if (cver >= 0) st.contentVersion = cver;
+                if (fver >= 0) st.filterVersion = fver;
 
-                    // Open the fail-closed gate ONLY when we actually KNOW the hidden set. Membership lives
-                    // solely in the filter blob, so that means either: the filter DECODED (rf is a FilterBlob —
-                    // 200 + successful decrypt), OR a definitive 404 (fver == 0 → no blob → genuinely no hidden
-                    // chats). A 200 whose decrypt FAILED (fver >= 1 but rf == null) is NOT conclusive: the
-                    // hidden set is unknown, so we must keep the gate closed instead of revealing everything.
-                    final boolean conclusivePull = (rf instanceof LeemenBlob.FilterBlob) || (fver == 0);
-                    final Runnable projectAndPush = () -> {
+                // Open the fail-closed gate ONLY when we actually KNOW the hidden set. Membership lives
+                // solely in the filter blob, so that means either: the filter DECODED (rf is a FilterBlob —
+                // 200 + successful decrypt), OR a definitive 404 (fver == 0 → no blob → genuinely no hidden
+                // chats). A 200 whose decrypt FAILED (fver >= 1 but rf == null) is NOT conclusive: the
+                // hidden set is unknown, so we must keep the gate closed instead of revealing everything.
+                final boolean conclusivePull = (rf instanceof LeemenBlob.FilterBlob) || (fver == 0);
+                final Runnable projectAndPush = () -> {
+                    if (!isCycleCurrent(account, generation, token)) {
+                        Arrays.fill(key, (byte) 0);
+                        return;
+                    }
+                    final boolean gateWasClosed = conclusivePull && !hasEverSynced(account);
+                    LeemenMerge.recomputeOffModeVisible(st.filter, st.content);
+                    // Project membership while the gate is still closed. If projection throws, the catch below
+                    // leaves the gate closed; a confirmed-but-unapplied filter must never become fail-open.
+                    projectToController(account, st);
+                    if (conclusivePull) {
+                        markSyncConfirmed(account);
+                        if (gateWasClosed) {
+                            // applySyncedState's synchronous reload observed the closed gate. Rebuild once more
+                            // now that the already-installed membership may safely become visible.
+                            reloadDialogs(account);
+                        }
+                    }
+                    st.persist();
+                    final Runnable done = () -> {
                         if (!isCycleCurrent(account, generation, token)) {
                             Arrays.fill(key, (byte) 0);
                             return;
                         }
-                        if (conclusivePull) {
-                            markSyncConfirmed(account); // open the fail-closed gate: the real hidden set is known
+                        if (BuildVars.LOGS_ENABLED) {
+                            int hidden = 0;
+                            for (LeemenBlob.Reg r : st.filter.hidden_chat_ids.values()) if (LeemenBlob.isLive(r)) hidden++;
+                            FileLog.d("Leemen: sync done account " + account + " filterV=" + st.filterVersion
+                                    + " contentV=" + st.contentVersion + " hiddenChats=" + hidden);
                         }
-                        // The preview-warmup launch gate is armed inside applySyncedState (projectToController),
-                        // which both populates the hidden set and kicks the warmup — so it owns the hold/lift.
-                        LeemenMerge.recomputeOffModeVisible(st.filter, st.content);
-                        projectToController(account, st);
+                        Arrays.fill(key, (byte) 0);
                         st.persist();
-                        final Runnable done = () -> {
-                            if (!isCycleCurrent(account, generation, token)) {
-                                Arrays.fill(key, (byte) 0);
-                                return;
-                            }
-                            if (BuildVars.LOGS_ENABLED) {
-                                int hidden = 0;
-                                for (LeemenBlob.Reg r : st.filter.hidden_chat_ids.values()) if (LeemenBlob.isLive(r)) hidden++;
-                                FileLog.d("Leemen: sync done account " + account + " filterV=" + st.filterVersion
-                                        + " contentV=" + st.contentVersion + " hiddenChats=" + hidden);
-                            }
-                            Arrays.fill(key, (byte) 0);
-                            st.persist();
-                            finish(account, generation);
-                        };
-                        if (!reconcileChanged) {
-                            // Nothing local changed (we just pulled/merged remote state, or it was a no-op
-                            // realtime notify) → don't push; just finish. Stops the version-bump loop.
-                            done.run();
-                        } else if (membershipRemoved) {
-                            // removes: filter first (membership gone), then content (cascade)
-                            pushBlob(account, generation, LeemenConfig.EP_FILTER, true, st, key, token, MAX_CAS_RETRY, () ->
-                                    pushBlob(account, generation, LeemenConfig.EP_CONTENT, false, st, key, token, MAX_CAS_RETRY, done));
-                        } else {
-                            // adds/updates: content first (detail), then filter (membership)
-                            pushBlob(account, generation, LeemenConfig.EP_CONTENT, false, st, key, token, MAX_CAS_RETRY, () -> {
-                                if (!isCycleCurrent(account, generation, token)) {
-                                    done.run();
-                                    return;
-                                }
-                                LeemenMerge.recomputeOffModeVisible(st.filter, st.content);
-                                pushBlob(account, generation, LeemenConfig.EP_FILTER, true, st, key, token, MAX_CAS_RETRY, done);
-                            });
-                        }
+                        finish(account, generation);
                     };
-                    // §6.5 self-heal: filter ahead of content (a torn remote write) → re-GET content before
-                    // making any exposure/membership projection, so we never act on a stale content blob.
-                    if (st.filter.lamport > st.content.lamport) {
-                        pullRaw(LeemenConfig.EP_CONTENT, false, key, token, (rc2, cver2) -> {
+                    if (!reconcileChanged) {
+                        // Nothing local changed (we just pulled/merged remote state, or it was a no-op
+                        // realtime notify) → don't push; just finish. Stops the version-bump loop.
+                        done.run();
+                    } else if (membershipRemoved) {
+                        // removes: filter first (membership gone), then content (cascade)
+                        pushBlob(account, generation, LeemenConfig.EP_FILTER, true, st, key, token, MAX_CAS_RETRY, () ->
+                                pushBlob(account, generation, LeemenConfig.EP_CONTENT, false, st, key, token, MAX_CAS_RETRY, done));
+                    } else {
+                        // adds/updates: content first (detail), then filter (membership)
+                        pushBlob(account, generation, LeemenConfig.EP_CONTENT, false, st, key, token, MAX_CAS_RETRY, () -> {
                             if (!isCycleCurrent(account, generation, token)) {
-                                Arrays.fill(key, (byte) 0);
+                                done.run();
                                 return;
                             }
-                            if (rc2 instanceof LeemenBlob.ContentBlob) LeemenMerge.mergeContent(st.content, (LeemenBlob.ContentBlob) rc2);
-                            if (cver2 >= 0) st.contentVersion = cver2;
-                            projectAndPush.run();
+                            LeemenMerge.recomputeOffModeVisible(st.filter, st.content);
+                            pushBlob(account, generation, LeemenConfig.EP_FILTER, true, st, key, token, MAX_CAS_RETRY, done);
                         });
-                    } else {
-                        projectAndPush.run();
                     }
-                } catch (Throwable e) {
-                    FileLog.e(e);
-                    Arrays.fill(key, (byte) 0);
-                    finish(account, generation);
+                };
+                // §6.5 self-heal: filter ahead of content (a torn remote write) → re-GET content before
+                // making any exposure/membership projection, so we never act on a stale content blob.
+                if (st.filter.lamport > st.content.lamport) {
+                    pullRaw(LeemenConfig.EP_CONTENT, false, key, token, (rc2, cver2) -> {
+                        if (!isCycleCurrent(account, generation, token)) {
+                            Arrays.fill(key, (byte) 0);
+                            return;
+                        }
+                        if (rc2 instanceof LeemenBlob.ContentBlob) LeemenMerge.mergeContent(st.content, (LeemenBlob.ContentBlob) rc2);
+                        if (cver2 >= 0) st.contentVersion = cver2;
+                        projectAndPush.run();
+                    });
+                } else {
+                    projectAndPush.run();
                 }
-            });
+            } catch (Throwable e) {
+                FileLog.e(e);
+                Arrays.fill(key, (byte) 0);
+                finish(account, generation);
+            }
         });
     }
 
@@ -430,6 +427,33 @@ public final class LeemenSync {
                 FileLog.e(e);
             }
             cb.on(blob, version);
+        });
+    }
+
+    /**
+     * Start both blob GETs at once. LeemenRestClient delivers callbacks on the UI thread, so this tiny barrier
+     * needs no locking and invokes {@code cb} exactly once after both requests settle. Keeping the barrier here
+     * preserves the all-at-once CRDT merge/projection semantics while changing latency from sum(RTTs) to max(RTTs).
+     */
+    private static void pullRawPair(byte[] key, String token, RawPairCb cb) {
+        final Object[] blobs = new Object[2];
+        final long[] versions = {-1L, -1L};
+        final int[] completed = {0};
+        final Runnable completeOne = () -> {
+            completed[0]++;
+            if (completed[0] == 2) {
+                cb.on(blobs[0], versions[0], blobs[1], versions[1]);
+            }
+        };
+        pullRaw(LeemenConfig.EP_CONTENT, false, key, token, (blob, version) -> {
+            blobs[0] = blob;
+            versions[0] = version;
+            completeOne.run();
+        });
+        pullRaw(LeemenConfig.EP_FILTER, true, key, token, (blob, version) -> {
+            blobs[1] = blob;
+            versions[1] = version;
+            completeOne.run();
         });
     }
 

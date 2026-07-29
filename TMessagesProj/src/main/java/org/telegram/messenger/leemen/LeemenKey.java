@@ -4,6 +4,7 @@ import android.util.Base64;
 
 import com.google.gson.JsonObject;
 
+import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.UserConfig;
@@ -126,8 +127,16 @@ public final class LeemenKey {
                 FileLog.d("Leemen: K_master ready for account " + account + (created ? " (generated + wrapped)" : " (fetched)"));
             }
             LeemenSync.onRemoteChanged(account); // key ready → kick off the first sync
-            LeemenDevice.ensureRegistered(account);
-            LeemenRealtime.connect(account);
+            // onRemoteChanged posts the privacy-critical blob GETs to the UI queue. Defer device/realtime by one
+            // UI turn so first-time device registration cannot take the last REST-pool slot ahead of them.
+            final String expectedToken = LeemenAccount.getToken(account);
+            AndroidUtilities.runOnUIThread(() -> {
+                if (bindingMatches(account, expectedToken)
+                        && LeemenAccount.hasKMaster(account)) {
+                    LeemenDevice.ensureRegistered(account);
+                    LeemenRealtime.connect(account);
+                }
+            });
             return true;
         } finally {
             Arrays.fill(k, (byte) 0);

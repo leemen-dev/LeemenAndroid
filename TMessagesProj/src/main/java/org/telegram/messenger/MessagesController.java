@@ -6393,6 +6393,11 @@ public class MessagesController extends BaseController implements NotificationCe
         if (unconfirmedAuthController != null) {
             unconfirmedAuthController.cleanup();
         }
+        if (userNameResolver != null) {
+            // The resolver outlives the Telegram account slot unless explicitly reset. Invalidate both its
+            // one-hour peer cache and any request callback owned by the account generation being logged out.
+            userNameResolver.cleanup();
+        }
 
         showFiltersTooltip = false;
 
