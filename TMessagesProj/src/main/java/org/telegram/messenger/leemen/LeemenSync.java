@@ -66,6 +66,9 @@ public final class LeemenSync {
     private static final boolean[] everSynced = new boolean[N];      // in-memory cache of the persisted flag
     private static final boolean[] everSyncedLoaded = new boolean[N];
     private static final boolean[] loginPending = new boolean[N];    // forced gate from onAuthSuccess until 1st sync
+    /** A device with no local onboarding claim must refresh content before presenting it. Otherwise the
+     *  350 ms UI delay can beat a remote "already shown" marker from another device. */
+    private static final boolean[] onboardingRefreshPending = new boolean[N];
     // Safe-preview warmup is deliberately separate from this security gate. Once membership is known, ordinary
     // chats may render immediately; SecondSpaceController keeps only unresolved hidden rows out of the list.
     private static final int[] gateLogState = new int[N];            // debug: last-logged gate state per account
@@ -131,6 +134,19 @@ public final class LeemenSync {
         });
     }
 
+    /** Urgent grow-only UX claim: start the sync cycle without the normal 500 ms coalescing delay. */
+    public static void onLocalMutationImmediate(final int account) {
+        if (!inRange(account)) return;
+        AndroidUtilities.runOnUIThread(() -> {
+            if (!ready(account)) return;
+            if (debounce[account] != null) {
+                AndroidUtilities.cancelRunOnUIThread(debounce[account]);
+                debounce[account] = null;
+            }
+            syncAccount(account);
+        });
+    }
+
     /** Pull+push every ready account (app foreground / Realtime reconnect). Thread-safe. */
     public static void syncAll() {
         AndroidUtilities.runOnUIThread(() -> {
@@ -143,6 +159,19 @@ public final class LeemenSync {
     /** Sync now (key just became ready / Realtime blob_changed notify). Thread-safe. */
     public static void onRemoteChanged(final int account) {
         AndroidUtilities.runOnUIThread(() -> { if (ready(account)) syncAccount(account); });
+    }
+
+    /** Require one conclusive content pull before this device may present Private Space onboarding. */
+    public static void refreshOnboardingStateBeforeShow(final int account) {
+        if (!inRange(account)) return;
+        onboardingRefreshPending[account] = true;
+        AndroidUtilities.runOnUIThread(() -> {
+            if (ready(account)) syncAccount(account);
+        });
+    }
+
+    public static boolean isOnboardingRefreshPending(int account) {
+        return inRange(account) && onboardingRefreshPending[account];
     }
 
     /** Realtime blob_changed notify. IGNORES the echo of our OWN write — a version we already hold — so we
@@ -180,6 +209,7 @@ public final class LeemenSync {
         }
         cancelWatchdog(account);
         loginPending[account] = false;
+        onboardingRefreshPending[account] = false;
         // Logout/delete wipes the cached hidden set, so the next login must fail closed again until it
         // re-syncs (don't trust a stale/absent cache).
         resetEverSynced(account);
@@ -242,6 +272,15 @@ public final class LeemenSync {
         markEverSynced(account);
     }
 
+    private static void markOnboardingRefreshConfirmed(int account) {
+        if (!inRange(account) || !onboardingRefreshPending[account]) return;
+        onboardingRefreshPending[account] = false;
+        // applySyncedState reloads while the gate is still closed. Re-run only the onboarding decision after
+        // the conclusive content state has been installed and this freshness gate is open.
+        NotificationCenter.getInstance(account).postNotificationName(
+                NotificationCenter.secondSpaceOnboardingRefreshCompleted);
+    }
+
     private static void reloadDialogs(int account) {
         try {
             NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.dialogsNeedReload);
@@ -296,6 +335,9 @@ public final class LeemenSync {
                 // chats). A 200 whose decrypt FAILED (fver >= 1 but rf == null) is NOT conclusive: the
                 // hidden set is unknown, so we must keep the gate closed instead of revealing everything.
                 final boolean conclusivePull = (rf instanceof LeemenBlob.FilterBlob) || (fver == 0);
+                final boolean[] conclusiveContentPull = {
+                        (rc instanceof LeemenBlob.ContentBlob) || (cver == 0)
+                };
                 final Runnable projectAndPush = () -> {
                     if (!isCycleCurrent(account, generation, token)) {
                         Arrays.fill(key, (byte) 0);
@@ -313,6 +355,9 @@ public final class LeemenSync {
                             // now that the already-installed membership may safely become visible.
                             reloadDialogs(account);
                         }
+                    }
+                    if (conclusiveContentPull[0] && !isInitialSyncPending(account)) {
+                        markOnboardingRefreshConfirmed(account);
                     }
                     st.persist();
                     final Runnable done = () -> {
@@ -358,7 +403,12 @@ public final class LeemenSync {
                             Arrays.fill(key, (byte) 0);
                             return;
                         }
-                        if (rc2 instanceof LeemenBlob.ContentBlob) LeemenMerge.mergeContent(st.content, (LeemenBlob.ContentBlob) rc2);
+                        if (rc2 instanceof LeemenBlob.ContentBlob) {
+                            LeemenMerge.mergeContent(st.content, (LeemenBlob.ContentBlob) rc2);
+                        }
+                        if (rc2 instanceof LeemenBlob.ContentBlob || cver2 == 0) {
+                            conclusiveContentPull[0] = true;
+                        }
                         if (cver2 >= 0) st.contentVersion = cver2;
                         projectAndPush.run();
                     });
@@ -669,6 +719,13 @@ public final class LeemenSync {
             }
         }
 
+        // Grow-only account UX markers live as dedicated preserved platform sections. Older Android builds
+        // keep unknown platform sections verbatim, whereas adding typed ContentBlob fields would let an old
+        // Gson model silently strip them on its next PUT.
+        stampUxMarkerIfNeeded(st, UX_ONBOARDING_SEEN, c.hasOnboardingBeenShown(), lam, dev);
+        stampUxMarkerIfNeeded(st, UX_ONBOARDING_DONE, c.isOnboardingCompleted(), lam, dev);
+        stampUxMarkerIfNeeded(st, UX_PAYWALL_SHOWN, c.isPaywallShown(), lam, dev);
+
         // Tier-P (platform-specific) — synced ONLY between same-platform devices. The complete Android entry
         // config is one LWW block: gesture + PIN-in-search + fallback-button + verified gate.
         AndroidPlatformState localPlatformState = canonicalLocalAndroidPlatformState(c);
@@ -734,6 +791,9 @@ public final class LeemenSync {
                 ? (int) st.content.private_space_settings.pin_timeout_minutes.v : null;
         Boolean allowSs = st.content.private_space_settings.allow_screenshots != null
                 ? st.content.private_space_settings.allow_screenshots.v : null;
+        Boolean onboardingSeen = uxMarkerSet(st.content.platform, UX_ONBOARDING_SEEN) ? Boolean.TRUE : null;
+        Boolean onboardingDone = uxMarkerSet(st.content.platform, UX_ONBOARDING_DONE) ? Boolean.TRUE : null;
+        Boolean paywallShown = uxMarkerSet(st.content.platform, UX_PAYWALL_SHOWN) ? Boolean.TRUE : null;
 
         // PS PIN (§7.2): apply the synced register to the controller (set → store the Argon2id hash+salt;
         // none → clear). Absent ps_pin leaves the local PIN untouched. Self-guarded against back-push.
@@ -754,6 +814,7 @@ public final class LeemenSync {
                 androidState != null ? androidState.pinInSearch : null,
                 androidState != null ? androidState.entryButtonVisible : null,
                 androidState != null ? androidState.shortcutTested : null,
+                onboardingSeen, onboardingDone, paywallShown,
                 pinChanged);
     }
 
@@ -790,6 +851,9 @@ public final class LeemenSync {
 
     // ---- Tier-P: Android entry config, synced only within this platform's blob sub-object ----
     private static final String PLATFORM_ANDROID = "android";
+    private static final String UX_ONBOARDING_SEEN = "ux_onboarding_seen";
+    private static final String UX_ONBOARDING_DONE = "ux_onboarding_done";
+    private static final String UX_PAYWALL_SHOWN = "ux_onboarding_paywall_shown";
 
     private static final class AndroidPlatformState {
         java.util.List<SecondSpaceController.TabStep> tabSequence = new java.util.ArrayList<>();
@@ -865,6 +929,32 @@ public final class LeemenSync {
         } catch (Throwable e) {
             return fallback;
         }
+    }
+
+    private static boolean uxMarkerSet(JsonObject platform, String key) {
+        try {
+            return platform != null
+                    && platform.has(key)
+                    && platform.get(key).isJsonObject()
+                    && boolField(platform.getAsJsonObject(key), "shown", false);
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    private static void stampUxMarkerIfNeeded(LeemenSyncState st, String key, boolean localValue,
+                                               long[] lamport, String deviceId) {
+        if (!localValue || uxMarkerSet(st.content.platform, key)) {
+            return;
+        }
+        if (st.content.platform == null) {
+            st.content.platform = new JsonObject();
+        }
+        JsonObject marker = new JsonObject();
+        marker.addProperty("c", lam(st, lamport));
+        marker.addProperty("dev", deviceId);
+        marker.addProperty("shown", true);
+        st.content.platform.add(key, marker);
     }
 
     private static LeemenBlob.PerChat perChat(LeemenSyncState st, String dialogKey) {

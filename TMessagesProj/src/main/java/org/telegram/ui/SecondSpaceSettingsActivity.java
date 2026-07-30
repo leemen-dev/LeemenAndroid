@@ -115,22 +115,37 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             return false;
         }
         getNotificationCenter().addObserver(this, NotificationCenter.secondSpaceModeChanged);
+        getNotificationCenter().addObserver(this, NotificationCenter.secondSpaceOnboardingRefreshCompleted);
         return super.onFragmentCreate();
     }
 
     @Override
     public void onFragmentDestroy() {
         getNotificationCenter().removeObserver(this, NotificationCenter.secondSpaceModeChanged);
+        getNotificationCenter().removeObserver(this, NotificationCenter.secondSpaceOnboardingRefreshCompleted);
         super.onFragmentDestroy();
     }
 
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.secondSpaceOnboardingRefreshCompleted) {
+            SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+            if (ssc.isActive() && !ssc.isOnboardingDone() && !isOnboardingSyncPending()) {
+                onboardingTour = true;
+                if (listView != null) {
+                    listView.post(this::startOnboardingTour);
+                }
+            }
+            return;
+        }
         if (id == NotificationCenter.secondSpaceModeChanged) {
             SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
             if (!ssc.isActive()) {
                 finishFragment();
                 return;
+            }
+            if (ssc.isOnboardingDone() || isOnboardingSyncPending()) {
+                cancelOnboardingTour();
             }
             // Entry-method changes (PIN/sequence/pin-in-search) force the entry-button toggle
             // back to ON via clearShortcutTested; rebind so the toggle row reflects current state.
@@ -223,7 +238,8 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         reloadHiddenIds();
         // Auto-start the guided tour on ANY entry into these settings while onboarding is unfinished,
         // not only when launched via the dedicated shortcut.
-        if (onboardingTour || !SecondSpaceController.getInstance(currentAccount).isOnboardingDone()) {
+        if (!isOnboardingSyncPending()
+                && (onboardingTour || !SecondSpaceController.getInstance(currentAccount).isOnboardingDone())) {
             onboardingTour = true;
             listView.post(this::startOnboardingTour);
         }
@@ -237,7 +253,9 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     }
 
     private void startOnboardingTour() {
-        if (!onboardingTour || getParentActivity() == null || !(fragmentView instanceof FrameLayout)) {
+        if (!onboardingTour || getParentActivity() == null || !(fragmentView instanceof FrameLayout)
+                || isOnboardingSyncPending()
+                || SecondSpaceController.getInstance(currentAccount).isOnboardingDone()) {
             return;
         }
         LeemenAnalytics.track("onboarding_step_view", Collections.singletonMap("step", "settings_tour"));
@@ -310,6 +328,12 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
     }
 
     private void finishTour() {
+        cancelOnboardingTour();
+        // Marks onboarding done (also fires onboarding_completed analytics).
+        SecondSpaceController.getInstance(currentAccount).markOnboardingDone("settings_tour");
+    }
+
+    private void cancelOnboardingTour() {
         onboardingTour = false;
         tourTargetRow = -1;
         tourAdvanceOnResume = false;
@@ -317,8 +341,11 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
             ((ViewGroup) tourOverlay.getParent()).removeView(tourOverlay);
         }
         tourOverlay = null;
-        // Marks onboarding done (also fires onboarding_completed analytics).
-        SecondSpaceController.getInstance(currentAccount).markOnboardingDone("settings_tour");
+    }
+
+    private boolean isOnboardingSyncPending() {
+        return org.telegram.messenger.leemen.LeemenSync.isInitialSyncPending(currentAccount)
+                || org.telegram.messenger.leemen.LeemenSync.isOnboardingRefreshPending(currentAccount);
     }
 
     private void openChatPicker() {

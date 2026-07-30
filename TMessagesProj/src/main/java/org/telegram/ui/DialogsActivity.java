@@ -2835,6 +2835,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
             getNotificationCenter().addObserver(this, NotificationCenter.dialogsNeedReload);
             getNotificationCenter().addObserver(this, NotificationCenter.secondSpaceModeChanged);
+            getNotificationCenter().addObserver(this, NotificationCenter.secondSpaceOnboardingRefreshCompleted);
             NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.emojiLoaded);
             if (!onlySelect) {
                 NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.closeSearchByActiveAction);
@@ -3008,6 +3009,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (searchString == null) {
             getNotificationCenter().removeObserver(this, NotificationCenter.dialogsNeedReload);
             getNotificationCenter().removeObserver(this, NotificationCenter.secondSpaceModeChanged);
+            getNotificationCenter().removeObserver(this, NotificationCenter.secondSpaceOnboardingRefreshCompleted);
             NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.emojiLoaded);
             if (!onlySelect) {
                 NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.closeSearchByActiveAction);
@@ -10722,6 +10724,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (onlySelect || folderId != 0 || initialDialogsType != DIALOGS_TYPE_DEFAULT) {
             return;
         }
+        if (org.telegram.messenger.leemen.LeemenSync.isInitialSyncPending(currentAccount)
+                || org.telegram.messenger.leemen.LeemenSync.isOnboardingRefreshPending(currentAccount)) {
+            return;
+        }
         boolean hasHidden = !ssc.getDialogIds().isEmpty();
         // Subscription lapsed while holding more than the free allowance of hidden chats OR any hidden
         // account (accounts are premium): on every entry, present a blocking renew-or-reveal gate — the
@@ -10738,7 +10744,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (ssc.isOnboardingDone()) {
             // The "euphoria" moment: user lived the loop (hid a chat, saw it vanish, came back).
             // Offer the upgrade once — unless they already subscribed.
-            if (!ssc.isPaywallShown() && hasHidden && !ssc.hasLeemenPremium()) {
+            if (ssc.isOnboardingCompleted()
+                    && !ssc.isPaywallShown() && hasHidden && !ssc.hasLeemenPremium()) {
                 ssc.markPaywallShown();
                 showPrivateSpacePaywall();
             }
@@ -10869,6 +10876,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     @SuppressWarnings("unchecked")
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.secondSpaceOnboardingRefreshCompleted) {
+            if (SecondSpaceController.getInstance(currentAccount).isRealActive()) {
+                maybeStartPrivateSpaceOnboardingOrPaywall();
+            }
+            return;
+        }
         if (id == NotificationCenter.secondSpaceModeChanged) {
             updatePrivateSpaceEmptyView();
             if (actionBar != null && actionBar.isActionModeShowed()) {
@@ -10893,11 +10906,15 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 // filterRecent is mode-aware (filters out private-only entries in off mode).
                 searchViewPager.dialogsSearchAdapter.filterRecent(null);
             }
-            if (SecondSpaceController.getInstance(currentAccount).isRealActive()) {
+            SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
+            if (ssc.isRealActive()) {
                 // Entering the private space: (re)check the privacy-warning conditions and reset the
                 // which-dialog-next cursor. Enforce an expired over-limit subscription immediately; only
                 // ordinary coaching / the one-time offer waits for the list transition to settle.
                 privacyWarningCursor = 0;
+                if (ssc.isOnboardingDone()) {
+                    stopPrivateSpaceOnboarding();
+                }
                 org.telegram.messenger.leemen.LeemenPrivacyWarning.refresh(currentAccount, this::updatePrivacyWarningButton);
                 if (!ensurePrivateSpaceOverLimitGate()) {
                     AndroidUtilities.runOnUIThread(this::maybeStartPrivateSpaceOnboardingOrPaywall, 350);

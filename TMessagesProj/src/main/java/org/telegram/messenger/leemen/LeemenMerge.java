@@ -153,6 +153,18 @@ public final class LeemenMerge {
             if (!local.has(plat)) {
                 local.add(plat, rEl);
             } else {
+                JsonElement lEl = local.get(plat);
+                if (plat.startsWith("ux_onboarding_")) {
+                    boolean localShown = markerShown(lEl);
+                    boolean remoteShown = markerShown(rEl);
+                    // These one-shot markers are grow-only: a malformed/newer false must never resurrect UX.
+                    if (localShown && !remoteShown) {
+                        continue;
+                    } else if (remoteShown && !localShown) {
+                        local.add(plat, rEl);
+                        continue;
+                    }
+                }
                 long lc = platLamport(local.get(plat));
                 long rc = platLamport(rEl);
                 if (rc > lc || (rc == lc && platDev(rEl).compareTo(platDev(local.get(plat))) > 0)) {
@@ -161,6 +173,15 @@ public final class LeemenMerge {
             }
         }
         return local;
+    }
+
+    private static boolean markerShown(JsonElement el) {
+        try {
+            JsonObject object = el.getAsJsonObject();
+            return object.has("shown") && object.get("shown").getAsBoolean();
+        } catch (Throwable e) {
+            return false;
+        }
     }
 
     private static long platLamport(JsonElement el) {

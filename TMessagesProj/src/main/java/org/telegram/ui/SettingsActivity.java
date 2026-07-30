@@ -210,6 +210,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         getNotificationCenter().addObserver(this, NotificationCenter.starBalanceUpdated);
         getNotificationCenter().addObserver(this, NotificationCenter.newSuggestionsAvailable);
         getNotificationCenter().addObserver(this, NotificationCenter.secondSpaceModeChanged);
+        getNotificationCenter().addObserver(this, NotificationCenter.secondSpaceOnboardingRefreshCompleted);
 
         if (arguments != null) {
             hasMainTabs = arguments.getBoolean("hasMainTabs", false);
@@ -504,6 +505,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         getNotificationCenter().removeObserver(this, NotificationCenter.starBalanceUpdated);
         getNotificationCenter().removeObserver(this, NotificationCenter.newSuggestionsAvailable);
         getNotificationCenter().removeObserver(this, NotificationCenter.secondSpaceModeChanged);
+        getNotificationCenter().removeObserver(this, NotificationCenter.secondSpaceOnboardingRefreshCompleted);
     }
 
     @Override
@@ -519,12 +521,14 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             if (listView != null) {
                 listView.adapter.update(true);
             }
+        } else if (id == NotificationCenter.secondSpaceOnboardingRefreshCompleted) {
+            schedulePrivateSpaceRowHighlight();
         } else if (id == NotificationCenter.secondSpaceModeChanged) {
             if (listView != null) {
                 listView.adapter.update(true);
             }
             SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-            if (!ssc.isActive() || ssc.isOnboardingDone()) {
+            if (!ssc.isActive() || ssc.isOnboardingDone() || isOnboardingSyncPending()) {
                 // SettingsActivity can stay alive when the bottom navigation exits the private space.
                 // Never leave its private-space-only onboarding overlay attached in the regular UI.
                 dismissPsRowOverlay();
@@ -651,7 +655,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             return;
         }
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        if (!ssc.isActive() || ssc.isOnboardingDone()) {
+        if (!ssc.isActive() || ssc.isOnboardingDone() || isOnboardingSyncPending()) {
             dismissPsRowOverlay();
             return;
         }
@@ -681,7 +685,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             return;
         }
         SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);
-        if (!ssc.isActive() || ssc.isOnboardingDone()) {
+        if (!ssc.isActive() || ssc.isOnboardingDone() || isOnboardingSyncPending()) {
             dismissPsRowOverlay();
             return;
         }
@@ -718,6 +722,11 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 null,
                 LocaleController.getString(R.string.Open),
                 v -> openPrivateSpaceSettings(generation));
+    }
+
+    private boolean isOnboardingSyncPending() {
+        return org.telegram.messenger.leemen.LeemenSync.isInitialSyncPending(currentAccount)
+                || org.telegram.messenger.leemen.LeemenSync.isOnboardingRefreshPending(currentAccount);
     }
 
     /** Bounds of the PS-settings row in the overlay's coordinates, or null if it isn't on-screen. */

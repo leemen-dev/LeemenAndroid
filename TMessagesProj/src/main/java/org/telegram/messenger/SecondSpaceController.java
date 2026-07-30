@@ -56,6 +56,10 @@ public class SecondSpaceController extends BaseController implements Notificatio
     private static final boolean DEFAULT_ALLOW_SCREENSHOTS = true;
     private static final String PREF_ONBOARDING_DONE = "second_space_onboarding_done";
     private static final String PREF_INTRO_SHOWN = "second_space_intro_shown";
+    /** Synced grow-only claim that some device has already presented the onboarding.
+     *  Kept separate from {@link #PREF_INTRO_SHOWN}: the presenting device must be allowed to finish its
+     *  walkthrough, while every other device suppresses a duplicate. */
+    private static final String PREF_ONBOARDING_SEEN_SYNCED = "second_space_onboarding_seen_synced";
     private static final String PREF_PAYWALL_SHOWN = "second_space_paywall_shown";
     /** Leemen Premium expiry, epoch ms, retained for display only. */
     private static final String PREF_PREMIUM_UNTIL = "second_space_premium_until";
@@ -1098,6 +1102,9 @@ public class SecondSpaceController extends BaseController implements Notificatio
                                  Boolean pinInSearchVal,
                                  Boolean entryButtonVisibleVal,
                                  Boolean shortcutTestedVal,
+                                 Boolean onboardingSeenVal,
+                                 Boolean onboardingDoneVal,
+                                 Boolean paywallShownVal,
                                  boolean pinChanged) {
         // Keep the rendered-chat portion of the old state so a no-op pull (including our own PUT echo) does
         // not force every open OFF-mode chat to reload. Local mutations are already present in the controller;
@@ -1113,6 +1120,8 @@ public class SecondSpaceController extends BaseController implements Notificatio
         boolean previousShortcutTested = shortcutTested;
         int previousPinTimeout = pinTimeoutMinutes;
         boolean previousAllowScreenshots = allowScreenshots;
+        boolean previousOnboardingDone = isOnboardingDone();
+        boolean previousPaywallShown = isPaywallShown();
         applyingRemoteSync = true;
         try {
             // Tier-P: the Android entry config is one LWW block. Apply it atomically so changing the gesture
@@ -1162,6 +1171,17 @@ public class SecondSpaceController extends BaseController implements Notificatio
             SharedPreferences.Editor settingsEditor = getMessagesController().getMainSettings().edit()
                     .putInt(PREF_PIN_TIMEOUT_MIN, pinTimeoutMinutes)
                     .putBoolean(PREF_ALLOW_SCREENSHOTS, allowScreenshots);
+            if (Boolean.TRUE.equals(onboardingSeenVal)) {
+                settingsEditor.putBoolean(PREF_ONBOARDING_SEEN_SYNCED, true);
+            }
+            if (Boolean.TRUE.equals(onboardingDoneVal)) {
+                settingsEditor
+                        .putBoolean(PREF_ONBOARDING_SEEN_SYNCED, true)
+                        .putBoolean(PREF_ONBOARDING_DONE, true);
+            }
+            if (Boolean.TRUE.equals(paywallShownVal)) {
+                settingsEditor.putBoolean(PREF_PAYWALL_SHOWN, true);
+            }
             if (tabSeq != null) {
                 settingsEditor
                         .putBoolean(PREF_PIN_IN_SEARCH, pinInSearchEnabled)
@@ -1219,7 +1239,9 @@ public class SecondSpaceController extends BaseController implements Notificatio
                 || previousShortcutTested != shortcutTested;
         boolean settingsStateChanged = pinChanged
                 || previousPinTimeout != pinTimeoutMinutes
-                || previousAllowScreenshots != allowScreenshots;
+                || previousAllowScreenshots != allowScreenshots
+                || previousOnboardingDone != isOnboardingDone()
+                || previousPaywallShown != isPaywallShown();
         if (platformEntryStateChanged || settingsStateChanged) {
             // Settings/Privacy rebuild PIN, timeout, screenshot and explicit-entry rows from this event.
             getNotificationCenter().postNotificationName(NotificationCenter.secondSpaceModeChanged);
@@ -1338,6 +1360,14 @@ public class SecondSpaceController extends BaseController implements Notificatio
         }
     }
 
+    private void notifyLeemenSyncImmediately() {
+        if (applyingRemoteSync) return;
+        try {
+            org.telegram.messenger.leemen.LeemenSync.onLocalMutationImmediate(currentAccount);
+        } catch (Throwable ignored) {
+        }
+    }
+
     /** Wipe ALL local private-space data for this account (every second_space_* pref + in-memory state).
      *  Used by the "delete account &amp; data" flow. Guarded so the cascade of clears doesn't echo back as
      *  a sync push. Does NOT touch the Telegram account. */
@@ -1430,6 +1460,11 @@ public class SecondSpaceController extends BaseController implements Notificatio
         }
         activeMode = mode;
         // Intentionally NOT persisted: activeMode is per-session, always MODE_OFF on next launch.
+        if (mode == MODE_REAL && !hasOnboardingBeenShown()) {
+            // Arm the freshness gate before broadcasting the mode change, so every onboarding surface
+            // (Chats, Settings and the settings tour) waits for the same conclusive content pull.
+            org.telegram.messenger.leemen.LeemenSync.refreshOnboardingStateBeforeShow(currentAccount);
+        }
         // Leaving the private space: wipe any draft authored inside it so a secret draft can't show in OFF mode.
         if (oldMode == MODE_REAL && mode == MODE_OFF) {
             wipePsDrafts();
@@ -1645,10 +1680,26 @@ public class SecondSpaceController extends BaseController implements Notificatio
 
     // --- First-run onboarding & paywall (one-shot) ---
 
-    /** True once the user has hidden their first chat (or is a pre-onboarding existing user).
-     *  Gates the first-hide coach-marks (shown only while this is false). */
+    /** Effective UI completion. A remote "already presented" claim suppresses the walkthrough on this device,
+     *  but does not interrupt the device that originally presented it ({@link #isIntroShown()}). */
     public boolean isOnboardingDone() {
+        return isOnboardingCompleted()
+                || (hasSyncedOnboardingSeen() && !isIntroShown());
+    }
+
+    /** Actual completion, as opposed to remote duplicate suppression. This is the value propagated by the
+     *  grow-only completion marker and used to decide whether the post-onboarding offer is eligible. */
+    public boolean isOnboardingCompleted() {
         return getMessagesController().getMainSettings().getBoolean(PREF_ONBOARDING_DONE, false);
+    }
+
+    /** True once onboarding has been presented or completed on any device. */
+    public boolean hasOnboardingBeenShown() {
+        return isIntroShown() || isOnboardingCompleted() || hasSyncedOnboardingSeen();
+    }
+
+    private boolean hasSyncedOnboardingSeen() {
+        return getMessagesController().getMainSettings().getBoolean(PREF_ONBOARDING_SEEN_SYNCED, false);
     }
 
     public void markOnboardingDone() {
@@ -1663,15 +1714,31 @@ public class SecondSpaceController extends BaseController implements Notificatio
     }
 
     public void markIntroShown() {
-        getMessagesController().getMainSettings().edit().putBoolean(PREF_INTRO_SHOWN, true).apply();
+        boolean changed = !isIntroShown() || !hasSyncedOnboardingSeen();
+        getMessagesController().getMainSettings().edit()
+                .putBoolean(PREF_INTRO_SHOWN, true)
+                .putBoolean(PREF_ONBOARDING_SEEN_SYNCED, true)
+                .apply();
+        if (changed) {
+            // This is the account-wide "already presented" claim. Skip the normal debounce to minimize the
+            // cross-device window before another client can observe it.
+            notifyLeemenSyncImmediately();
+        }
     }
 
     /** @param lastStep how onboarding completed (e.g. "settings_tour" or "first_hide"), for analytics. */
     public void markOnboardingDone(String lastStep) {
-        boolean was = isOnboardingDone();
-        getMessagesController().getMainSettings().edit().putBoolean(PREF_ONBOARDING_DONE, true).apply();
+        boolean was = isOnboardingCompleted();
+        boolean changed = !was || !hasSyncedOnboardingSeen();
+        getMessagesController().getMainSettings().edit()
+                .putBoolean(PREF_ONBOARDING_DONE, true)
+                .putBoolean(PREF_ONBOARDING_SEEN_SYNCED, true)
+                .apply();
         if (!was) {
             org.telegram.messenger.leemen.LeemenAnalytics.track("onboarding_completed", java.util.Collections.singletonMap("last_step", lastStep));
+        }
+        if (changed) {
+            notifyLeemenSync();
         }
     }
 
@@ -1682,7 +1749,11 @@ public class SecondSpaceController extends BaseController implements Notificatio
     }
 
     public void markPaywallShown() {
+        if (isPaywallShown()) {
+            return;
+        }
         getMessagesController().getMainSettings().edit().putBoolean(PREF_PAYWALL_SHOWN, true).apply();
+        notifyLeemenSync();
     }
 
     /** Free-tier hidden-chat allowance. */
