@@ -1103,6 +1103,11 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             layersActionBarLayout.setBackgroundView(shadowTablet);
             layersActionBarLayout.setUseAlphaAnimations(true);
             layersActionBarLayout.setFragmentStack(layerFragmentsStack);
+            layersActionBarLayout.setFragmentStackChangedListener(() -> {
+                if (layersActionBarLayout.getFragmentStack().isEmpty()) {
+                    schedulePrivateSpaceOverLimitCheck();
+                }
+            });
             layersActionBarLayout.setDelegate(this);
             layersActionBarLayout.setDrawerLayoutContainer(drawerLayoutContainer);
 
@@ -1124,6 +1129,16 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             }
         }
         FloatingDebugController.setActive(this, SharedConfig.isFloatingDebugActive, false);
+    }
+
+    private void schedulePrivateSpaceOverLimitCheck() {
+        BaseFragment fragment = actionBarLayout != null ? actionBarLayout.getLastFragment() : null;
+        if (fragment instanceof MainTabsActivity) {
+            fragment = ((MainTabsActivity) fragment).getDialogsActivity();
+        }
+        if (fragment instanceof DialogsActivity) {
+            ((DialogsActivity) fragment).schedulePrivateSpaceOverLimitCheck();
+        }
     }
 
     public void addOnUserLeaveHintListener(Runnable callback) {

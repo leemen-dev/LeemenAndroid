@@ -592,15 +592,25 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
      *  revealed — this only gates the real-mode UI. Non-cancelable: the user must either renew or go to
      *  settings to reveal/manage; there is no dismiss-into-an-over-limit space. Revealing is non-destructive
      *  (chats/accounts simply become visible again) and never happens automatically. */
-    public static AlertDialog showOverLimitDialog(BaseFragment fragment, int account) {
+    public static AlertDialog showOverLimitDialog(BaseFragment fragment, int account, Runnable onNavigationAttempted) {
         if (fragment == null || fragment.getParentActivity() == null) {
             return null;
         }
         AlertDialog.Builder b = new AlertDialog.Builder(fragment.getParentActivity());
         b.setTitle(LocaleController.getString(R.string.PrivateSpaceOverLimitTitle));
         b.setMessage(LocaleController.getString(R.string.PrivateSpaceOverLimitMessage));
-        b.setPositiveButton(LocaleController.getString(R.string.LeemenPremiumRenew), (d, w) -> fragment.presentFragment(new LeemenPremiumActivity("limit")));
-        b.setNegativeButton(LocaleController.getString(R.string.PrivateSpaceOverLimitRemove), (d, w) -> fragment.presentFragment(new SecondSpaceSettingsActivity()));
+        b.setPositiveButton(LocaleController.getString(R.string.LeemenPremiumRenew), (d, w) -> {
+            fragment.presentFragment(new LeemenPremiumActivity("limit"));
+            if (onNavigationAttempted != null) {
+                onNavigationAttempted.run();
+            }
+        });
+        b.setNegativeButton(LocaleController.getString(R.string.PrivateSpaceOverLimitRemove), (d, w) -> {
+            fragment.presentFragment(new SecondSpaceSettingsActivity());
+            if (onNavigationAttempted != null) {
+                onNavigationAttempted.run();
+            }
+        });
         AlertDialog dialog = b.create();
         if (fragment.showDialog(dialog) == null) {
             return null;

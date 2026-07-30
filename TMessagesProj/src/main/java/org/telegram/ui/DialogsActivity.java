@@ -5528,6 +5528,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     if (fragmentView != null) {
                         fragmentView.invalidate();
                     }
+                    schedulePrivateSpaceOverLimitCheck();
                 }
                 if (searchViewPager != null) {
                     searchViewPager.updateTabs();
@@ -10629,7 +10630,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private AlertDialog privateSpaceOverLimitDialog;
     private Runnable privateSpaceOverLimitCheckRunnable;
 
-    private void schedulePrivateSpaceOverLimitCheck() {
+    void schedulePrivateSpaceOverLimitCheck() {
         if (privateSpaceOverLimitCheckRunnable != null) {
             AndroidUtilities.cancelRunOnUIThread(privateSpaceOverLimitCheckRunnable);
         }
@@ -10642,7 +10643,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     /**
      * Keep an expired over-limit Private Space behind a modal gate until the user renews or reveals enough
-     * chats/accounts. Returning from either child screen re-enters here through resume/full-visibility hooks.
+     * chats/accounts. Returning from either child screen re-enters here through phone lifecycle hooks or the
+     * tablet auxiliary-stack callback.
      *
      * @return true when the over-limit state owns the UI, even if showing must retry after a transition.
      */
@@ -10651,7 +10653,22 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         boolean eligibleScreen = fragmentView != null && getParentActivity() != null
                 && !onlySelect && folderId == 0 && initialDialogsType == DIALOGS_TYPE_DEFAULT
                 && ssc.isRealActive();
-        if (!eligibleScreen || !ssc.isOverLimit()) {
+        boolean overLimit = ssc.isOverLimit();
+        boolean auxiliaryLayerOpen = false;
+        Activity activity = getParentActivity();
+        if (activity instanceof LaunchActivity) {
+            INavigationLayout layersLayout = ((LaunchActivity) activity).getLayersActionBarLayout();
+            auxiliaryLayerOpen = layersLayout != null && !layersLayout.getFragmentStack().isEmpty();
+        }
+        if (BuildVars.LOGS_ENABLED && ssc.isRealActive() && overLimit) {
+            FileLog.d("Leemen: premium gate check eligible=" + eligibleScreen
+                    + " paused=" + isPaused() + " mainTabs=" + hasMainTabs
+                    + " auxiliaryLayerOpen=" + auxiliaryLayerOpen
+                    + " chatOver=" + ssc.isOverChatLimit()
+                    + " accountOver=" + ssc.isOverAccountLimit()
+                    + " account " + currentAccount);
+        }
+        if (!eligibleScreen || !overLimit) {
             if (privateSpaceOverLimitDialog != null && privateSpaceOverLimitDialog.isShowing()) {
                 privateSpaceOverLimitDialog.dismiss();
             }
@@ -10662,13 +10679,14 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         // Wait for its next onResume instead of placing the gate over the management screen itself.
         // With MainTabs this fragment is embedded inside MainTabsActivity, so it can never itself be
         // parentLayout's last fragment. Its resumed state is the authoritative visibility signal there.
-        if (isPaused() || (!hasMainTabs && !isLastFragment())) {
+        if (isPaused() || auxiliaryLayerOpen || (!hasMainTabs && !isLastFragment())) {
             return true;
         }
         if (privateSpaceOverLimitDialog != null && privateSpaceOverLimitDialog.isShowing()) {
             return true;
         }
-        privateSpaceOverLimitDialog = LeemenPremiumActivity.showOverLimitDialog(this, currentAccount);
+        privateSpaceOverLimitDialog = LeemenPremiumActivity.showOverLimitDialog(
+                this, currentAccount, this::schedulePrivateSpaceOverLimitCheck);
         if (privateSpaceOverLimitDialog == null) {
             // showDialog rejects calls during fragment transitions. Retry until this active screen is gated.
             schedulePrivateSpaceOverLimitCheck();
