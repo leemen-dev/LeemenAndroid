@@ -62,20 +62,16 @@ public final class LeemenKey {
                 }
                 String mode = optStr(resp, "mode", "default");
                 if ("max".equals(mode)) {
-                    // max mode: K_master is only recoverable with the user's secret (passphrase / BIP-39 phrase).
-                    // ensureKey runs headless, so signal the UI to prompt — ONCE per process (avoid dialog spam).
-                    LeemenAccount.setPrivacyMode(account, "max");
-                    if (maxPromptShown.add(account)) {
-                        if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: account/key mode=max — prompting for unwrap secret");
-                        org.telegram.messenger.NotificationCenter.getGlobalInstance()
-                                .postNotificationName(org.telegram.messenger.NotificationCenter.leemenMaxKeyNeeded, account);
-                    }
+                    acceptMaxKeyResponse(account, token, resp);
                 } else if (resp.has("k_master") && !resp.get("k_master").isJsonNull()) {
                     byte[] k = Base64.decode(resp.get("k_master").getAsString(), Base64.NO_WRAP);
                     if (k.length == 32) {
                         storeKMaster(account, k, false);
-                    } else if (BuildVars.LOGS_ENABLED) {
-                        FileLog.d("Leemen: account/key bad k_master length " + k.length);
+                    } else {
+                        if (BuildVars.LOGS_ENABLED) {
+                            FileLog.d("Leemen: account/key bad k_master length " + k.length);
+                        }
+                        Arrays.fill(k, (byte) 0);
                     }
                 } else if (resp.has("needs_wrap") && !resp.get("needs_wrap").isJsonNull() && resp.get("needs_wrap").getAsBoolean()) {
                     wrapNewKey(account, token);
@@ -89,6 +85,89 @@ public final class LeemenKey {
                 if (!delegated) clearInFlight(account);
             }
         });
+    }
+
+    /**
+     * Accept the key union embedded in a validated /auth/telegram bootstrap without issuing GET /account/key.
+     * The matching ciphertext snapshot must be staged in LeemenSync first; storeKMaster's normal sync kick then
+     * consumes it instead of starting the legacy blob GET pair.
+     */
+    static boolean acceptAuthBootstrap(int account, String token, JsonObject keyResponse) {
+        if (!bindingMatches(account, token) || keyResponse == null) return false;
+        try {
+            String mode = optStr(keyResponse, "mode", null);
+            if ("max".equals(mode)) {
+                if (!acceptMaxKeyResponse(account, token, keyResponse)) return false;
+                if (LeemenAccount.hasKMaster(account)) {
+                    LeemenSync.onRemoteChanged(account);
+                }
+                return true;
+            }
+            if (!"default".equals(mode)) return false;
+            LeemenAccount.setPrivacyMode(account, "default");
+            if (keyResponse.has("k_master") && !keyResponse.get("k_master").isJsonNull()) {
+                byte[] k = Base64.decode(keyResponse.get("k_master").getAsString(), Base64.NO_WRAP);
+                if (k.length != LeemenCrypto.KEY_BYTES) {
+                    Arrays.fill(k, (byte) 0);
+                    return false;
+                }
+                // The server value is authoritative. A private-space reset on another device may rotate
+                // K_master without creating a new Telegram account generation, so keeping an existing local
+                // key here can otherwise make every bootstrap decrypt fail forever.
+                byte[] current = getKMaster(account);
+                boolean same = current != null && Arrays.equals(current, k);
+                if (current != null) Arrays.fill(current, (byte) 0);
+                if (same) {
+                    Arrays.fill(k, (byte) 0);
+                    LeemenSync.onRemoteChanged(account);
+                    return true;
+                }
+                boolean stored = storeKMaster(account, k, false);
+                if (!stored) {
+                    // Do not let the legacy fallback short-circuit on a key we now know is stale.
+                    LeemenAccount.dropKMaster(account);
+                }
+                return stored;
+            }
+            if (LeemenAccount.hasKMaster(account)) {
+                LeemenSync.onRemoteChanged(account);
+                return true;
+            }
+            if (keyResponse.has("needs_wrap") && !keyResponse.get("needs_wrap").isJsonNull()
+                    && keyResponse.get("needs_wrap").getAsBoolean()) {
+                synchronized (inFlight) {
+                    if (!inFlight.add(account)) return true;
+                }
+                wrapNewKey(account, token);
+                return true;
+            }
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
+        return false;
+    }
+
+    private static boolean acceptMaxKeyResponse(int account, String token, JsonObject response) {
+        if (!bindingMatches(account, token) || response == null) return false;
+        String wrappedPw = optStr(response, "wrapped_k_master_pw", null);
+        String saltPw = optStr(response, "salt_pw", null);
+        String wrappedRecovery = optStr(response, "wrapped_k_master_recovery", null);
+        String saltRecovery = optStr(response, "salt_recovery", null);
+        Integer wrapVersion = optInt(response, "wrap_version");
+        if (wrappedPw == null || saltPw == null || wrappedRecovery == null || saltRecovery == null
+                || wrapVersion == null || wrapVersion <= 0) {
+            return false;
+        }
+        LeemenAccount.setPrivacyMode(account, "max");
+        LeemenAccount.setWrapVersion(account, wrapVersion);
+        LeemenMaxPrivacy.cacheAuthBootstrapKey(account, token, response);
+        // K_master is only recoverable with the user's secret. Signal the UI once per account generation.
+        if (!LeemenAccount.hasKMaster(account) && maxPromptShown.add(account)) {
+            if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: account key mode=max — prompting for unwrap secret");
+            org.telegram.messenger.NotificationCenter.getGlobalInstance()
+                    .postNotificationName(org.telegram.messenger.NotificationCenter.leemenMaxKeyNeeded, account);
+        }
+        return true;
     }
 
     private static void wrapNewKey(int account, String token) {
@@ -153,11 +232,26 @@ public final class LeemenKey {
         return storeKMaster(account, k, false);
     }
 
+    static void clearAccount(int account) {
+        synchronized (inFlight) {
+            inFlight.remove(account);
+        }
+        maxPromptShown.remove(account);
+    }
+
     private static String optStr(JsonObject o, String key, String def) {
         try {
             return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : def;
         } catch (Throwable e) {
             return def;
+        }
+    }
+
+    private static Integer optInt(JsonObject o, String key) {
+        try {
+            return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsInt() : null;
+        } catch (Throwable e) {
+            return null;
         }
     }
 

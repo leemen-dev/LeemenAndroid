@@ -417,6 +417,8 @@ public final class LeemenAccount {
         if (!committed && org.telegram.messenger.BuildVars.LOGS_ENABLED) {
             org.telegram.messenger.FileLog.d("Leemen: failed to synchronously clear account slot " + account);
         }
+        LeemenKey.clearAccount(account);
+        LeemenMaxPrivacy.clearAuthBootstrapKey(account);
         LeemenConsent.clearAccount(account);
         // Run after the token removal: an old in-flight register callback now fails its token check, while
         // this final removal also wins if that callback completed in the narrow window above.

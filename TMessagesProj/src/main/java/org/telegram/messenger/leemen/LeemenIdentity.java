@@ -318,6 +318,9 @@ public final class LeemenIdentity {
         final long expectedTelegramUserId = UserConfig.getInstance(account).getClientUserId();
         JsonObject body = new JsonObject();
         body.addProperty("initData", initData);
+        // Opt in explicitly so rolling/older clients do not receive an unused ciphertext snapshot. An older
+        // backend ignores this field and returns the legacy response, which is handled below.
+        body.addProperty("bootstrap_version", LeemenAuthBootstrap.SCHEMA_VERSION);
         if (renewal != null) {
             // Lookup-only mode: the backend may mint a replacement JWT only for this exact still-existing
             // generation. It must never create a new master account while healing a rejected session.
@@ -343,6 +346,7 @@ public final class LeemenIdentity {
                             ? resp.get("privacy_mode").getAsString() : null;
                     boolean created = resp.has("created") && !resp.get("created").isJsonNull()
                             && resp.get("created").getAsBoolean();
+                    final LeemenAuthBootstrap bootstrap = LeemenAuthBootstrap.parse(resp);
                     if (renewal != null) {
                         // Defense in depth for a rolling backend deploy (or a compromised/misbehaving
                         // endpoint): never let session recovery cross generations or invoke a local wipe.
@@ -360,9 +364,28 @@ public final class LeemenIdentity {
                         LeemenAccount.prepareForNewGeneration(account);
                     }
                     LeemenAccount.save(account, token, syncId, masterId, privacy);
-                    LeemenKey.ensureKey(account); // chain Phase 2: acquire K_master right after bind
+                    final Runnable startProtectedSync = () -> {
+                        boolean accepted = false;
+                        if (bootstrap != null && LeemenSync.stageAuthBootstrap(account, token, bootstrap)) {
+                            accepted = LeemenKey.acceptAuthBootstrap(account, token, bootstrap.key);
+                            if (!accepted) {
+                                LeemenSync.discardAuthBootstrap(account, token);
+                            }
+                        }
+                        if (!accepted) {
+                            // Missing/malformed/unknown bootstrap (rolling deploy), or a local key-store failure:
+                            // retain the established fail-closed key + concurrent blob GET path.
+                            boolean keyAlreadyReady = LeemenAccount.hasKMaster(account);
+                            LeemenKey.ensureKey(account);
+                            if (keyAlreadyReady) {
+                                LeemenSync.onRemoteChanged(account);
+                            }
+                        }
+                    };
                     if (renewal != null) {
-                        LeemenSync.onSessionRenewed(account);
+                        LeemenSync.onSessionRenewed(account, startProtectedSync);
+                    } else {
+                        startProtectedSync.run();
                     }
                     // A fresh/replacement token must immediately consume the authoritative snapshot. Waiting
                     // for the next startup/foreground poll leaves Premium and privacy stale after first bind

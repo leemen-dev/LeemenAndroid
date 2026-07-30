@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.SecondSpaceController;
+import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 
 import java.nio.charset.StandardCharsets;
@@ -27,6 +28,28 @@ public final class LeemenMaxPrivacy {
 
     public interface Callback { void onResult(boolean ok, String error); }
     public interface UpgradeCallback { void onResult(boolean ok, String mnemonic, String error); }
+
+    private static final class CachedKey {
+        final String token;
+        final JsonObject response;
+
+        CachedKey(String token, JsonObject response) {
+            this.token = token;
+            this.response = response;
+        }
+    }
+
+    private static final CachedKey[] cachedKeys = new CachedKey[UserConfig.MAX_ACCOUNT_COUNT];
+
+    /** Keep opaque max-mode wraps from auth/account-key in memory so the unlock prompt does not GET them again. */
+    static void cacheAuthBootstrapKey(int account, String token, JsonObject response) {
+        if (account < 0 || account >= cachedKeys.length || token == null || response == null) return;
+        cachedKeys[account] = new CachedKey(token, response.deepCopy());
+    }
+
+    static void clearAuthBootstrapKey(int account) {
+        if (account >= 0 && account < cachedKeys.length) cachedKeys[account] = null;
+    }
 
     /** default → max. Generates the recovery phrase; on success returns it (show ONCE) via the callback. */
     public static void upgrade(int account, String passphrase, UpgradeCallback cb) {
@@ -89,33 +112,68 @@ public final class LeemenMaxPrivacy {
             AndroidUtilities.runOnUIThread(() -> cb.onResult(false, "bad_input"));
             return;
         }
+        JsonObject cached = cachedKey(account, token);
+        if (cached != null) {
+            unwrapResponse(account, token, cached, secret, recovery, cb);
+            return;
+        }
         LeemenRestClient.get(LeemenConfig.EP_ACCOUNT_KEY, token, (resp, code, ec, em) -> {
             if (!is2xx(resp, code)) { cb.onResult(false, err(ec, code)); return; }
-            if (!"max".equals(optStr(resp, "mode", "default"))) { cb.onResult(false, "not_max"); return; }
-            final String wrappedB64 = optStr(resp, recovery ? "wrapped_k_master_recovery" : "wrapped_k_master_pw", null);
-            final String saltB64 = optStr(resp, recovery ? "salt_recovery" : "salt_pw", null);
-            if (wrappedB64 == null || saltB64 == null) { cb.onResult(false, "missing_wrap"); return; }
-            final Integer wrapVer = optInt(resp, "wrap_version");
-            Utilities.globalQueue.postRunnable(() -> {
-                byte[] kek = null, kmaster = null, secretBytes = null;
-                try {
-                    secretBytes = utf8(secret);
-                    kek = LeemenCrypto.argon2idKek(secretBytes, Base64.decode(saltB64, Base64.NO_WRAP));
-                    kmaster = kek == null ? null : LeemenCrypto.unwrapKey(Base64.decode(wrappedB64, Base64.NO_WRAP), kek);
-                } catch (Throwable e) {
-                    FileLog.e(e);
+            cacheAuthBootstrapKey(account, token, resp);
+            unwrapResponse(account, token, resp, secret, recovery, cb);
+        });
+    }
+
+    private static void unwrapResponse(int account, String token, JsonObject response, String secret,
+                                       boolean recovery, Callback cb) {
+        if (!"max".equals(optStr(response, "mode", "default"))) {
+            cb.onResult(false, "not_max");
+            return;
+        }
+        final String wrappedB64 = optStr(response,
+                recovery ? "wrapped_k_master_recovery" : "wrapped_k_master_pw", null);
+        final String saltB64 = optStr(response, recovery ? "salt_recovery" : "salt_pw", null);
+        if (wrappedB64 == null || saltB64 == null) {
+            cb.onResult(false, "missing_wrap");
+            return;
+        }
+        final Integer wrapVer = optInt(response, "wrap_version");
+        Utilities.globalQueue.postRunnable(() -> {
+            byte[] kek = null, kmaster = null, secretBytes = null;
+            try {
+                secretBytes = utf8(secret);
+                kek = LeemenCrypto.argon2idKek(secretBytes, Base64.decode(saltB64, Base64.NO_WRAP));
+                kmaster = kek == null ? null : LeemenCrypto.unwrapKey(Base64.decode(wrappedB64, Base64.NO_WRAP), kek);
+            } catch (Throwable e) {
+                FileLog.e(e);
+            }
+            zero(kek); zero(secretBytes);
+            final byte[] k = kmaster;
+            AndroidUtilities.runOnUIThread(() -> {
+                if (k == null || k.length != LeemenCrypto.KEY_BYTES) {
+                    zero(k);
+                    cb.onResult(false, "wrong_secret");
+                    return;
                 }
-                zero(kek); zero(secretBytes);
-                final byte[] k = kmaster;
-                AndroidUtilities.runOnUIThread(() -> {
-                    if (k == null || k.length != 32) { zero(k); cb.onResult(false, "wrong_secret"); return; }
-                    if (wrapVer != null) LeemenAccount.setWrapVersion(account, wrapVer);
-                    LeemenAccount.setPrivacyMode(account, "max");
-                    boolean stored = LeemenKey.acceptKMaster(account, k); // stores Keystore-wrapped + kicks sync; zeroes k
-                    cb.onResult(stored, stored ? null : "store_failed");
-                });
+                if (!token.equals(LeemenAccount.getToken(account))) {
+                    zero(k);
+                    cb.onResult(false, "stale_session");
+                    return;
+                }
+                if (wrapVer != null) LeemenAccount.setWrapVersion(account, wrapVer);
+                LeemenAccount.setPrivacyMode(account, "max");
+                boolean stored = LeemenKey.acceptKMaster(account, k); // zeroes k and consumes staged auth blobs
+                if (stored) clearAuthBootstrapKey(account);
+                cb.onResult(stored, stored ? null : "store_failed");
             });
         });
+    }
+
+    private static JsonObject cachedKey(int account, String token) {
+        if (account < 0 || account >= cachedKeys.length || token == null) return null;
+        CachedKey cached = cachedKeys[account];
+        if (cached == null || !token.equals(cached.token)) return null;
+        return cached.response.deepCopy();
     }
 
     /** Change the everyday passphrase (re-wrap pw only; CAS on wrap_version). Needs K_master loaded. */

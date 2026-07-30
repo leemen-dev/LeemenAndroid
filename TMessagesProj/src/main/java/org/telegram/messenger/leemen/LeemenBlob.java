@@ -1,7 +1,9 @@
 package org.telegram.messenger.leemen;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -97,20 +99,55 @@ public final class LeemenBlob {
 
     public static FilterBlob filterFromBytes(byte[] json) {
         if (json == null) return null;
-        FilterBlob b = GSON.fromJson(new String(json, StandardCharsets.UTF_8), FilterBlob.class);
-        if (b != null && b.hidden_chat_ids == null) b.hidden_chat_ids = new HashMap<>();
-        if (b != null && b.chats_off_mode_visible == null) b.chats_off_mode_visible = new ArrayList<>();
-        return b;
+        try {
+            JsonObject raw = versionedObject(json);
+            if (raw == null) return null;
+            FilterBlob b = GSON.fromJson(raw, FilterBlob.class);
+            if (b != null && b.hidden_chat_ids == null) b.hidden_chat_ids = new HashMap<>();
+            if (b != null && b.chats_off_mode_visible == null) b.chats_off_mode_visible = new ArrayList<>();
+            return b;
+        } catch (Throwable ignore) {
+            return null;
+        }
     }
 
     public static ContentBlob contentFromBytes(byte[] json) {
         if (json == null) return null;
-        ContentBlob b = GSON.fromJson(new String(json, StandardCharsets.UTF_8), ContentBlob.class);
-        if (b == null) return null;
-        if (b.per_chat == null) b.per_chat = new HashMap<>();
-        if (b.private_search_dialog_ids == null) b.private_search_dialog_ids = new HashMap<>();
-        if (b.private_space_settings == null) b.private_space_settings = new Settings();
-        return b;
+        try {
+            JsonObject raw = versionedObject(json);
+            if (raw == null) return null;
+            ContentBlob b = GSON.fromJson(raw, ContentBlob.class);
+            if (b == null) return null;
+            if (b.per_chat == null) b.per_chat = new HashMap<>();
+            if (b.private_search_dialog_ids == null) b.private_search_dialog_ids = new HashMap<>();
+            if (b.private_space_settings == null) b.private_space_settings = new Settings();
+            return b;
+        } catch (Throwable ignore) {
+            return null;
+        }
+    }
+
+    /**
+     * Never let Gson's field initializer turn a missing/unknown schema into the current one. Filter membership
+     * is privacy-authoritative, so only an explicitly numeric, exactly-supported schema may become conclusive.
+     */
+    private static JsonObject versionedObject(byte[] json) {
+        JsonElement parsed = JsonParser.parseString(new String(json, StandardCharsets.UTF_8));
+        if (parsed == null || !parsed.isJsonObject()) return null;
+        JsonObject raw = parsed.getAsJsonObject();
+        JsonElement version = raw.get("schema_version");
+        if (version == null || !version.isJsonPrimitive()
+                || !version.getAsJsonPrimitive().isNumber()) {
+            return null;
+        }
+        try {
+            if (new java.math.BigDecimal(version.getAsString()).intValueExact() != SCHEMA_VERSION) {
+                return null;
+            }
+        } catch (Throwable ignore) {
+            return null;
+        }
+        return raw;
     }
 
     // --- register state helpers (shared by merge + projection) ---
