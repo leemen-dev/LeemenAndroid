@@ -35,9 +35,9 @@ import java.util.ArrayList;
  * "Unlimited hidden chats" upsell, shown once after the user has lived the value loop
  * (hidden their first chat, seen it vanish, and re-entered the space).
  *
- * UI-only for now: the subscribe button runs the supplied callback (a placeholder until real
- * Leemen billing is wired). There is no Google Play Billing call here on purpose — the bundled
- * billing flow buys Telegram Premium, which is a different product.
+ * The primary action closes this dialog window first and only then runs the supplied navigation
+ * callback. Presenting a fragment while the dialog is still attached races the tablet/layers
+ * navigation layouts and can make a valid tap appear to do nothing.
  */
 public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListView {
 
@@ -48,12 +48,16 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
 
     private final Theme.ResourcesProvider rp;
     private final LinearLayout customView;
+    private final Runnable onSubscribe;
     private UniversalAdapter adapter;
+    private boolean subscribeRequested;
+    private boolean subscribeDispatched;
 
     @SuppressLint("UseCompatLoadingForDrawables")
-    public PrivateSpacePaywallBottomSheet(Context context, BaseFragment fragment, Runnable onSubscribe) {
+    private PrivateSpacePaywallBottomSheet(Context context, BaseFragment fragment, Runnable onSubscribe) {
         super(context, fragment, false, false, false, fragment != null ? fragment.getResourceProvider() : null);
         this.rp = fragment != null ? fragment.getResourceProvider() : null;
+        this.onSubscribe = onSubscribe;
         fixNavigationBar();
         // Keep the secondary action comfortably above the navigation safe-area in the initial
         // (not-yet-scrolled) sheet position. Two percent is about 16dp on a typical phone.
@@ -110,10 +114,8 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
         button.setText(LocaleController.getString(R.string.PrivateSpacePaywallButton));
         button.setBackground(Theme.AdaptiveRipple.filledRect(Theme.getColor(Theme.key_featuredStickers_addButton, rp), 8));
         button.setOnClickListener(e -> {
-            // TODO(billing): wire real Leemen subscription purchase + server verification here.
-            if (onSubscribe != null) {
-                onSubscribe.run();
-            }
+            if (subscribeRequested || isDismissed()) return;
+            subscribeRequested = true;
             dismiss();
         });
         linearLayout.addView(button, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 0, 20, 22, 14, 0));
@@ -145,9 +147,24 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
     }
 
     public static PrivateSpacePaywallBottomSheet show(BaseFragment fragment, Runnable onSubscribe) {
+        if (fragment == null || fragment.getParentActivity() == null) {
+            return null;
+        }
         PrivateSpacePaywallBottomSheet sheet = new PrivateSpacePaywallBottomSheet(fragment.getParentActivity(), fragment, onSubscribe);
-        fragment.showDialog(sheet);
+        if (fragment.showDialog(sheet, ignored -> sheet.dispatchSubscribeAfterDismiss()) == null) {
+            return null;
+        }
         return sheet;
+    }
+
+    private void dispatchSubscribeAfterDismiss() {
+        if (!subscribeRequested || subscribeDispatched || onSubscribe == null) {
+            return;
+        }
+        subscribeDispatched = true;
+        // BaseFragment clears visibleDialog immediately after invoking this listener. Post one UI turn so
+        // navigation sees the fully-detached dialog and the final active tablet layer.
+        AndroidUtilities.runOnUIThread(onSubscribe);
     }
 
     private class FeatureCell extends FrameLayout {

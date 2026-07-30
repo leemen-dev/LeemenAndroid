@@ -584,7 +584,24 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         if (fragment == null || fragment.getParentActivity() == null) {
             return;
         }
-        PrivateSpacePaywallBottomSheet.show(fragment, () -> fragment.presentFragment(new LeemenPremiumActivity("limit")));
+        PrivateSpacePaywallBottomSheet.show(fragment, () -> presentFromPaywall(fragment, "limit"));
+    }
+
+    /**
+     * Resolve the active fragment only after the paywall dialog has fully closed. On wide layouts the
+     * fragment that requested the sheet can sit underneath a picker or move between navigation layers.
+     */
+    static void presentFromPaywall(BaseFragment fallback, String placement) {
+        BaseFragment host = LaunchActivity.getSafeLastFragment();
+        if (host == null || host.getParentActivity() == null) {
+            host = fallback;
+        }
+        if (host != null && host.getParentActivity() != null) {
+            // On tablet LaunchActivity may successfully reroute this to layersActionBarLayout while the
+            // originating presentFragment() still returns false. Dispatch exactly once; never infer failure
+            // from that return value or a fast retry can open two Premium screens.
+            host.presentFragment(new LeemenPremiumActivity(placement));
+        }
     }
 
     /** Blocking renew-or-reveal gate shown on entry into the space when the subscription has lapsed while

@@ -358,7 +358,7 @@ public class SecondSpaceSettingsActivity extends BaseFragment implements Notific
         SecondSpaceController psc = SecondSpaceController.getInstance(currentAccount);
         if (!psc.hasLeemenPremium()) {
             fragment.setLeemenSelectLimit(psc.freeChatSlotsLeft(),
-                    () -> LeemenPremiumActivity.showUpgradeDialog(SecondSpaceSettingsActivity.this));
+                    () -> LeemenPremiumActivity.showUpgradeDialog(fragment));
         }
         fragment.setDelegate((premium, miniapps, ids) -> {
             SecondSpaceController ssc = SecondSpaceController.getInstance(currentAccount);

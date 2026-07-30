@@ -10746,8 +10746,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             // Offer the upgrade once — unless they already subscribed.
             if (ssc.isOnboardingCompleted()
                     && !ssc.isPaywallShown() && hasHidden && !ssc.hasLeemenPremium()) {
-                ssc.markPaywallShown();
-                showPrivateSpacePaywall();
+                if (tryShowPrivateSpacePaywall()) {
+                    ssc.markPaywallShown();
+                }
             }
         } else if (!ssc.isIntroShown()) {
             // Brand-new user's very first entry: explain the space up front with the intro modal (once).
@@ -10822,15 +10823,26 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     }
 
     private void showPrivateSpacePaywall() {
+        tryShowPrivateSpacePaywall();
+    }
+
+    private boolean tryShowPrivateSpacePaywall() {
         if (getParentActivity() == null) {
-            return;
+            return false;
         }
-        // placement deliberately does NOT name the feature (deniability §0): one-shot post-onboarding offer.
-        org.telegram.messenger.leemen.LeemenAnalytics.track("paywall_view", java.util.Collections.singletonMap("placement", "onboarding_offer"));
         // Teaser sheet → open the full Leemen Premium screen (monthly / yearly plan choice).
-        showDialog(new PrivateSpacePaywallBottomSheet(getParentActivity(), DialogsActivity.this, () ->
-                presentFragment(new LeemenPremiumActivity())
-        ));
+        PrivateSpacePaywallBottomSheet sheet = PrivateSpacePaywallBottomSheet.show(
+                DialogsActivity.this,
+                () -> LeemenPremiumActivity.presentFromPaywall(
+                        DialogsActivity.this, "onboarding_offer"));
+        if (sheet == null) {
+            return false;
+        }
+        // Placement deliberately does NOT name the feature (deniability §0): one-shot post-onboarding offer.
+        org.telegram.messenger.leemen.LeemenAnalytics.track(
+                "paywall_view",
+                java.util.Collections.singletonMap("placement", "onboarding_offer"));
+        return true;
     }
 
     /** Show/hide the in-private-space warning button: only in MODE_REAL, and only when something is
