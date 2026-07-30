@@ -133,18 +133,93 @@ public final class LeemenAccount {
 
     /** Durable last-write-wins queue for the backend consent ledger. A stored false is a pending revoke. */
     public static boolean hasPendingConsent(int account, String type) {
-        return prefs().contains("consent_pending_" + account + "_" + type);
+        return prefs().contains(pendingConsentKey(account, type));
     }
 
     public static boolean getPendingConsent(int account, String type) {
-        return prefs().getBoolean("consent_pending_" + account + "_" + type, false);
+        return prefs().getBoolean(pendingConsentKey(account, type), false);
+    }
+
+    public static String getPendingConsentVersion(int account, String type) {
+        return prefs().getString(pendingConsentVersionKey(account, type), null);
     }
 
     public static void setPendingConsent(int account, String type, Boolean granted) {
-        String key = "consent_pending_" + account + "_" + type;
+        String key = pendingConsentKey(account, type);
+        String versionKey = pendingConsentVersionKey(account, type);
         SharedPreferences.Editor e = prefs().edit();
-        if (granted == null) e.remove(key); else e.putBoolean(key, granted);
+        if (granted == null) {
+            e.remove(key).remove(versionKey);
+        } else {
+            e.putBoolean(key, granted)
+                    .putString(versionKey, LeemenConsent.CURRENT_TERMS_VERSION);
+        }
         e.apply();
+    }
+
+    /**
+     * Persist both rows represented by the single telemetry switch in one synchronous transaction.
+     * This is the privacy boundary: when this method returns, a process crash cannot forget the user's
+     * latest revoke/grant before either network request starts.
+     */
+    static boolean setPendingTelemetryConsent(int account, boolean granted) {
+        String analyticsKey = pendingConsentKey(account, LeemenConsent.TYPE_ANALYTICS);
+        String attributionKey = pendingConsentKey(account, LeemenConsent.TYPE_ATTRIBUTION);
+        return prefs().edit()
+                .putBoolean(analyticsKey, granted)
+                .putString(analyticsKey + "_version", LeemenConsent.CURRENT_TERMS_VERSION)
+                .putBoolean(attributionKey, granted)
+                .putString(attributionKey + "_version", LeemenConsent.CURRENT_TERMS_VERSION)
+                .commit();
+    }
+
+    /**
+     * Analytics/attribution choices belong to the stable backend generation, not a reusable local slot.
+     * Keeping their pending writes under master_account_id lets an offline choice survive ordinary
+     * logout/rebind while a newly-created master UUID can never inherit it.
+     */
+    private static String pendingConsentKey(int account, String type) {
+        String masterAccountId = getMasterAccountId(account);
+        boolean telemetryType = LeemenConsent.TYPE_ANALYTICS.equals(type)
+                || LeemenConsent.TYPE_ATTRIBUTION.equals(type);
+        if (!TextUtils.isEmpty(masterAccountId) && telemetryType) {
+            String masterKey = "consent_pending_master_" + masterAccountId + "_" + type;
+            // One-time migration from released builds that stored telemetry mutations by reusable slot.
+            // Only migrate after this slot is positively bound to the master generation that will own it.
+            if (hasBinding(account)) {
+                String legacyKey = "consent_pending_" + account + "_" + type;
+                SharedPreferences p = prefs();
+                if (p.contains(legacyKey)) {
+                    SharedPreferences.Editor e = p.edit();
+                    if (!p.contains(masterKey)) {
+                        String legacyVersion = p.getString(legacyKey + "_version", null);
+                        e.putBoolean(masterKey, p.getBoolean(legacyKey, false))
+                                .putString(masterKey + "_version",
+                                        TextUtils.isEmpty(legacyVersion)
+                                                ? LeemenConsent.CURRENT_TERMS_VERSION
+                                                : legacyVersion);
+                    }
+                    e.remove(legacyKey).remove(legacyKey + "_version").apply();
+                }
+            }
+            return masterKey;
+        }
+        return "consent_pending_" + account + "_" + type;
+    }
+
+    private static String pendingConsentVersionKey(int account, String type) {
+        return pendingConsentKey(account, type) + "_version";
+    }
+
+    static void clearTelemetryConsentPendingForGeneration(int account) {
+        String masterAccountId = getMasterAccountId(account);
+        if (TextUtils.isEmpty(masterAccountId)) return;
+        prefs().edit()
+                .remove("consent_pending_master_" + masterAccountId + "_" + LeemenConsent.TYPE_ANALYTICS)
+                .remove("consent_pending_master_" + masterAccountId + "_" + LeemenConsent.TYPE_ANALYTICS + "_version")
+                .remove("consent_pending_master_" + masterAccountId + "_" + LeemenConsent.TYPE_ATTRIBUTION)
+                .remove("consent_pending_master_" + masterAccountId + "_" + LeemenConsent.TYPE_ATTRIBUTION + "_version")
+                .apply();
     }
 
     public static boolean hasBinding(int account) {
@@ -215,6 +290,11 @@ public final class LeemenAccount {
         }
         try {
             org.telegram.messenger.SecondSpaceController.getInstance(account).wipeAllLocalData();
+        } catch (Throwable e) {
+            org.telegram.messenger.FileLog.e(e);
+        }
+        try {
+            LeemenAnalytics.clearAccountGeneration(account);
         } catch (Throwable e) {
             org.telegram.messenger.FileLog.e(e);
         }
@@ -410,9 +490,13 @@ public final class LeemenAccount {
                 .remove("consent_dirty_" + account)
                 .remove("wrapver_" + account)
                 .remove("consent_pending_" + account + "_" + LeemenConsent.TYPE_TERMS)
+                .remove("consent_pending_" + account + "_" + LeemenConsent.TYPE_TERMS + "_version")
                 .remove("consent_pending_" + account + "_" + LeemenConsent.TYPE_KZ_CROSS_BORDER)
+                .remove("consent_pending_" + account + "_" + LeemenConsent.TYPE_KZ_CROSS_BORDER + "_version")
                 .remove("consent_pending_" + account + "_" + LeemenConsent.TYPE_ANALYTICS)
+                .remove("consent_pending_" + account + "_" + LeemenConsent.TYPE_ANALYTICS + "_version")
                 .remove("consent_pending_" + account + "_" + LeemenConsent.TYPE_ATTRIBUTION)
+                .remove("consent_pending_" + account + "_" + LeemenConsent.TYPE_ATTRIBUTION + "_version")
                 .commit();
         if (!committed && org.telegram.messenger.BuildVars.LOGS_ENABLED) {
             org.telegram.messenger.FileLog.d("Leemen: failed to synchronously clear account slot " + account);
@@ -420,6 +504,7 @@ public final class LeemenAccount {
         LeemenKey.clearAccount(account);
         LeemenMaxPrivacy.clearAuthBootstrapKey(account);
         LeemenConsent.clearAccount(account);
+        LeemenAnalytics.clearAccountSession(account);
         // Run after the token removal: an old in-flight register callback now fails its token check, while
         // this final removal also wins if that callback completed in the narrow window above.
         LeemenDevice.clearAccount(account);

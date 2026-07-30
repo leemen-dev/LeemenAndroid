@@ -11,6 +11,7 @@ import com.google.gson.JsonObject;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.UserConfig;
 
 /**
  * Phase 7 — install attribution (Play Install Referrer). First-touch, once per install: read the Play
@@ -28,8 +29,14 @@ public final class LeemenAttribution {
     private static volatile boolean inFlight;
 
     public static void captureIfNeeded() {
+        captureIfNeeded(UserConfig.selectedAccount);
+    }
+
+    public static void captureIfNeeded(final int account) {
         try {
-            if (!LeemenAnalytics.isTelemetryEnabled()) return;
+            if (!LeemenAnalytics.isTelemetryEnabled(account)) return;
+            final String masterAccountId = LeemenAccount.getMasterAccountId(account);
+            if (masterAccountId == null) return;
             SharedPreferences p = prefs();
             if (p.getBoolean("sent", false) || p.getBoolean("skip", false)) return; // first-touch, once ever
             if (inFlight) return;
@@ -45,7 +52,7 @@ public final class LeemenAttribution {
                             ReferrerDetails d = client.getInstallReferrer();
                             String referrer = d != null ? d.getInstallReferrer() : null;
                             if (referrer != null && !referrer.isEmpty()) {
-                                post(referrer);            // referrer already extracted; client can close now
+                                post(account, masterAccountId, referrer); // client can close after extraction
                                 postStarted = true;        // post()'s callback owns clearing inFlight
                             } else {
                                 prefs().edit().putBoolean("skip", true).apply(); // nothing to attribute → don't retry
@@ -71,8 +78,12 @@ public final class LeemenAttribution {
         }
     }
 
-    private static void post(String referrer) {
-        if (!LeemenAnalytics.isTelemetryEnabled()) { inFlight = false; return; }
+    private static void post(int account, String masterAccountId, String referrer) {
+        if (!masterAccountId.equals(LeemenAccount.getMasterAccountId(account))
+                || !LeemenAnalytics.isTelemetryEnabled(account)) {
+            inFlight = false;
+            return;
+        }
         JsonObject body = new JsonObject();
         body.addProperty("install_id", LeemenAnalytics.installId());
         body.addProperty("install_referrer", referrer);

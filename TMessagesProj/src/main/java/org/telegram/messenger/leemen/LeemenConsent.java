@@ -63,7 +63,13 @@ public final class LeemenConsent {
      * Precondition: the account is bound (has a session token) — callers gate on LeemenAccount.hasBinding.
      */
     public static void evaluate(final int account, final Eval cb) {
-        if (CURRENT_TERMS_VERSION.equals(LeemenAccount.getAcceptedTermsVersion(account))) {
+        evaluate(account, cb, 0);
+    }
+
+    private static void evaluate(final int account, final Eval cb, final int staleRetries) {
+        final boolean termsAcceptedLocally =
+                CURRENT_TERMS_VERSION.equals(LeemenAccount.getAcceptedTermsVersion(account));
+        if (termsAcceptedLocally && LeemenAnalytics.hasConsentDecision(account)) {
             cb.on(false, false);
             return;
         }
@@ -80,6 +86,23 @@ public final class LeemenConsent {
             }
             try {
                 if (resp != null && code >= 200 && code < 300 && resp.has("account") && resp.get("account").isJsonObject()) {
+                    if (!LeemenAccountState.wasMeSnapshotApplied(account, resp)) {
+                        // Never bypass the global request ordering with an older response. Retry as the
+                        // newest request with a small bound; central account-state reconciliation also
+                        // coalesces a fresh snapshot whenever any successful response is superseded.
+                        if (staleRetries < 3) {
+                            org.telegram.messenger.AndroidUtilities.runOnUIThread(
+                                    () -> evaluate(account, cb, staleRetries + 1),
+                                    100L * (staleRetries + 1));
+                        } else {
+                            // Keep the authoritative background reconcile, but never strand the caller's
+                            // onboarding flow. Local Terms remain usable; analytics is still fail-closed and
+                            // its prompt can safely represent UNKNOWN as an explicit choice.
+                            LeemenAccountState.onRemoteChanged(account);
+                            cb.on(!termsAcceptedLocally, false);
+                        }
+                        return;
+                    }
                     JsonObject acc = resp.getAsJsonObject("account");
                     boolean kz = boolField(acc, "kz_consent_required");
 
@@ -98,16 +121,21 @@ public final class LeemenConsent {
                         // already accepted current version (e.g. on another device / before reinstall) → mirror, no prompt
                         LeemenAccount.setAcceptedTermsVersion(account, CURRENT_TERMS_VERSION);
                         cb.on(false, false);
+                    } else if (termsAcceptedLocally) {
+                        // We only came to /me because analytics consent was not cached. Preserve the existing
+                        // local Terms fast path while the ordered /me application restores analytics state.
+                        cb.on(false, false);
                     } else {
                         cb.on(true, kz);
                     }
                 } else {
-                    // can't confirm (offline / error) → prompt for Terms, omit KZ paragraph (best-effort)
-                    cb.on(true, false);
+                    // Keep a previously accepted local Terms version usable offline. Analytics remains
+                    // fail-closed and can still be chosen explicitly in the prompt/settings.
+                    cb.on(!termsAcceptedLocally, false);
                 }
             } catch (Throwable e) {
                 FileLog.e(e);
-                cb.on(true, false);
+                cb.on(!termsAcceptedLocally, false);
             }
         });
     }
@@ -122,11 +150,22 @@ public final class LeemenConsent {
         }
     }
 
-    /** Record a consent grant/revoke of any type (analytics/attribution) in the backend ledger. Best-effort:
-     *  the local gate is the source of truth; this is the compliance audit record. Versioned by the current
-     *  policy version (consent is given under the policy text in effect). */
+    /** Record a consent grant/revoke of any type in the backend ledger. The durable local mutation is
+     *  last-write-wins; telemetry grants remain fail-closed until a fresh /me confirms the server record.
+     *  Versioned by the current policy version (consent is given under the policy text in effect). */
     public static void recordConsent(int account, String type, boolean granted) {
         postConsent(account, type, granted);
+    }
+
+    /** Persist both halves before advancing the local decision revision or starting network IO. */
+    static boolean persistTelemetryConsent(int account, boolean granted) {
+        return LeemenAccount.setPendingTelemetryConsent(account, granted);
+    }
+
+    /** Start both already-persisted requests after the local fail-closed decision mirror is updated. */
+    static void sendTelemetryConsent(int account) {
+        sendPending(account, TYPE_ANALYTICS);
+        sendPending(account, TYPE_ATTRIBUTION);
     }
 
     /** Re-send every pending ledger mutation. The stored value is last-write-wins, including revocations. */
@@ -145,6 +184,17 @@ public final class LeemenConsent {
         }
     }
 
+    /** Re-send durable mutations for every active bound account, not only the currently visible one. */
+    public static void flushDirtyAll() {
+        for (int account = 0; account < UserConfig.MAX_ACCOUNT_COUNT; account++) {
+            if (UserConfig.getInstance(account).isClientActivated()
+                    && !LeemenAccount.isDisabled(account)
+                    && LeemenAccount.hasBinding(account)) {
+                flushDirty(account);
+            }
+        }
+    }
+
     private static void postConsent(final int account, final String type, final boolean granted) {
         // Persist before IO so process death, offline starts and rapid grant→revoke changes are recoverable.
         LeemenAccount.setPendingConsent(account, type, granted);
@@ -155,26 +205,41 @@ public final class LeemenConsent {
         if (!LeemenAccount.hasPendingConsent(account, type)) return;
         final String token = LeemenAccount.getToken(account);
         if (token == null) return;
-        final String requestKey = account + ":" + type;
+        final boolean telemetryType = isTelemetryType(type);
+        final String masterAccountId = telemetryType ? LeemenAccount.getMasterAccountId(account) : null;
+        if (telemetryType && masterAccountId == null) return;
+        // Telemetry choices belong to the master generation. Keeping this guard across a local logout/rebind
+        // prevents an old grant request from arriving after the new token's revoke request.
+        final String requestKey = telemetryType
+                ? "master:" + masterAccountId + ":" + type
+                : account + ":" + type;
         synchronized (inFlight) {
             if (inFlight.containsKey(requestKey)) return;
             inFlight.put(requestKey, token);
         }
         final boolean granted = LeemenAccount.getPendingConsent(account, type);
+        final String storedPendingVersion = LeemenAccount.getPendingConsentVersion(account, type);
+        final String pendingVersion = storedPendingVersion != null ? storedPendingVersion : CURRENT_TERMS_VERSION;
         JsonObject body = new JsonObject();
         body.addProperty("type", type);
         body.addProperty("granted", granted);
-        body.addProperty("version", CURRENT_TERMS_VERSION);
+        body.addProperty("version", pendingVersion);
         body.addProperty("locale", currentLocale());
         // NB: no accepted_at — the server timestamps the legal record; the client clock is not trusted.
         LeemenRestClient.post(LeemenConfig.EP_CONSENT, token, body, (resp, code, ec, em) -> {
             boolean ok = resp != null && code >= 200 && code < 300 && boolField(resp, "ok");
-            boolean tokenStillCurrent = token.equals(LeemenAccount.getToken(account));
+            int ownerAccount = telemetryType ? boundAccountForMaster(masterAccountId) : account;
+            boolean ownerStillCurrent = ownerAccount >= 0
+                    && (telemetryType || token.equals(LeemenAccount.getToken(ownerAccount)));
+            boolean tokenWasReplaced = ownerStillCurrent
+                    && !token.equals(LeemenAccount.getToken(ownerAccount));
             boolean hasNewerValue = false;
-            if (tokenStillCurrent && LeemenAccount.hasPendingConsent(account, type)) {
-                hasNewerValue = LeemenAccount.getPendingConsent(account, type) != granted;
+            if (ownerStillCurrent && LeemenAccount.hasPendingConsent(ownerAccount, type)) {
+                String currentPendingVersion = LeemenAccount.getPendingConsentVersion(ownerAccount, type);
+                hasNewerValue = LeemenAccount.getPendingConsent(ownerAccount, type) != granted
+                        || (currentPendingVersion != null && !pendingVersion.equals(currentPendingVersion));
                 if (ok && !hasNewerValue) {
-                    LeemenAccount.setPendingConsent(account, type, null);
+                    LeemenAccount.setPendingConsent(ownerAccount, type, null);
                 }
             }
             synchronized (inFlight) {
@@ -182,14 +247,26 @@ public final class LeemenConsent {
             }
             // Serialize opposite mutations: a revoke queued behind a grant is sent only after the grant
             // completes, so request reordering cannot resurrect the older server state.
-            if (tokenStillCurrent && hasNewerValue) sendPending(account, type);
+            if (ownerStillCurrent && (hasNewerValue || (!ok && tokenWasReplaced))) {
+                sendPending(ownerAccount, type);
+            }
+            if (ok && ownerStillCurrent && telemetryType
+                    && !LeemenAccount.hasPendingConsent(ownerAccount, TYPE_ANALYTICS)
+                    && !LeemenAccount.hasPendingConsent(ownerAccount, TYPE_ATTRIBUTION)) {
+                // A /me that started while these writes were pending may have read the old ledger. Force a
+                // post-ack snapshot; request ordering then makes only this fresh combined state applicable.
+                LeemenAccountState.onRemoteChanged(ownerAccount);
+            }
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("Leemen: POST /consent type=" + type + " granted=" + granted + " code=" + code + " ok=" + ok + (ec != null ? " err=" + ec : ""));
             }
         });
     }
 
-    /** Forget requests belonging to an account slot before that slot is reused by another Telegram account. */
+    /**
+     * Forget slot-owned Terms/KZ requests before slot reuse. Master-owned telemetry requests deliberately
+     * stay serialized until their callback/timeout, so a same-master rebind cannot reorder grant and revoke.
+     */
     static void clearAccount(int account) {
         synchronized (inFlight) {
             for (String type : LEDGER_TYPES) inFlight.remove(account + ":" + type);
@@ -202,5 +279,22 @@ public final class LeemenConsent {
 
     private static String strField(JsonObject o, String key) {
         try { return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : null; } catch (Throwable e) { return null; }
+    }
+
+    private static boolean isTelemetryType(String type) {
+        return TYPE_ANALYTICS.equals(type) || TYPE_ATTRIBUTION.equals(type);
+    }
+
+    private static int boundAccountForMaster(String masterAccountId) {
+        if (masterAccountId == null) return -1;
+        for (int account = 0; account < UserConfig.MAX_ACCOUNT_COUNT; account++) {
+            if (UserConfig.getInstance(account).isClientActivated()
+                    && !LeemenAccount.isDisabled(account)
+                    && LeemenAccount.hasBinding(account)
+                    && masterAccountId.equals(LeemenAccount.getMasterAccountId(account))) {
+                return account;
+            }
+        }
+        return -1;
     }
 }

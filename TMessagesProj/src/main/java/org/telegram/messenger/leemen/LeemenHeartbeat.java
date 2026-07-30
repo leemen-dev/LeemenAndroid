@@ -36,7 +36,7 @@ public final class LeemenHeartbeat {
 
     private static void maybeSend(final int account) {
         // Retention telemetry is non-essential and follows the same explicit opt-in as product analytics.
-        if (!LeemenAnalytics.isTelemetryEnabled()) return;
+        if (!LeemenAnalytics.isTelemetryEnabled(account)) return;
         if (LeemenAccount.isDisabled(account)) return;
         final String token = LeemenAccount.getToken(account);
         if (token == null) return;

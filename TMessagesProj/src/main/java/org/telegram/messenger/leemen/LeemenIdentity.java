@@ -361,6 +361,7 @@ public final class LeemenIdentity {
                             return;
                         }
                     } else if (created) {
+                        LeemenAnalytics.clearAccountGeneration(account);
                         LeemenAccount.prepareForNewGeneration(account);
                     }
                     LeemenAccount.save(account, token, syncId, masterId, privacy);
@@ -395,6 +396,9 @@ public final class LeemenIdentity {
                     // identity existed. Re-enter the shared/coalesced restore path now that routing by the
                     // exact master_account_id is possible.
                     LeemenBilling.getInstance().restore(account);
+                    // An analytics choice made offline belongs to master_account_id and survives an ordinary
+                    // Telegram logout. Re-bind its durable ledger mutations immediately for the same master.
+                    LeemenConsent.flushDirty(account);
                     // A session token now exists → let the Terms/Privacy acceptance gate run (LaunchActivity).
                     try {
                         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.leemenBindCompleted, account);

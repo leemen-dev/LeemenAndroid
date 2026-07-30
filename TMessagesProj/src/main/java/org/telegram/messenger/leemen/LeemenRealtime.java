@@ -261,7 +261,7 @@ public final class LeemenRealtime {
                         // authenticated generation guard, which logs out solely on the backend's 401/404.
                         LeemenSessionGuard.checkNow(account);
                     } else if ("account_state_changed".equals(broadcastEvent)) {
-                        // Notify-only: confirm Premium/privacy mode with one authenticated GET /me.
+                        // Notify-only: confirm Premium/privacy mode and consent with authenticated GET /me.
                         LeemenAccountState.onRemoteChanged(account);
                     } else if ("blob_changed".equals(broadcastEvent)) {
                         // Supabase broadcast nests the data one level deeper: payload.payload = {table, version}.
@@ -330,6 +330,7 @@ public final class LeemenRealtime {
             // Close the race between the initial GET and the moment this channel became live: any broadcast
             // sent in that interval was legitimately missed, so reconcile once after every successful join.
             LeemenSync.onRemoteChanged(account);
+            LeemenAccountState.onRemoteChanged(account);
             // Broadcasts are not replayed. If account deletion happened while this socket was down, the
             // authoritative status check makes the reconnect itself terminate the stale generation.
             LeemenSessionGuard.checkNow(account);

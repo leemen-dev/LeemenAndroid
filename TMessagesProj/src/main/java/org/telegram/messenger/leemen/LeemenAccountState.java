@@ -15,8 +15,8 @@ import java.util.Set;
 
 /**
  * Reconciles server-authoritative account state that does not belong in the encrypted PS blob:
- * Premium entitlements and the default/max privacy mode. Realtime is notify-only, so every event is
- * confirmed with GET /me; the foreground cadence is the missed-event correctness backstop.
+ * Premium entitlements, analytics consent and the default/max privacy mode. Realtime is notify-only, so
+ * every event is confirmed with GET /me; the foreground cadence is the missed-event correctness backstop.
  */
 public final class LeemenAccountState {
 
@@ -30,6 +30,11 @@ public final class LeemenAccountState {
     private static final Object requestOrderLock = new Object();
     private static final String[] latestIssuedBearer = new String[UserConfig.MAX_ACCOUNT_COUNT];
     private static final long[] latestIssuedRequest = new long[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final long[] consentRevisionAtIssue = new long[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final boolean[] consentPendingAtIssue = new boolean[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final String[] consentMasterAtIssue = new String[UserConfig.MAX_ACCOUNT_COUNT];
+    /** Identity marker used by request-specific callbacks to know whether central ordering accepted it. */
+    private static final JsonObject[] lastAppliedResponse = new JsonObject[UserConfig.MAX_ACCOUNT_COUNT];
     private static long nextRequestId;
 
     static long beginMeRequest(@Nullable String bearer) {
@@ -44,6 +49,11 @@ public final class LeemenAccountState {
                 long requestId = ++nextRequestId;
                 latestIssuedBearer[account] = bearer;
                 latestIssuedRequest[account] = requestId;
+                consentRevisionAtIssue[account] = LeemenAnalytics.localDecisionRevision(account);
+                consentPendingAtIssue[account] =
+                        LeemenAccount.hasPendingConsent(account, LeemenConsent.TYPE_ANALYTICS)
+                        || LeemenAccount.hasPendingConsent(account, LeemenConsent.TYPE_ATTRIBUTION);
+                consentMasterAtIssue[account] = LeemenAccount.getMasterAccountId(account);
                 return requestId;
             }
         }
@@ -97,11 +107,11 @@ public final class LeemenAccountState {
 
     /**
      * Apply every successful authenticated GET /me snapshot before its request-specific callback.
-     * Keeping this at the REST boundary makes Premium/privacy global account state: a paywall check,
-     * foreground poll, startup reconcile and Realtime wake-up all update the same controller cache.
+     * Keeping this at the REST boundary makes Premium/privacy/consent global account state: a paywall check,
+     * foreground poll, startup reconcile and Realtime wake-up all update the same controller caches.
      */
-    static void applyMeSnapshot(@Nullable String bearer, long requestId, JsonObject response) {
-        if (TextUtils.isEmpty(bearer) || requestId <= 0L || response == null) return;
+    static boolean applyMeSnapshot(@Nullable String bearer, long requestId, JsonObject response) {
+        if (TextUtils.isEmpty(bearer) || requestId <= 0L || response == null) return false;
         for (int account = 0; account < UserConfig.MAX_ACCOUNT_COUNT; account++) {
             if (!bearer.equals(LeemenAccount.getToken(account))
                     || !UserConfig.getInstance(account).isClientActivated()
@@ -109,12 +119,9 @@ public final class LeemenAccountState {
                 continue;
             }
             long serverNowMs = parseServerNow(response);
-            if (serverNowMs <= 0L) {
-                if (BuildVars.LOGS_ENABLED) {
-                    FileLog.d("Leemen: ignored invalid /me snapshot account " + account);
-                }
-                return;
-            }
+            final long consentRevision;
+            final boolean consentWasPending;
+            final String consentMasterAccountId;
             synchronized (requestOrderLock) {
                 // A response from an older request must never overwrite a snapshot requested later.
                 // server_now cannot order these safely: an older request can finish last after reading
@@ -124,18 +131,41 @@ public final class LeemenAccountState {
                     if (BuildVars.LOGS_ENABLED) {
                         FileLog.d("Leemen: ignored stale /me snapshot account " + account);
                     }
-                    return;
+                    final int staleAccount = account;
+                    // Never let a newer failed GET make us discard the only successful remote revoke/grant
+                    // until the 30-second poll. One coalesced fresh request closes that ordering gap.
+                    org.telegram.messenger.AndroidUtilities.runOnUIThread(
+                            () -> onRemoteChanged(staleAccount));
+                    return false;
                 }
+                consentRevision = consentRevisionAtIssue[account];
+                consentWasPending = consentPendingAtIssue[account];
+                consentMasterAccountId = consentMasterAtIssue[account];
+                lastAppliedResponse[account] = response;
             }
-            if (!LeemenBilling.applyEntitlementsFromMe(account, response, serverNowMs)) {
+            LeemenAnalytics.applyConsentFromMe(
+                    account, response, consentRevision, consentWasPending, consentMasterAccountId);
+            applyPrivacyMode(account, response);
+            if (serverNowMs <= 0L) {
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("Leemen: ignored invalid /me snapshot account " + account);
                 }
-                return;
+                return true;
             }
-            applyPrivacyMode(account, response);
-            return;
+            if (!LeemenBilling.applyEntitlementsFromMe(account, response, serverNowMs)
+                    && BuildVars.LOGS_ENABLED) {
+                FileLog.d("Leemen: ignored invalid entitlement snapshot account " + account);
+            }
+            return true;
         }
+        return false;
+    }
+
+    static boolean wasMeSnapshotApplied(int account, JsonObject response) {
+        return account >= 0
+                && account < lastAppliedResponse.length
+                && response != null
+                && lastAppliedResponse[account] == response;
     }
 
     private static long parseServerNow(JsonObject response) {

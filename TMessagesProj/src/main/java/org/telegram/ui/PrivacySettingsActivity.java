@@ -203,6 +203,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
             feeValue = (privacySettings.flags & 32) != 0;
         }
 
+        org.telegram.messenger.leemen.LeemenAnalytics.migrateLegacyConsent(currentAccount);
         updateRows();
         loadPasswordSettings();
         loadPasskeys();
@@ -212,6 +213,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         getNotificationCenter().addObserver(this, NotificationCenter.didSetOrRemoveTwoStepPassword);
         getNotificationCenter().addObserver(this, NotificationCenter.didUpdateGlobalAutoDeleteTimer);
         getNotificationCenter().addObserver(this, NotificationCenter.secondSpaceModeChanged);
+        getNotificationCenter().addObserver(this, NotificationCenter.leemenAnalyticsConsentChanged);
 
         getUserConfig().loadGlobalTTl();
 
@@ -245,6 +247,7 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         getNotificationCenter().removeObserver(this, NotificationCenter.didSetOrRemoveTwoStepPassword);
         getNotificationCenter().removeObserver(this, NotificationCenter.didUpdateGlobalAutoDeleteTimer);
         getNotificationCenter().removeObserver(this, NotificationCenter.secondSpaceModeChanged);
+        getNotificationCenter().removeObserver(this, NotificationCenter.leemenAnalyticsConsentChanged);
         boolean save = false;
         if (currentSync != newSync) {
             getUserConfig().syncContacts = newSync;
@@ -579,10 +582,12 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                     ((TextCheckCell) view).setChecked(newSync);
                 }
             } else if (position == analyticsConsentRow) {
-                boolean granted = !org.telegram.messenger.leemen.LeemenAnalytics.hasConsent();
-                org.telegram.messenger.leemen.LeemenAnalytics.setConsent(granted);
+                boolean granted = !org.telegram.messenger.leemen.LeemenAnalytics.hasConsent(currentAccount);
+                boolean stored = org.telegram.messenger.leemen.LeemenAnalytics.setConsent(currentAccount, granted);
                 if (view instanceof TextCheckCell) {
-                    ((TextCheckCell) view).setChecked(granted);
+                    ((TextCheckCell) view).setChecked(stored
+                            ? granted
+                            : org.telegram.messenger.leemen.LeemenAnalytics.hasConsent(currentAccount));
                 }
             } else if (position == privacyModeRow) {
                 presentFragment(new LeemenPrivacyModeActivity());
@@ -729,6 +734,10 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
             // The Android entry configuration is synced across active devices. Recalculate row positions so
             // an already-open Privacy screen immediately adds/removes the Protected Space entry button.
             updateRows();
+        } else if (id == NotificationCenter.leemenAnalyticsConsentChanged) {
+            if (listAdapter != null && analyticsConsentRow >= 0) {
+                listAdapter.notifyItemChanged(analyticsConsentRow);
+            }
         }
     }
 
@@ -1554,7 +1563,8 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                     } else if (position == newChatsRow) {
                         textCheckCell.setTextAndCheck(getString("ArchiveAndMute", R.string.ArchiveAndMute), archiveChats, false);
                     } else if (position == analyticsConsentRow) {
-                        textCheckCell.setTextAndCheck(getString(R.string.LeemenAnalyticsSetting), org.telegram.messenger.leemen.LeemenAnalytics.hasConsent(), false);
+                        textCheckCell.setTextAndCheck(getString(R.string.LeemenAnalyticsSetting),
+                                org.telegram.messenger.leemen.LeemenAnalytics.hasConsent(currentAccount), false);
                     }
                     break;
                 case 5:

@@ -307,6 +307,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     private PasscodeViewDialog passcodeDialog;
     private List<PasscodeView> overlayPasscodeViews = new ArrayList<>();
     private TermsOfServiceView termsOfServiceView;
+    private AlertDialog leemenAnalyticsConsentDialog;
     private BlockingUpdateView blockingUpdateView;
     public final ArrayList<Dialog> visibleDialogs = new ArrayList<>();
     private Dialog proxyErrorDialog;
@@ -747,7 +748,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 org.telegram.messenger.leemen.LeemenTelemetryPolicy.refresh();
                 // Terms/Privacy acceptance gate for already-bound accounts (fresh binds fire leemenBindCompleted).
                 maybeShowLeemenTerms(currentAccount);
-                org.telegram.messenger.leemen.LeemenConsent.flushDirty(currentAccount);
+                org.telegram.messenger.leemen.LeemenConsent.flushDirtyAll();
             } catch (Throwable ignore) {}
         }, 1200);
 
@@ -1331,6 +1332,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         if (account == UserConfig.selectedAccount || !UserConfig.isValidAccount(account)) {
             return;
         }
+        dismissLeemenAnalyticsConsentDialog();
         int outgoing = UserConfig.selectedAccount;
         SecondSpaceController outgoingSsc = SecondSpaceController.getInstance(outgoing);
         if (outgoingSsc.isAccountHidden(account)) {
@@ -1398,9 +1400,12 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         org.telegram.messenger.NotificationsController.getInstance(account).updateBadge();
 
         switchingAccount = false;
+        org.telegram.messenger.leemen.LeemenConsent.flushDirty(account);
+        maybeShowLeemenTerms(account);
     }
 
     private void switchToAvailableAccountOrLogout() {
+        dismissLeemenAnalyticsConsentDialog();
         int account = -1;
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (UserConfig.getInstance(a).isClientActivated()) {
@@ -1599,18 +1604,21 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     private void maybeShowLeemenTerms(int account) {
         if (drawerLayoutContainer == null || isFinishing()) return;
         if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return;
+        if (account != currentAccount || account != UserConfig.selectedAccount) return;
         if (!UserConfig.getInstance(account).isClientActivated()) return;
         if (!org.telegram.messenger.leemen.LeemenAccount.hasBinding(account)) return; // no session token yet
+        org.telegram.messenger.leemen.LeemenAnalytics.migrateLegacyConsent(account);
         org.telegram.messenger.leemen.LeemenConsent.evaluate(account, (needsPrompt, kz) -> {
             if (drawerLayoutContainer == null || isFinishing()) return;
+            if (account != currentAccount || account != UserConfig.selectedAccount) return;
             if (needsPrompt) {
                 org.telegram.messenger.leemen.LeemenConsent.grant(account, kz); // accepted-by-continuing
                 if (kz) {
-                    showLeemenKzNotice(this::maybeShowAnalyticsConsentPrompt);
+                    showLeemenKzNotice(() -> maybeShowAnalyticsConsentPrompt(account));
                     return;
                 }
             }
-            maybeShowAnalyticsConsentPrompt();
+            maybeShowAnalyticsConsentPrompt(account);
         });
     }
 
@@ -1636,21 +1644,64 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
     /** Leemen: one-time non-blocking soft prompt offering the analytics/attribution opt-in (off by default).
      *  Shown once after onboarding/terms; the durable control lives in Settings → Privacy. */
-    private void maybeShowAnalyticsConsentPrompt() {
+    private void maybeShowAnalyticsConsentPrompt(int account) {
         if (isFinishing()) return;
-        if (org.telegram.messenger.leemen.LeemenAnalytics.isConsentPromptShown()) return;
-        if (org.telegram.messenger.leemen.LeemenAnalytics.hasConsent()) {
-            org.telegram.messenger.leemen.LeemenAnalytics.markConsentPromptShown();
-            return;
-        }
-        org.telegram.messenger.leemen.LeemenAnalytics.markConsentPromptShown();
+        if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return;
+        if (account != currentAccount || account != UserConfig.selectedAccount) return;
+        if (!UserConfig.getInstance(account).isClientActivated()) return;
+        if (org.telegram.messenger.leemen.LeemenAccount.isDisabled(account)) return;
+        if (!org.telegram.messenger.leemen.LeemenAccount.hasBinding(account)
+                || org.telegram.messenger.leemen.LeemenAccount.getMasterAccountId(account) == null) return;
+        if (org.telegram.messenger.leemen.LeemenAnalytics.hasConsentDecision(account)) return;
+        if (leemenAnalyticsConsentDialog != null && leemenAnalyticsConsentDialog.isShowing()) return;
+        final boolean[] choiceStored = {false};
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle(LocaleController.getString(R.string.LeemenAnalyticsConsentTitle));
         builder.setMessage(LocaleController.getString(R.string.LeemenAnalyticsConsentMessage));
-        builder.setPositiveButton(LocaleController.getString(R.string.LeemenAnalyticsConsentEnable),
-                (d, w) -> org.telegram.messenger.leemen.LeemenAnalytics.setConsent(true));
-        builder.setNegativeButton(LocaleController.getString(R.string.LeemenAnalyticsConsentLater), null);
-        try { builder.show(); } catch (Throwable ignore) {}
+        builder.setPositiveButton(LocaleController.getString(R.string.LeemenAnalyticsConsentEnable), (d, w) -> {
+            if (!choiceStored[0]) {
+                choiceStored[0] = true;
+                org.telegram.messenger.leemen.LeemenAnalytics.setConsent(account, true);
+            }
+        });
+        builder.setNegativeButton(LocaleController.getString(R.string.LeemenAnalyticsConsentLater), (d, w) -> {
+            if (!choiceStored[0]) {
+                choiceStored[0] = true;
+                org.telegram.messenger.leemen.LeemenAnalytics.setConsent(account, false);
+            }
+        });
+        // Back/outside dismissal is equivalent to "Not now": telemetry stays off and the refusal is
+        // remembered instead of silently becoming an install-only prompt flag.
+        builder.setOnCancelListener(d -> {
+            if (!choiceStored[0]) {
+                choiceStored[0] = true;
+                org.telegram.messenger.leemen.LeemenAnalytics.setConsent(account, false);
+            }
+        });
+        builder.setOnDismissListener(d -> {
+            leemenAnalyticsConsentDialog = null;
+            int selected = UserConfig.selectedAccount;
+            // A second account may have completed binding while this dialog was visible. Re-evaluate the
+            // account the user is actually looking at after the current choice has been stored.
+            if (selected != account) {
+                AndroidUtilities.runOnUIThread(() -> maybeShowLeemenTerms(selected));
+            }
+        });
+        try {
+            leemenAnalyticsConsentDialog = builder.show();
+        } catch (Throwable ignore) {
+            leemenAnalyticsConsentDialog = null;
+        }
+    }
+
+    private void dismissLeemenAnalyticsConsentDialog() {
+        if (leemenAnalyticsConsentDialog == null) return;
+        // Invalidate the outgoing account's prompt before selectedAccount changes or the login UI appears.
+        // Its button callbacks must never mutate an account that is no longer visible.
+        leemenAnalyticsConsentDialog.setOnCancelListener(null);
+        leemenAnalyticsConsentDialog.setOnDismissListener(null);
+        leemenAnalyticsConsentDialog.dismiss();
+        leemenAnalyticsConsentDialog = null;
     }
 
     public void showPasscodeActivity(boolean fingerprint, boolean animated, int x, int y, Runnable onShow, Runnable onStart) {

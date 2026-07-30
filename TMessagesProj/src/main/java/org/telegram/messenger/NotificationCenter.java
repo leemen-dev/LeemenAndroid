@@ -388,6 +388,8 @@ public class NotificationCenter {
     /** A Leemen backend bind (/auth/telegram) just completed for an account (args[0] = account int). Lets
      *  LaunchActivity run the Terms/Privacy acceptance gate once a session token exists. */
     public static final int leemenBindCompleted = totalEvents++;
+    /** The current account's analytics/attribution consent was changed locally or restored from /me. */
+    public static final int leemenAnalyticsConsentChanged = totalEvents++;
     /** Max-privacy: GET /account/key reported mode=max but K_master isn't local — the UI must prompt for the
      *  user's passphrase / BIP-39 recovery phrase to unwrap it (args[0] = account int). */
     public static final int leemenMaxKeyNeeded = totalEvents++;

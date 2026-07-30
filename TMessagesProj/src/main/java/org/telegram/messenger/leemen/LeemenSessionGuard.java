@@ -66,6 +66,9 @@ public final class LeemenSessionGuard {
                 if (UserConfig.getInstance(account).isClientActivated()
                         && !LeemenAccount.isDisabled(account)
                         && LeemenAccount.hasBinding(account)) {
+                    // Retry durable consent grants/revocations for every account on foreground and during
+                    // the periodic backstop, including accounts that are not currently selected.
+                    LeemenConsent.flushDirty(account);
                     // GET /me is authoritative for account existence, privacy mode and entitlements. Its
                     // deleted-generation errors are still handled centrally by LeemenRestClient below.
                     LeemenAccountState.refresh(account);
