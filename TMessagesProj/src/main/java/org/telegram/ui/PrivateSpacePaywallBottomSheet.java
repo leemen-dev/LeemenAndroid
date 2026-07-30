@@ -11,6 +11,7 @@ import android.graphics.drawable.Drawable;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -67,6 +68,9 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
         // Keep an additional visual gap above the system inset when the sheet is scrolled to the end.
         applyBottomInset(AndroidUtilities.navigationBarHeight);
         linearLayout.setOrientation(LinearLayout.VERTICAL);
+        // RecyclerListView checks only the holder's direct child before deciding that a gesture belongs to
+        // the row. Mark the custom root clickable so nested CTA TextViews keep their click sequence.
+        linearLayout.setClickable(true);
 
         FrameLayout topView = new FrameLayout(context);
         ImageView imageView = new ImageView(context);
@@ -118,6 +122,7 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
             subscribeRequested = true;
             dismiss();
         });
+        keepClickInsideRecycler(button);
         linearLayout.addView(button, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 0, 20, 22, 14, 0));
 
         TextView later = new TextView(context);
@@ -127,6 +132,7 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
         later.setText(LocaleController.getString(R.string.PrivateSpacePaywallLater));
         later.setBackground(Theme.AdaptiveRipple.filledRect(Theme.multAlpha(Theme.getColor(Theme.key_featuredStickers_addButton, rp), 0f), 8));
         later.setOnClickListener(e -> dismiss());
+        keepClickInsideRecycler(later);
         linearLayout.addView(later, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 44, 0, 8, 22, 16, 8));
 
         adapter.update(false);
@@ -144,6 +150,22 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
         }
         customView.setPadding(backgroundPaddingLeft + dp(6), 0, backgroundPaddingLeft + dp(6),
                 Math.max(0, bottomInset) + dp(BOTTOM_ACTION_SPACING));
+    }
+
+    /**
+     * These CTAs live two levels below a RecyclerView holder. Once a press begins on a button, keep the
+     * RecyclerView/bottom-sheet drag recognizers from stealing ACTION_UP and cancelling performClick().
+     */
+    private void keepClickInsideRecycler(View button) {
+        button.setOnTouchListener((view, event) -> {
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                recyclerListView.requestDisallowInterceptTouchEvent(true);
+            } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                recyclerListView.requestDisallowInterceptTouchEvent(false);
+            }
+            return false;
+        });
     }
 
     public static PrivateSpacePaywallBottomSheet show(BaseFragment fragment, Runnable onSubscribe) {
@@ -204,6 +226,10 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
     }
 
     private void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
-        items.add(UItem.asCustom(customView));
+        // The default custom item is MATCH_PARENT high. On wide/short devices the secondary CTA can then
+        // be drawn past that measured touch boundary: it is visible, but taps reach the sheet background.
+        // Keep full sheet width, but measure height from real content so the whole footer is scrollable and
+        // hit-testable. asFullyCustom would make the child WRAP_CONTENT in both dimensions.
+        items.add(UItem.asCustom(customView, LayoutHelper.WRAP_CONTENT));
     }
 }
