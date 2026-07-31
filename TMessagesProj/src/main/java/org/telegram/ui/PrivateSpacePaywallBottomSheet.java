@@ -46,6 +46,8 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
     private static final int ICON_SIZE = 24;
     private static final int ITEM_TEXT_PADDING = 68;
     private static final int BOTTOM_ACTION_SPACING = 16;
+    private static final int ACTION_LEFT_MARGIN = 20;
+    private static final int ACTION_RIGHT_MARGIN = 22;
 
     private final Theme.ResourcesProvider rp;
     private final LinearLayout customView;
@@ -123,7 +125,8 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
             dismiss();
         });
         keepClickInsideRecycler(button);
-        linearLayout.addView(button, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 0, 20, 22, 14, 0));
+        linearLayout.addView(button, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 0,
+                ACTION_LEFT_MARGIN, 22, ACTION_RIGHT_MARGIN, 0));
 
         TextView later = new TextView(context);
         later.setGravity(Gravity.CENTER);
@@ -133,7 +136,8 @@ public class PrivateSpacePaywallBottomSheet extends BottomSheetWithRecyclerListV
         later.setBackground(Theme.AdaptiveRipple.filledRect(Theme.multAlpha(Theme.getColor(Theme.key_featuredStickers_addButton, rp), 0f), 8));
         later.setOnClickListener(e -> dismiss());
         keepClickInsideRecycler(later);
-        linearLayout.addView(later, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 44, 0, 8, 22, 16, 8));
+        linearLayout.addView(later, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 44, 0,
+                ACTION_LEFT_MARGIN, 16, ACTION_RIGHT_MARGIN, 8));
 
         adapter.update(false);
     }
