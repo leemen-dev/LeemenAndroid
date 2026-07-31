@@ -141,6 +141,7 @@ import org.telegram.messenger.PushListenerController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SRPHelper;
 import org.telegram.messenger.SharedConfig;
+import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.ConnectionsManager;
@@ -468,6 +469,61 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         super();
         currentAccount = account;
         newAccount = true;
+    }
+
+    /**
+     * Opens a new-account login without letting the Private Space focus-loss guard destroy it.
+     *
+     * <p>The phone page probes Android Credential Manager for a passkey as soon as it appears. That
+     * system surface pauses {@link LaunchActivity}; while Private Space is active, the deniability
+     * guard responds by leaving the space and popping every fragment above the tabs root. If login
+     * was already attached, it is popped too and Android reports that Leemen cancelled the request.
+     * Leave Private Space first, then attach login from the activity-owned root after navigation has
+     * been reset.</p>
+     */
+    public static void presentForAddingAccount(BaseFragment source, int account) {
+        presentForAddingAccount(source, new LoginActivity(account));
+    }
+
+    public static void presentForAddingAccount(BaseFragment source, LoginActivity loginActivity) {
+        if (source == null || loginActivity == null || !loginActivity.newAccount) {
+            return;
+        }
+        final int targetAccount = loginActivity.currentAccount;
+        if (targetAccount < 0 || targetAccount >= UserConfig.MAX_ACCOUNT_COUNT
+                || UserConfig.getInstance(targetAccount).isClientActivated()) {
+            return;
+        }
+        final int sourceAccount = source.getCurrentAccount();
+
+        Activity parentActivity = source.getParentActivity();
+        if (!(parentActivity instanceof LaunchActivity)) {
+            source.presentFragment(loginActivity);
+            return;
+        }
+
+        final LaunchActivity launchActivity = (LaunchActivity) parentActivity;
+        if (UserConfig.selectedAccount != sourceAccount || !UserConfig.isValidAccount(sourceAccount)) {
+            return;
+        }
+        SecondSpaceController privateSpace = SecondSpaceController.getInstance(sourceAccount);
+        if (!privateSpace.isActive()) {
+            source.presentFragment(loginActivity);
+            return;
+        }
+
+        Runnable openLogin = () -> {
+            if (LaunchActivity.instance != launchActivity
+                    || launchActivity.isFinishing()
+                    || UserConfig.selectedAccount != sourceAccount
+                    || !UserConfig.isValidAccount(sourceAccount)
+                    || UserConfig.getInstance(targetAccount).isClientActivated()) {
+                return;
+            }
+            launchActivity.presentFragment(loginActivity);
+        };
+        privateSpace.setActive(false);
+        AndroidUtilities.runOnUIThread(openLogin);
     }
 
     /** When &gt;= 0, this is a brand-new account being added from the Private Space "add account" flow:

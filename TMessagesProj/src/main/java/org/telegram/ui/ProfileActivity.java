@@ -14309,7 +14309,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                             }
                         }
                         if (freeAccount >= 0) {
-                            f.presentFragment(new LoginActivity(freeAccount));
+                            LoginActivity.presentForAddingAccount(f, freeAccount);
                         }
                     }).withLink("tg://settings/edit/add-account"),
                     // TODO:
