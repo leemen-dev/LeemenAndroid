@@ -26,6 +26,7 @@ import android.app.Activity;
 import android.app.Dialog;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
@@ -144,6 +145,7 @@ import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.SecondSpaceController;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
+import org.telegram.messenger.leemen.LeemenReviewerLogin;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.SerializedData;
@@ -204,6 +206,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -394,6 +397,20 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
     private boolean forceDisableSafetyNet;
 
+    private static final int REVIEWER_AUTH_REQUEST_FLAGS =
+            ConnectionsManager.RequestFlagFailOnServerErrors
+                    | ConnectionsManager.RequestFlagWithoutLogin
+                    | ConnectionsManager.RequestFlagTryDifferentDc
+                    | ConnectionsManager.RequestFlagEnableUnauthorized;
+    // Backend acceptance is bounded to 8 seconds; keep enough transport/scheduling margin around that budget.
+    private static final int REVIEWER_TOKEN_MIN_LIFETIME_SECONDS = 12;
+    private int reviewerFlowGeneration;
+    private int reviewerMtprotoRequestId;
+    private boolean reviewerLoginInProgress;
+    private byte[] reviewerImportTokenCopy;
+    private int normalPhoneLoginGeneration;
+    private boolean returnToPhoneAfterReviewerPause;
+
     private static class ProgressView extends View {
 
         private final Path path = new Path();
@@ -572,6 +589,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
     @Override
     public void onFragmentDestroy() {
+        abortReviewerLogin(false);
         super.onFragmentDestroy();
         for (int a = 0; a < views.length; a++) {
             if (views[a] != null) {
@@ -976,6 +994,16 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
     @Override
     public void onPause() {
+        // A reviewer credential must not complete an unseen login after this screen moves to the background.
+        abortReviewerLogin(true);
+        if (currentViewNum == VIEW_PASSWORD && views[VIEW_PASSWORD] instanceof LoginActivityPasswordView) {
+            boolean abortedReviewerPassword =
+                    ((LoginActivityPasswordView) views[VIEW_PASSWORD]).abortReviewerQrPassword();
+            if (abortedReviewerPassword) {
+                returnToPhoneAfterReviewerPause = true;
+                needHideProgress(true);
+            }
+        }
         super.onPause();
         if (newAccount) {
             ConnectionsManager.getInstance(currentAccount).setAppPaused(true, false);
@@ -992,6 +1020,12 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         AndroidUtilities.requestAdjustResize(getParentActivity(), classGuid);
         if (fragmentView != null) {
             fragmentView.requestLayout();
+        }
+        if (returnToPhoneAfterReviewerPause) {
+            returnToPhoneAfterReviewerPause = false;
+            if (currentViewNum == VIEW_PASSWORD) {
+                setPage(VIEW_PHONE_INPUT, false, null, true);
+            }
         }
         try {
             if (currentViewNum >= VIEW_CODE_MESSAGE && currentViewNum <= VIEW_CODE_CALL && views[currentViewNum] instanceof LoginActivitySmsView) {
@@ -1165,6 +1199,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
         if (currentViewNum == VIEW_PHONE_INPUT || activityMode == MODE_CHANGE_LOGIN_EMAIL && currentViewNum == VIEW_ADD_EMAIL) {
             if (invoked) {
+                abortReviewerLogin(true);
                 for (int a = 0; a < views.length; a++) {
                     if (views[a] != null) {
                         views[a].onDestroyActivity();
@@ -1231,6 +1266,383 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         builder.setMessage(text);
         builder.setPositiveButton(getString("OK", R.string.OK), null);
         showDialog(builder.create());
+    }
+
+    /** Opens the Play-Console-documented reviewer path. The gesture is only discoverability; the password
+     * remains server-verified and no phone number or reviewer secret exists in the APK. */
+    private void showReviewerAccessDialog() {
+        if (activityMode != MODE_LOGIN || currentViewNum != VIEW_PHONE_INPUT
+                || reviewerLoginInProgress || isNormalPhoneLoginBusy() || getParentActivity() == null
+                || currentAccount < 0 || currentAccount >= UserConfig.MAX_ACCOUNT_COUNT
+                || UserConfig.getInstance(currentAccount).isClientActivated()) {
+            return;
+        }
+
+        final Context context = getParentActivity();
+        final EditTextBoldCursor passwordField = new EditTextBoldCursor(context);
+        passwordField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        passwordField.setTransformationMethod(PasswordTransformationMethod.getInstance());
+        passwordField.setTypeface(Typeface.DEFAULT);
+        passwordField.setSingleLine(true);
+        int reviewerImeOptions = EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            reviewerImeOptions |= EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING;
+        }
+        passwordField.setImeOptions(reviewerImeOptions);
+        passwordField.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
+        passwordField.setTextColor(Theme.getColor(Theme.key_dialogTextBlack));
+        passwordField.setCursorColor(Theme.getColor(Theme.key_dialogTextBlack));
+        passwordField.setHintTextColor(Theme.getColor(Theme.key_dialogTextHint));
+        passwordField.setHint(getString(R.string.LeemenReviewerAccessPasswordHint));
+        passwordField.setSaveEnabled(false);
+        passwordField.setSaveFromParentEnabled(false);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            passwordField.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
+        }
+
+        FrameLayout container = new FrameLayout(context);
+        container.setPadding(dp(24), dp(4), dp(24), dp(12));
+        container.addView(passwordField, LayoutHelper.createFrame(
+                LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        builder.setTitle(getString(R.string.LeemenReviewerAccessTitle));
+        builder.setMessage(getString(R.string.LeemenReviewerAccessMessage));
+        builder.setView(container);
+        builder.setPositiveButton(getString(R.string.LeemenReviewerAccessSignIn), null);
+        builder.setNegativeButton(getString(R.string.Cancel), null);
+        AlertDialog dialog = builder.create();
+        if (showDialog(dialog, ignored -> passwordField.setText("")) == null) {
+            passwordField.setText("");
+            return;
+        }
+
+        final Runnable submit = () -> {
+            CharSequence entered = passwordField.getText();
+            int length = entered != null ? entered.length() : 0;
+            if (length == 0) {
+                Toast.makeText(context, getString(R.string.LeemenReviewerAccessPasswordRequired), Toast.LENGTH_SHORT).show();
+                AndroidUtilities.shakeViewSpring(passwordField, 3.5f);
+                return;
+            }
+            if (length < 24 || length > 256) {
+                Toast.makeText(context, getString(R.string.LeemenReviewerAccessPasswordLength), Toast.LENGTH_SHORT).show();
+                AndroidUtilities.shakeViewSpring(passwordField, 3.5f);
+                return;
+            }
+            // Keep only the request-scoped immutable String; the editable UI buffer is cleared immediately.
+            String password = entered.toString();
+            passwordField.setText("");
+            AndroidUtilities.hideKeyboard(passwordField);
+            dialog.dismiss();
+            startReviewerLogin(password);
+        };
+        TextView positiveButton = (TextView) dialog.getButton(DialogInterface.BUTTON_POSITIVE);
+        if (positiveButton != null) {
+            positiveButton.setOnClickListener(v -> submit.run());
+        }
+        passwordField.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                submit.run();
+                return true;
+            }
+            return false;
+        });
+        AndroidUtilities.runOnUIThread(() -> {
+            if (dialog.isShowing()) {
+                passwordField.requestFocus();
+                showKeyboard(passwordField);
+            }
+        }, SHOW_DELAY);
+    }
+
+    private void startReviewerLogin(String password) {
+        if (TextUtils.isEmpty(password) || password.length() < 24 || password.length() > 256
+                || reviewerLoginInProgress || isNormalPhoneLoginBusy() || getParentActivity() == null
+                || activityMode != MODE_LOGIN || currentViewNum != VIEW_PHONE_INPUT
+                || currentAccount < 0 || currentAccount >= UserConfig.MAX_ACCOUNT_COUNT
+                || UserConfig.getInstance(currentAccount).isClientActivated()) {
+            return;
+        }
+        cancelReviewerLogin(true);
+        // Invalidate any normal-auth callback which was cancelled immediately before this gesture.
+        normalPhoneLoginGeneration++;
+        ConnectionsManager.getInstance(currentAccount).cleanup(false);
+        reviewerLoginInProgress = true;
+        int generation = ++reviewerFlowGeneration;
+        needShowProgress(0);
+        requestFreshReviewerTokenForBroker(generation, password, false, true);
+    }
+
+    private boolean isNormalPhoneLoginBusy() {
+        if (isRequestingFirebaseSms || phoneNumberConfirmView != null) {
+            return true;
+        }
+        SlideView phoneView = views != null && views.length > VIEW_PHONE_INPUT
+                ? views[VIEW_PHONE_INPUT] : null;
+        return phoneView instanceof PhoneView && ((PhoneView) phoneView).nextPressed;
+    }
+
+    /** Export a token that has not yet been sent to the broker. Regenerating once is safe when Telegram leaves
+     * less lifetime than the broker budget plus margin; rotation never occurs while acceptance is in flight. */
+    private void requestFreshReviewerTokenForBroker(int generation, String password,
+                                                    boolean brokerRetry, boolean mayRegenerateExpiringToken) {
+        if (!isReviewerFlowActive(generation)) return;
+        TLRPC.TL_auth_exportLoginToken request = createReviewerExportRequest();
+        reviewerMtprotoRequestId = ConnectionsManager.getInstance(currentAccount).sendRequest(request,
+                (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+                    if (!isReviewerFlowActive(generation)) return;
+                    reviewerMtprotoRequestId = 0;
+                    if (error != null) {
+                        if (brokerRetry) {
+                            // The reviewer password was already confirmed before this retry-token refresh.
+                            handleReviewerTelegramError(generation, error);
+                        } else if ("AUTH_TOKEN_EXPIRED".equals(error.text)
+                                || "AUTH_TOKEN_INVALID".equals(error.text)) {
+                            failReviewerLogin(generation, R.string.LeemenReviewerAccessExpired);
+                        } else {
+                            failReviewerLogin(generation, R.string.LeemenReviewerAccessUnavailable);
+                        }
+                    } else if (response instanceof TLRPC.TL_auth_loginToken) {
+                        TLRPC.TL_auth_loginToken token = (TLRPC.TL_auth_loginToken) response;
+                        int secondsLeft = token.expires
+                                - ConnectionsManager.getInstance(currentAccount).getCurrentTime();
+                        if (secondsLeft < REVIEWER_TOKEN_MIN_LIFETIME_SECONDS) {
+                            if (mayRegenerateExpiringToken) {
+                                requestFreshReviewerTokenForBroker(generation, password, brokerRetry, false);
+                            } else {
+                                failReviewerLogin(generation, R.string.LeemenReviewerAccessExpired);
+                            }
+                            return;
+                        }
+                        submitReviewerLoginToken(generation, password, token.token, brokerRetry);
+                    } else if (brokerRetry && response instanceof TLRPC.TL_auth_loginTokenSuccess) {
+                        completeReviewerLogin(generation, (TLRPC.TL_auth_loginTokenSuccess) response);
+                    } else if (brokerRetry && response instanceof TLRPC.TL_auth_loginTokenMigrateTo) {
+                        importReviewerLoginToken(generation, (TLRPC.TL_auth_loginTokenMigrateTo) response, 0);
+                    } else {
+                        // On the initial export, migrate/success/2FA would be stale state from an abandoned
+                        // attempt. Never let it bypass password verification at the broker.
+                        failReviewerLogin(generation, R.string.LeemenReviewerAccessUnavailable);
+                    }
+                }), REVIEWER_AUTH_REQUEST_FLAGS);
+    }
+
+    private TLRPC.TL_auth_exportLoginToken createReviewerExportRequest() {
+        TLRPC.TL_auth_exportLoginToken request = new TLRPC.TL_auth_exportLoginToken();
+        request.api_id = BuildVars.APP_ID;
+        request.api_hash = BuildVars.APP_HASH;
+        for (int account = 0; account < UserConfig.MAX_ACCOUNT_COUNT; account++) {
+            UserConfig userConfig = UserConfig.getInstance(account);
+            if (userConfig.isClientActivated() && userConfig.getClientUserId() != 0) {
+                request.except_ids.add(userConfig.getClientUserId());
+            }
+        }
+        return request;
+    }
+
+    private void submitReviewerLoginToken(int generation, String password, byte[] token, boolean brokerRetry) {
+        if (!isReviewerFlowActive(generation)) return;
+        LeemenReviewerLogin.accept(password, token, (accepted, httpCode, errorCode) -> {
+            if (!isReviewerFlowActive(generation)) return;
+            if (accepted) {
+                // auth.acceptLoginToken has completed server-side. Only now is it safe to export again.
+                requestReviewerLoginResult(generation, password, brokerRetry);
+                return;
+            }
+            if (httpCode == 401 || "invalid_credentials".equals(errorCode)) {
+                failReviewerLogin(generation, R.string.LeemenReviewerAccessInvalidPassword);
+            } else if ("invalid_token".equals(errorCode)
+                    || "token_expired".equals(errorCode)
+                    || "token-expired".equals(errorCode)) {
+                failReviewerLogin(generation, R.string.LeemenReviewerAccessExpired);
+            } else if ((!"disabled".equals(errorCode) && (httpCode == -1 || httpCode >= 500))
+                    || "accept_failed".equals(errorCode)
+                    || "telegram_unavailable".equals(errorCode)) {
+                // The worker may have accepted the one-time token even if its HTTP response was lost.
+                // Reconcile with Telegram exactly once; a fresh token permits one final broker attempt.
+                requestReviewerLoginResult(generation, password, brokerRetry);
+            } else if (httpCode == 400) {
+                failReviewerLogin(generation, R.string.LeemenReviewerAccessInvalidRequest);
+            } else {
+                failReviewerLogin(generation, R.string.LeemenReviewerAccessUnavailable);
+            }
+        });
+    }
+
+    /** One post-broker export: success completes login; a fresh token can be brokered only once more. */
+    private void requestReviewerLoginResult(int generation, String password, boolean brokerRetry) {
+        if (!isReviewerFlowActive(generation)) return;
+        TLRPC.TL_auth_exportLoginToken request = createReviewerExportRequest();
+        reviewerMtprotoRequestId = ConnectionsManager.getInstance(currentAccount).sendRequest(request,
+                (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+                    if (!isReviewerFlowActive(generation)) return;
+                    reviewerMtprotoRequestId = 0;
+                    if (error != null) {
+                        handleReviewerTelegramError(generation, error);
+                    } else if (response instanceof TLRPC.TL_auth_loginTokenSuccess) {
+                        completeReviewerLogin(generation, (TLRPC.TL_auth_loginTokenSuccess) response);
+                    } else if (response instanceof TLRPC.TL_auth_loginTokenMigrateTo) {
+                        importReviewerLoginToken(generation, (TLRPC.TL_auth_loginTokenMigrateTo) response, 0);
+                    } else if (response instanceof TLRPC.TL_auth_loginToken) {
+                        if (brokerRetry) {
+                            // The second ambiguous broker attempt is the hard retry limit. The fresh token
+                            // says authorization still did not settle, but this is an availability failure.
+                            failReviewerLogin(generation, R.string.LeemenReviewerAccessUnavailable);
+                        } else {
+                            TLRPC.TL_auth_loginToken freshToken = (TLRPC.TL_auth_loginToken) response;
+                            int secondsLeft = freshToken.expires
+                                    - ConnectionsManager.getInstance(currentAccount).getCurrentTime();
+                            if (secondsLeft < REVIEWER_TOKEN_MIN_LIFETIME_SECONDS) {
+                                requestFreshReviewerTokenForBroker(generation, password, true, true);
+                            } else {
+                                submitReviewerLoginToken(generation, password, freshToken.token, true);
+                            }
+                        }
+                    } else {
+                        failReviewerLogin(generation, R.string.LeemenReviewerAccessUnavailable);
+                    }
+                }), REVIEWER_AUTH_REQUEST_FLAGS);
+    }
+
+    private void importReviewerLoginToken(int generation, TLRPC.TL_auth_loginTokenMigrateTo migrate, int depth) {
+        if (!isReviewerFlowActive(generation)) return;
+        if (depth > 1 || migrate.dc_id <= 0
+                || migrate.token == null || migrate.token.length < 16 || migrate.token.length > 512) {
+            failReviewerLogin(generation, R.string.LeemenReviewerAccessExpired);
+            return;
+        }
+        TLRPC.TL_auth_importLoginToken request = new TLRPC.TL_auth_importLoginToken();
+        request.token = reviewerImportTokenCopy = Arrays.copyOf(migrate.token, migrate.token.length);
+        reviewerMtprotoRequestId = ConnectionsManager.getInstance(currentAccount).sendRequest(request,
+                (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+                    Arrays.fill(request.token, (byte) 0);
+                    if (reviewerImportTokenCopy == request.token) {
+                        reviewerImportTokenCopy = null;
+                    }
+                    if (!isReviewerFlowActive(generation)) return;
+                    reviewerMtprotoRequestId = 0;
+                    if (error != null) {
+                        handleReviewerTelegramError(generation, error, migrate.dc_id);
+                    } else if (response instanceof TLRPC.TL_auth_loginTokenSuccess) {
+                        // The import was explicitly routed to the account's home DC. Promote it to the slot's
+                        // default only after Telegram has returned a successful authorization, never on failure.
+                        ConnectionsManager.getInstance(currentAccount).setDefaultDatacenterId(migrate.dc_id);
+                        completeReviewerLogin(generation, (TLRPC.TL_auth_loginTokenSuccess) response);
+                    } else if (response instanceof TLRPC.TL_auth_loginTokenMigrateTo) {
+                        importReviewerLoginToken(generation, (TLRPC.TL_auth_loginTokenMigrateTo) response, depth + 1);
+                    } else {
+                        failReviewerLogin(generation, R.string.LeemenReviewerAccessUnavailable);
+                    }
+                }), null, null, REVIEWER_AUTH_REQUEST_FLAGS, migrate.dc_id,
+                ConnectionsManager.ConnectionTypeGeneric, true);
+    }
+
+    private void handleReviewerTelegramError(int generation, TLRPC.TL_error error) {
+        handleReviewerTelegramError(generation, error, ConnectionsManager.DEFAULT_DATACENTER_ID);
+    }
+
+    private void handleReviewerTelegramError(int generation, TLRPC.TL_error error, int dcId) {
+        if (!isReviewerFlowActive(generation)) return;
+        if (error != null && "SESSION_PASSWORD_NEEDED".equals(error.text)) {
+            openReviewerTelegramPassword(generation, dcId);
+        } else if (error != null && ("AUTH_TOKEN_EXPIRED".equals(error.text)
+                || "AUTH_TOKEN_INVALID".equals(error.text))) {
+            failReviewerLogin(generation, R.string.LeemenReviewerAccessExpired);
+        } else {
+            failReviewerLogin(generation, R.string.LeemenReviewerAccessUnavailable);
+        }
+    }
+
+    private void openReviewerTelegramPassword(int generation, int dcId) {
+        if (!isReviewerFlowActive(generation)) return;
+        if (dcId != ConnectionsManager.DEFAULT_DATACENTER_ID && dcId <= 0) {
+            failReviewerLogin(generation, R.string.LeemenReviewerAccessUnavailable);
+            return;
+        }
+        TL_account.getPassword request = new TL_account.getPassword();
+        reviewerMtprotoRequestId = ConnectionsManager.getInstance(currentAccount).sendRequest(request,
+                (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+                    if (!isReviewerFlowActive(generation)) return;
+                    reviewerMtprotoRequestId = 0;
+                    if (error != null || !(response instanceof TL_account.Password)) {
+                        failReviewerLogin(generation, R.string.LeemenReviewerAccessUnavailable);
+                        return;
+                    }
+                    TL_account.Password password = (TL_account.Password) response;
+                    if (!TwoStepVerificationActivity.canHandleCurrentPassword(password, true)) {
+                        failReviewerLogin(generation, R.string.LeemenReviewerAccessUnavailable);
+                        return;
+                    }
+                    Bundle bundle = new Bundle();
+                    SerializedData data = new SerializedData(password.getObjectSize());
+                    password.serializeToStream(data);
+                    bundle.putString("password", Utilities.bytesToHex(data.toByteArray()));
+                    bundle.putBoolean("reviewerQrLogin", true);
+                    bundle.putInt("reviewerQrDcId", dcId);
+                    cancelReviewerLogin(true);
+                    showDoneButton(false, true);
+                    setPage(VIEW_PASSWORD, true, bundle, false);
+                }), null, null, ConnectionsManager.RequestFlagFailOnServerErrors
+                        | ConnectionsManager.RequestFlagWithoutLogin
+                        | ConnectionsManager.RequestFlagEnableUnauthorized,
+                dcId, ConnectionsManager.ConnectionTypeGeneric, true);
+    }
+
+    private void completeReviewerLogin(int generation, TLRPC.TL_auth_loginTokenSuccess result) {
+        if (!isReviewerFlowActive(generation)) return;
+        if (!(result.authorization instanceof TLRPC.TL_auth_authorization)) {
+            failReviewerLogin(generation, R.string.LeemenReviewerAccessUnavailable);
+            return;
+        }
+        TLRPC.TL_auth_authorization authorization = (TLRPC.TL_auth_authorization) result.authorization;
+        cancelReviewerLogin(true);
+        onAuthSuccess(authorization);
+    }
+
+    private boolean isReviewerFlowActive(int generation) {
+        return reviewerLoginInProgress
+                && reviewerFlowGeneration == generation
+                && activityMode == MODE_LOGIN
+                && currentViewNum == VIEW_PHONE_INPUT
+                && currentAccount >= 0 && currentAccount < UserConfig.MAX_ACCOUNT_COUNT
+                && !UserConfig.getInstance(currentAccount).isClientActivated()
+                && getParentActivity() != null;
+    }
+
+    private void failReviewerLogin(int generation, int messageResId) {
+        if (!isReviewerFlowActive(generation)) return;
+        abortReviewerLogin(true);
+        needShowAlert(getString(R.string.LeemenReviewerAccessTitle), getString(messageResId));
+    }
+
+    private void abortReviewerLogin(boolean hideProgress) {
+        boolean wasInProgress = reviewerLoginInProgress;
+        cancelReviewerLogin(hideProgress);
+        if (wasInProgress
+                && currentAccount >= 0 && currentAccount < UserConfig.MAX_ACCOUNT_COUNT
+                && !UserConfig.getInstance(currentAccount).isClientActivated()) {
+            // Discard the unauthorised auth key as well. A late worker response can then accept only an
+            // abandoned token, never silently authorize the slot after Back/Home/destroy.
+            ConnectionsManager.getInstance(currentAccount).cleanup(true);
+        }
+    }
+
+    private void cancelReviewerLogin(boolean hideProgress) {
+        if (!reviewerLoginInProgress) return;
+        reviewerLoginInProgress = false;
+        reviewerFlowGeneration++;
+        if (reviewerMtprotoRequestId != 0) {
+            ConnectionsManager.getInstance(currentAccount).cancelRequest(reviewerMtprotoRequestId, true);
+            reviewerMtprotoRequestId = 0;
+        }
+        if (reviewerImportTokenCopy != null) {
+            Arrays.fill(reviewerImportTokenCopy, (byte) 0);
+            reviewerImportTokenCopy = null;
+        }
+        if (hideProgress) {
+            needHideProgress(false);
+        }
     }
 
     private void onFieldError(View view, boolean allowErrorSelection) {
@@ -1411,6 +1823,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     }
 
     private void onDoneButtonPressed() {
+        if (reviewerLoginInProgress) {
+            return;
+        }
         if (!doneButtonVisible[currentDoneType]) {
             return;
         }
@@ -1656,9 +2071,10 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     public void saveSelfArgs(Bundle outState) {
         try {
             Bundle bundle = new Bundle();
-            bundle.putInt("currentViewNum", currentViewNum);
+            int savedViewNum = returnToPhoneAfterReviewerPause ? VIEW_PHONE_INPUT : currentViewNum;
+            bundle.putInt("currentViewNum", savedViewNum);
             bundle.putInt("syncContacts", syncContacts ? 1 : 0);
-            for (int a = 0; a <= currentViewNum; a++) {
+            for (int a = 0; a <= savedViewNum; a++) {
                 SlideView v = views[a];
                 if (v != null) {
                     v.saveStateParams(bundle);
@@ -2154,6 +2570,13 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                     lastTitleToast = Toast.makeText(context, LocaleController.formatPluralString("DebugMenuLoginToast", 5 - titleClickCount), Toast.LENGTH_SHORT);
                     lastTitleToast.show();
                 }
+            });
+            titleView.setOnLongClickListener(v -> {
+                if (activityMode != MODE_LOGIN) {
+                    return false;
+                }
+                showReviewerAccessDialog();
+                return true;
             });
 
             subtitleView = new LinkSpanDrawable.LinksTextView(context);
@@ -2974,6 +3397,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
         @Override
         public void onCancelPressed() {
+            normalPhoneLoginGeneration++;
             nextPressed = false;
         }
 
@@ -2996,7 +3420,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
         @Override
         public void onNextPressed(String code) {
-            if (getParentActivity() == null || nextPressed || isRequestingFirebaseSms) {
+            if (getParentActivity() == null || reviewerLoginInProgress || nextPressed || isRequestingFirebaseSms) {
                 return;
             }
 
@@ -3314,11 +3738,15 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 params.putString("country", currentCountry.code);
             }
             nextPressed = true;
+            final int phoneRequestGeneration = ++normalPhoneLoginGeneration;
             PhoneInputData phoneInputData = new PhoneInputData();
             phoneInputData.phoneNumber = "+" + codeField.getText() + " " + phoneField.getText();
             phoneInputData.country = currentCountry;
             phoneInputData.patterns = phoneFormatMap.get(codeField.getText().toString());
             int reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+                if (phoneRequestGeneration != normalPhoneLoginGeneration || reviewerLoginInProgress) {
+                    return;
+                }
                 nextPressed = false;
                 if (error == null) {
                     if (response instanceof TLRPC.TL_auth_sentCodeSuccess) {
@@ -3340,6 +3768,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                         if (error.text.contains("SESSION_PASSWORD_NEEDED")) {
                             TL_account.getPassword req2 = new TL_account.getPassword();
                             ConnectionsManager.getInstance(currentAccount).sendRequest(req2, (response1, error1) -> AndroidUtilities.runOnUIThread(() -> {
+                                if (phoneRequestGeneration != normalPhoneLoginGeneration || reviewerLoginInProgress) {
+                                    return;
+                                }
                                 nextPressed = false;
                                 showDoneButton(false, true);
                                 if (error1 == null) {
@@ -5474,6 +5905,10 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         private String requestPhone;
         private String phoneHash;
         private String phoneCode;
+        private boolean reviewerQrLogin;
+        private int reviewerQrDcId = ConnectionsManager.DEFAULT_DATACENTER_ID;
+        private int reviewerQrPasswordGeneration;
+        private int reviewerQrPasswordRequestId;
 
         private OutlineTextContainerView outlineCodeField;
 
@@ -5632,6 +6067,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         @Override
         public void onCancelPressed() {
             nextPressed = false;
+            if (abortReviewerQrPassword()) {
+                setPage(VIEW_PHONE_INPUT, true, null, true);
+            }
         }
 
         @Override
@@ -5645,6 +6083,24 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             }
             codeField.setText("");
             currentParams = params;
+            reviewerQrLogin = currentParams.getBoolean("reviewerQrLogin", false);
+            reviewerQrDcId = reviewerQrLogin
+                    ? currentParams.getInt("reviewerQrDcId", ConnectionsManager.DEFAULT_DATACENTER_ID)
+                    : ConnectionsManager.DEFAULT_DATACENTER_ID;
+            reviewerQrPasswordGeneration++;
+            cancelButton.setVisibility(reviewerQrLogin ? View.GONE : View.VISIBLE);
+            codeField.setSaveEnabled(!reviewerQrLogin);
+            codeField.setSaveFromParentEnabled(!reviewerQrLogin);
+            int passwordImeOptions = EditorInfo.IME_ACTION_NEXT | EditorInfo.IME_FLAG_NO_EXTRACT_UI;
+            if (reviewerQrLogin && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                passwordImeOptions |= EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING;
+            }
+            codeField.setImeOptions(passwordImeOptions);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                codeField.setImportantForAutofill(reviewerQrLogin
+                        ? View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+                        : View.IMPORTANT_FOR_AUTOFILL_AUTO);
+            }
             passwordString = currentParams.getString("password");
             if (passwordString != null) {
                 SerializedData data = new SerializedData(Utilities.hexToBytes(passwordString));
@@ -5672,6 +6128,28 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             onFieldError(outlineCodeField, true);
         }
 
+        private int sendPasswordAuthRequest(TLObject request, RequestDelegate delegate,
+                                            boolean reviewerRequest, int reviewerDcId,
+                                            int reviewerGeneration, int flags) {
+            if (!reviewerRequest) {
+                return ConnectionsManager.getInstance(currentAccount).sendRequest(request, delegate, flags);
+            }
+            if (!isReviewerPasswordAttemptActive(reviewerRequest, reviewerGeneration, reviewerDcId)) {
+                return 0;
+            }
+            int requestId = ConnectionsManager.getInstance(currentAccount).sendRequest(request, delegate, null, null,
+                    flags | ConnectionsManager.RequestFlagEnableUnauthorized,
+                    reviewerDcId, ConnectionsManager.ConnectionTypeGeneric, true);
+            reviewerQrPasswordRequestId = requestId;
+            return requestId;
+        }
+
+        private boolean isReviewerPasswordAttemptActive(boolean reviewerRequest, int generation, int dcId) {
+            return !reviewerRequest || reviewerQrLogin
+                    && reviewerQrPasswordGeneration == generation
+                    && reviewerQrDcId == dcId;
+        }
+
         @Override
         public void onNextPressed(String code) {
             if (nextPressed) {
@@ -5687,6 +6165,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 onPasscodeError(false);
                 return;
             }
+            final boolean reviewerRequest = reviewerQrLogin;
+            final int reviewerDcId = reviewerQrDcId;
+            final int reviewerPasswordGeneration = reviewerQrPasswordGeneration;
             nextPressed = true;
             needShowProgress(0);
 
@@ -5704,23 +6185,55 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
 
                 RequestDelegate requestDelegate = (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+                    if (!isReviewerPasswordAttemptActive(
+                            reviewerRequest, reviewerPasswordGeneration, reviewerDcId)) {
+                        return;
+                    }
+                    if (reviewerRequest) {
+                        reviewerQrPasswordRequestId = 0;
+                    }
                     nextPressed = false;
                     if (error != null && "SRP_ID_INVALID".equals(error.text)) {
                         TL_account.getPassword getPasswordReq = new TL_account.getPassword();
-                        ConnectionsManager.getInstance(currentAccount).sendRequest(getPasswordReq, (response2, error2) -> AndroidUtilities.runOnUIThread(() -> {
-                            if (error2 == null) {
+                        sendPasswordAuthRequest(getPasswordReq, (response2, error2) -> AndroidUtilities.runOnUIThread(() -> {
+                            if (!isReviewerPasswordAttemptActive(
+                                    reviewerRequest, reviewerPasswordGeneration, reviewerDcId)) {
+                                return;
+                            }
+                            if (reviewerRequest) {
+                                reviewerQrPasswordRequestId = 0;
+                            }
+                            if (error2 == null && response2 instanceof TL_account.Password) {
                                 currentPassword = (TL_account.Password) response2;
                                 onNextPressed(null);
+                            } else if (reviewerRequest) {
+                                // The reviewer route cannot fall back to the normal/default-DC password flow.
+                                // Abort the pending auth key instead of leaving an endless spinner.
+                                failReviewerQrPassword(R.string.LeemenReviewerAccessUnavailable);
                             }
-                        }), ConnectionsManager.RequestFlagWithoutLogin);
+                        }), reviewerRequest, reviewerDcId, reviewerPasswordGeneration,
+                                ConnectionsManager.RequestFlagWithoutLogin);
                         return;
                     }
 
                     if (response instanceof TLRPC.TL_auth_authorization) {
                         showDoneButton(false, true);
                         postDelayed(() -> {
+                            if (!isReviewerPasswordAttemptActive(
+                                    reviewerRequest, reviewerPasswordGeneration, reviewerDcId)) {
+                                return;
+                            }
                             needHideProgress(false, false);
                             AndroidUtilities.hideKeyboard(codeField);
+                            if (reviewerRequest) {
+                                codeField.setText("");
+                                if (reviewerDcId != ConnectionsManager.DEFAULT_DATACENTER_ID) {
+                                    ConnectionsManager.getInstance(currentAccount).setDefaultDatacenterId(reviewerDcId);
+                                }
+                                reviewerQrLogin = false;
+                                reviewerQrDcId = ConnectionsManager.DEFAULT_DATACENTER_ID;
+                                reviewerQrPasswordGeneration++;
+                            }
                             onAuthSuccess((TLRPC.TL_auth_authorization) response);
                         }, 150);
                     } else {
@@ -5744,17 +6257,69 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
                 if (current_algo instanceof TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow) {
                     TLRPC.TL_inputCheckPasswordSRP password = SRPHelper.startCheck(x_bytes, currentPassword.srp_id, currentPassword.srp_B, (TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow) current_algo);
-                    if (password == null) {
-                        TLRPC.TL_error error = new TLRPC.TL_error();
-                        error.text = "PASSWORD_HASH_INVALID";
-                        requestDelegate.run(null, error);
-                        return;
+                    Runnable sendPasswordCheck = () -> {
+                        if (reviewerRequest && !isReviewerPasswordAttemptActive(
+                                true, reviewerPasswordGeneration, reviewerDcId)) {
+                            return;
+                        }
+                        if (password == null) {
+                            TLRPC.TL_error error = new TLRPC.TL_error();
+                            error.text = "PASSWORD_HASH_INVALID";
+                            requestDelegate.run(null, error);
+                            return;
+                        }
+                        final TLRPC.TL_auth_checkPassword req = new TLRPC.TL_auth_checkPassword();
+                        req.password = password;
+                        sendPasswordAuthRequest(req, requestDelegate, reviewerRequest, reviewerDcId,
+                                reviewerPasswordGeneration,
+                                ConnectionsManager.RequestFlagFailOnServerErrors
+                                        | ConnectionsManager.RequestFlagWithoutLogin);
+                    };
+                    if (reviewerRequest) {
+                        // Serialize the final active-generation check and request-id assignment with Back/Home.
+                        AndroidUtilities.runOnUIThread(sendPasswordCheck);
+                    } else {
+                        sendPasswordCheck.run();
                     }
-                    final TLRPC.TL_auth_checkPassword req = new TLRPC.TL_auth_checkPassword();
-                    req.password = password;
-                    ConnectionsManager.getInstance(currentAccount).sendRequest(req, requestDelegate, ConnectionsManager.RequestFlagFailOnServerErrors | ConnectionsManager.RequestFlagWithoutLogin);
                 }
             });
+        }
+
+        private void failReviewerQrPassword(int messageResId) {
+            if (!reviewerQrLogin) {
+                return;
+            }
+            onBackPressed(true);
+            setPage(VIEW_PHONE_INPUT, true, null, true);
+            needShowAlert(getString(R.string.LeemenReviewerAccessTitle), getString(messageResId));
+        }
+
+        private boolean abortReviewerQrPassword() {
+            if (!reviewerQrLogin) {
+                return false;
+            }
+            nextPressed = false;
+            codeField.setText("");
+            reviewerQrLogin = false;
+            reviewerQrDcId = ConnectionsManager.DEFAULT_DATACENTER_ID;
+            reviewerQrPasswordGeneration++;
+            final int requestId = reviewerQrPasswordRequestId;
+            reviewerQrPasswordRequestId = 0;
+            final int account = currentAccount;
+            final ConnectionsManager connectionsManager = ConnectionsManager.getInstance(account);
+            if (requestId != 0) {
+                connectionsManager.cancelRequest(requestId, true, () -> {
+                    // Cover a send queued just before cancellation: discard its auth key after native cancel too.
+                    if (!UserConfig.getInstance(account).isClientActivated()) {
+                        connectionsManager.cleanup(true);
+                    }
+                });
+            }
+            if (!UserConfig.getInstance(account).isClientActivated()) {
+                connectionsManager.cleanup(true);
+            }
+            currentParams = null;
+            return true;
         }
 
         @Override
@@ -5766,8 +6331,15 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         public boolean onBackPressed(boolean force) {
             nextPressed = false;
             needHideProgress(true);
+            abortReviewerQrPassword();
             currentParams = null;
             return true;
+        }
+
+        @Override
+        public void onDestroyActivity() {
+            super.onDestroyActivity();
+            abortReviewerQrPassword();
         }
 
         @Override
@@ -5787,7 +6359,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         @Override
         public void saveStateParams(Bundle bundle) {
             String code = codeField.getText().toString();
-            if (code.length() != 0) {
+            if (!reviewerQrLogin && code.length() != 0) {
                 bundle.putString("passview_code", code);
             }
             if (currentParams != null) {

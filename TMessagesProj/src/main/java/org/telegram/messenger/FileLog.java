@@ -186,6 +186,11 @@ public class FileLog {
             privateFields.add("status_text");
             privateFields.add("bytes");
             privateFields.add("secret");
+            // Authentication material must never enter private-build MTProto request dumps. In particular,
+            // auth.export/importLoginToken carries a one-time login token and the app API hash.
+            privateFields.add("token");
+            privateFields.add("password");
+            privateFields.add("api_hash");
             privateFields.add("stripped_thumb");
             privateFields.add("strippedBitmap");
 
