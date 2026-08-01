@@ -122,7 +122,12 @@ public class LeemenPremiumActivity extends BaseFragment implements NotificationC
         root.setBackgroundColor(BG);
 
         scrollView = new ScrollView(context);
-        scrollView.setFillViewport(true);
+        // With an active subscription the plan selector and purchase bar are hidden, so the remaining
+        // content can be shorter than a tablet pane. Filling the viewport then remeasures the vertical
+        // content to the pane height; the hero's MATCH_PARENT particle layer absorbs that extra height
+        // and pushes the feature rows below the fold. The root already paints the full dark background,
+        // so keeping the scroll child at its natural height is both safe and visually consistent.
+        scrollView.setFillViewport(false);
 
         LinearLayout content = new LinearLayout(context);
         content.setOrientation(LinearLayout.VERTICAL);
