@@ -489,14 +489,12 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     }
 
     /**
-     * Opens a new-account login without letting the Private Space focus-loss guard destroy it.
+     * Opens a new-account login while preserving the current Private Space state.
      *
-     * <p>The phone page probes Android Credential Manager for a passkey as soon as it appears. That
-     * system surface pauses {@link LaunchActivity}; while Private Space is active, the deniability
-     * guard responds by leaving the space and popping every fragment above the tabs root. If login
-     * was already attached, it is popped too and Android reports that Leemen cancelled the request.
-     * Leave Private Space first, then attach login from the activity-owned root after navigation has
-     * been reset.</p>
+     * <p>The phone page can open Android Credential Manager, which pauses {@link LaunchActivity} and
+     * triggers the normal Private Space auto-exit. The login itself is safe to keep visible, so it is
+     * marked as the sole fragment that may survive that navigation reset; private chats and settings
+     * are still removed normally.</p>
      */
     public static void presentForAddingAccount(BaseFragment source, int account) {
         presentForAddingAccount(source, new LoginActivity(account));
@@ -519,29 +517,22 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             return;
         }
 
-        final LaunchActivity launchActivity = (LaunchActivity) parentActivity;
         if (UserConfig.selectedAccount != sourceAccount || !UserConfig.isValidAccount(sourceAccount)) {
             return;
         }
-        SecondSpaceController privateSpace = SecondSpaceController.getInstance(sourceAccount);
-        if (!privateSpace.isActive()) {
-            source.presentFragment(loginActivity);
-            return;
-        }
-
-        Runnable openLogin = () -> {
-            if (LaunchActivity.instance != launchActivity
-                    || launchActivity.isFinishing()
-                    || UserConfig.selectedAccount != sourceAccount
-                    || !UserConfig.isValidAccount(sourceAccount)
-                    || UserConfig.getInstance(targetAccount).isClientActivated()) {
-                return;
-            }
-            launchActivity.presentFragment(loginActivity);
-        };
-        privateSpace.setActive(false);
-        AndroidUtilities.runOnUIThread(openLogin);
+        loginActivity.preserveOnPrivateSpaceExit =
+                SecondSpaceController.getInstance(sourceAccount).isActive();
+        source.presentFragment(loginActivity);
     }
+
+    /** The add-account screen is neutral UI and may remain after a real Private Space auto-exit. */
+    public boolean shouldSurvivePrivateSpaceNavigationReset() {
+        // Keep the marker through the successful-login handoff: needFinishActivity clears
+        // newAccount before switchToAccount turns off the outgoing owner's Private Space.
+        return preserveOnPrivateSpaceExit && activityMode == MODE_LOGIN;
+    }
+
+    private boolean preserveOnPrivateSpaceExit;
 
     /** When &gt;= 0, this is a brand-new account being added from the Private Space "add account" flow:
      *  once login succeeds, the new account is marked hidden for this owner account so it becomes a

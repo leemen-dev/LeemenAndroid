@@ -6898,9 +6898,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     /**
-     * Pops every fragment stacked above the root tabs fragment and selects the Chats tab, with no
-     * animation. Used for every Private Space mode change and focus loss so neither space retains
-     * an open chat (including the separate right pane on wide/tablet layouts).
+     * Pops every private fragment stacked above the root tabs fragment and selects the Chats tab,
+     * with no animation. An add-account LoginActivity opened from Private Space is neutral UI and
+     * may survive a real focus-loss auto-exit; chats and settings are still removed in every stack.
      */
     public void resetNavigationAfterPrivateSpaceModeChange(int account) {
         if (account != UserConfig.selectedAccount) {
@@ -6916,7 +6916,8 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         if (mainTabs == null) {
             return;
         }
-        popFragmentsAboveTabsRoot(actionBarLayout, mainTabs);
+        BaseFragment mainSurvivor = privateSpaceNavigationResetSurvivor(actionBarLayout);
+        popFragmentsAboveTabsRoot(actionBarLayout, mainTabs, mainSurvivor);
         if (AndroidUtilities.isTablet()) {
             if (rightActionBarLayout != null) {
                 rightActionBarLayout.removeAllFragments();
@@ -6930,13 +6931,16 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                     }
                 }
             }
-            // MainTabsActivity belongs to the primary stack and can never be a layer fragment.
-            // Removing the final tablet layer one-by-one starts the layers layout's alpha-close
-            // transition even when immediate removal was requested. Add-account login is opened on
-            // the next UI loop and would then be rejected by that still-transitioning layout. Clear
-            // the layer stack synchronously so the next fragment can be presented deterministically.
+            BaseFragment layerSurvivor = privateSpaceNavigationResetSurvivor(layersActionBarLayout);
             if (layersActionBarLayout != null) {
-                layersActionBarLayout.removeAllFragments();
+                if (layerSurvivor == null) {
+                    // MainTabsActivity belongs to the primary stack and can never be a layer
+                    // fragment. Clear tablet layers synchronously; removing the final layer through
+                    // removeFragmentFromStack starts an alpha-close transition despite immediate=true.
+                    layersActionBarLayout.removeAllFragments();
+                } else {
+                    removeFragmentsExcept(layersActionBarLayout, layerSurvivor);
+                }
             }
             if (layersActionBarLayout != null && layersActionBarLayout.getFragmentStack().isEmpty()) {
                 layersActionBarLayout.getView().setVisibility(View.GONE);
@@ -6945,7 +6949,20 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         mainTabs.switchToChatsTab(false);
     }
 
-    private static void popFragmentsAboveTabsRoot(INavigationLayout layout, MainTabsActivity root) {
+    private static BaseFragment privateSpaceNavigationResetSurvivor(INavigationLayout layout) {
+        if (layout == null || layout.getFragmentStack().isEmpty()) {
+            return null;
+        }
+        BaseFragment top = layout.getFragmentStack().get(layout.getFragmentStack().size() - 1);
+        if (top instanceof LoginActivity
+                && ((LoginActivity) top).shouldSurvivePrivateSpaceNavigationReset()) {
+            return top;
+        }
+        return null;
+    }
+
+    private static void popFragmentsAboveTabsRoot(
+            INavigationLayout layout, MainTabsActivity root, BaseFragment survivor) {
         if (layout == null) {
             return;
         }
@@ -6955,7 +6972,22 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             if (fragment == root) {
                 break;
             }
-            layout.removeFragmentFromStack(fragment, true);
+            if (fragment != survivor) {
+                layout.removeFragmentFromStack(fragment, true);
+            }
+        }
+    }
+
+    private static void removeFragmentsExcept(INavigationLayout layout, BaseFragment survivor) {
+        if (layout == null) {
+            return;
+        }
+        List<BaseFragment> snapshot = new ArrayList<>(layout.getFragmentStack());
+        for (int i = snapshot.size() - 1; i >= 0; i--) {
+            BaseFragment fragment = snapshot.get(i);
+            if (fragment != survivor) {
+                layout.removeFragmentFromStack(fragment, true);
+            }
         }
     }
 
