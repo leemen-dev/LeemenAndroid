@@ -145,6 +145,7 @@ public class ItemOptions {
     private final float[] point = new float[2];
 
     private Runnable dismissListener;
+    private Runnable fullyDismissListener;
 
     private float translateX, translateY;
     private int dimAlpha;
@@ -1332,6 +1333,10 @@ public class ItemOptions {
                     dismissListener.run();
                     dismissListener = null;
                 }
+                if (fullyDismissListener != null) {
+                    fullyDismissListener.run();
+                    fullyDismissListener = null;
+                }
             }
         });
         actionBarPopupWindow.setOutsideTouchable(true);
@@ -1589,6 +1594,15 @@ public class ItemOptions {
         return this;
     }
 
+    /**
+     * Runs after the popup window has actually been removed, including its dismissal animation.
+     * Unlike {@link #setOnDismiss(Runnable)}, this callback is not fired when dismissal merely starts.
+     */
+    public ItemOptions setOnFullyDismiss(Runnable fullyDismissListener) {
+        this.fullyDismissListener = fullyDismissListener;
+        return this;
+    }
+
     public void dismiss() {
         if (dontDismiss) {
             dontDismiss = false;
@@ -1598,6 +1612,14 @@ public class ItemOptions {
             actionBarPopupWindow.dismiss();
         } else if (dismissListener != null) {
             dismissListener.run();
+            dismissListener = null;
+            if (fullyDismissListener != null) {
+                fullyDismissListener.run();
+                fullyDismissListener = null;
+            }
+        } else if (fullyDismissListener != null) {
+            fullyDismissListener.run();
+            fullyDismissListener = null;
         }
     }
 

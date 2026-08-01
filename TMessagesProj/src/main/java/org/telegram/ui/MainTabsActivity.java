@@ -407,6 +407,8 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             return 0;
         });
 
+        final int[] pendingAddAccount = {-1};
+        final boolean[] pendingAccountLimit = {false};
         ItemOptions o = ItemOptions.makeOptions(this, button);
         if (UserConfig.getActivatedAccountsCount() < UserConfig.MAX_ACCOUNT_COUNT) {
             o.add(R.drawable.msg_addbot, getString(R.string.AddAccount), () -> {
@@ -424,12 +426,28 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
                     freeAccounts -= (UserConfig.MAX_ACCOUNT_COUNT - UserConfig.MAX_ACCOUNT_DEFAULT_COUNT);
                 }
                 if (freeAccounts > 0 && availableAccount != null) {
-                    LoginActivity.presentForAddingAccount(this, availableAccount);
+                    // ItemOptions invokes item callbacks before its popup has actually finished
+                    // dismissing. Starting Credential Manager while that window is still attached can
+                    // cancel the login flow on wide layouts. Defer the action to the real popup-dismiss
+                    // event below instead of guessing an animation duration.
+                    pendingAddAccount[0] = availableAccount;
                 } else if (!UserConfig.hasPremiumOnAccounts()) {
-                    showDialog(new LimitReachedBottomSheet(this, getContext(), TYPE_ACCOUNTS, currentAccount, null));
+                    pendingAccountLimit[0] = true;
                 }
             });
         }
+
+        o.setOnFullyDismiss(() -> {
+            int account = pendingAddAccount[0];
+            boolean showLimit = pendingAccountLimit[0];
+            pendingAddAccount[0] = -1;
+            pendingAccountLimit[0] = false;
+            if (account >= 0) {
+                LoginActivity.presentForAddingAccount(this, account);
+            } else if (showLimit) {
+                showDialog(new LimitReachedBottomSheet(this, getContext(), TYPE_ACCOUNTS, currentAccount, null));
+            }
+        });
 
         if (BuildConfig.DEBUG_PRIVATE_VERSION) {
             o.add(R.drawable.menu_download_round, "Dump Canvas", () -> AndroidUtilities.runOnUIThread(this::dumpCanvas, 1000));
