@@ -6930,7 +6930,14 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                     }
                 }
             }
-            popFragmentsAboveTabsRoot(layersActionBarLayout, mainTabs);
+            // MainTabsActivity belongs to the primary stack and can never be a layer fragment.
+            // Removing the final tablet layer one-by-one starts the layers layout's alpha-close
+            // transition even when immediate removal was requested. Add-account login is opened on
+            // the next UI loop and would then be rejected by that still-transitioning layout. Clear
+            // the layer stack synchronously so the next fragment can be presented deterministically.
+            if (layersActionBarLayout != null) {
+                layersActionBarLayout.removeAllFragments();
+            }
             if (layersActionBarLayout != null && layersActionBarLayout.getFragmentStack().isEmpty()) {
                 layersActionBarLayout.getView().setVisibility(View.GONE);
             }
