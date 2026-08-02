@@ -24,6 +24,9 @@
 # Without this rule R8 removes private bridge methods such as Native.fromNative(...),
 # causing release-only UnsatisfiedLinkError failures during Native.initIDs().
 -keep class com.sun.jna.** { *; }
+# JNA also ships desktop-only AWT helpers. They are unreachable on Android, but keeping
+# all JNI-resolved members makes R8 validate their references to the absent java.awt API.
+-dontwarn java.awt.**
 
 -keep class com.google.android.exoplayer2.ext.** { *; }
 -keep class com.google.android.exoplayer2.extractor.FlacStreamMetadata { *; }
