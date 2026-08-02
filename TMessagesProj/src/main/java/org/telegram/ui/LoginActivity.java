@@ -2089,26 +2089,31 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         if (getParentActivity() instanceof LaunchActivity) {
             if (newAccount) {
                 newAccount = false;
-                if (privateSpaceHideForOwner >= 0) {
-                    // Leemen PS add-account: the new account was already hidden for the owner in
-                    // onAuthSuccess. Do NOT switch the visible account onto it — it's a hidden account,
-                    // and leaving it selected would strand the user on it and trip the deniability bounce
-                    // (LaunchActivity resets selection off any hidden-by-any account on pause/relaunch).
-                    // Stay on the owner (still the selected account) and just pop back, exactly like
-                    // hiding an existing account never switches the visible account.
+                if (privateSpaceHideForOwner >= 0
+                        && (UserConfig.selectedAccount != privateSpaceHideForOwner
+                        || !UserConfig.isValidAccount(privateSpaceHideForOwner)
+                        || !SecondSpaceController.getInstance(privateSpaceHideForOwner)
+                                .isAccountHidden(currentAccount))) {
+                    // The owner disappeared or the hide operation was rejected (for example, Premium
+                    // expired during authentication). Do not enter the target as an ordinary visible
+                    // account: close the completed login flow and remain on the current safe account.
                     finishFragment();
-                } else {
-                    pendingSwitchingAccount = true;
-                    ((LaunchActivity) getParentActivity()).switchToAccount(currentAccount, true, obj -> {
-                        Bundle args = new Bundle();
-                        args.putBoolean("afterSignup", afterSignup);
-                        MainTabsActivity mainTabsActivity = new MainTabsActivity();
-                        mainTabsActivity.prepareDialogsActivity(args);
-                        return mainTabsActivity;
-                    });
-                    pendingSwitchingAccount = false;
-                    finishFragment();
+                    return;
                 }
+                // Switch to every newly added account, including one added from Private Space.
+                // For the latter, onAuthSuccess has already attached it to the owner's hide-list;
+                // LaunchActivity records that owner as preHiddenAccount and safely returns to it on
+                // the next focus loss, so showing the new hidden account now does not weaken deniability.
+                pendingSwitchingAccount = true;
+                ((LaunchActivity) getParentActivity()).switchToAccount(currentAccount, true, obj -> {
+                    Bundle args = new Bundle();
+                    args.putBoolean("afterSignup", afterSignup);
+                    MainTabsActivity mainTabsActivity = new MainTabsActivity();
+                    mainTabsActivity.prepareDialogsActivity(args);
+                    return mainTabsActivity;
+                });
+                pendingSwitchingAccount = false;
+                finishFragment();
             } else {
                 if (afterSignup && showSetPasswordConfirm) {
                     TwoStepVerificationSetupActivity twoStepVerification = new TwoStepVerificationSetupActivity(TwoStepVerificationSetupActivity.TYPE_INTRO, null);
@@ -2188,8 +2193,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         org.telegram.messenger.leemen.LeemenIdentity.bindWithRetry(currentAccount);
 
         // Leemen: a brand-new account added via the Private Space "add account" flow is hidden for the
-        // owner the moment it's created — before needFinishActivity's auto-switch — so it never lingers
-        // visibly in the account switcher. Runs only when this LoginActivity was launched for that flow.
+        // owner the moment it's created — before needFinishActivity switches into it. The account is
+        // therefore visible for this authenticated session but never leaks into ordinary account
+        // switchers; LaunchActivity returns to the owner on the next focus loss.
         if (privateSpaceHideForOwner >= 0 && privateSpaceHideForOwner != currentAccount
                 && UserConfig.isValidAccount(privateSpaceHideForOwner)) {
             org.telegram.messenger.SecondSpaceController.getInstance(privateSpaceHideForOwner)

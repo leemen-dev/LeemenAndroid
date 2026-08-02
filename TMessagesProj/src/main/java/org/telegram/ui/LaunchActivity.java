@@ -1320,7 +1320,17 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             PrivateSpacePinDialog.showEnterSwitchPassword(
                 this,
                 mainAccount,
-                () -> doSwitchToAccountInternal(account, removeAll, dialogsActivityProvider),
+                () -> {
+                    // The PIN dialog is asynchronous. Revalidate both the selected owner and its
+                    // hide edge so a concurrent account/state change cannot turn this into an
+                    // unguarded switch to an ordinary account.
+                    if (UserConfig.selectedAccount == mainAccount
+                            && UserConfig.isValidAccount(mainAccount)
+                            && UserConfig.isValidAccount(account)
+                            && SecondSpaceController.getInstance(mainAccount).isAccountHidden(account)) {
+                        doSwitchToAccountInternal(account, removeAll, dialogsActivityProvider);
+                    }
+                },
                 null
             );
             return;
