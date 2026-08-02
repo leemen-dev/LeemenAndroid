@@ -19,6 +19,12 @@
 -keep class org.telegram.tgnet.NativeByteBuffer { *; }
 -keep class org.telegram.tgnet.RequestTimeDelegate { *; }
 -keep class org.telegram.tgnet.RequestDelegate { *; }
+
+# JNA's native dispatcher resolves Java classes and members by hard-coded JNI names.
+# Without this rule R8 removes private bridge methods such as Native.fromNative(...),
+# causing release-only UnsatisfiedLinkError failures during Native.initIDs().
+-keep class com.sun.jna.** { *; }
+
 -keep class com.google.android.exoplayer2.ext.** { *; }
 -keep class com.google.android.exoplayer2.extractor.FlacStreamMetadata { *; }
 -keep class com.google.android.exoplayer2.metadata.flac.PictureFrame { *; }
