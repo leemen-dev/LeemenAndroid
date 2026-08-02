@@ -265,17 +265,22 @@ public final class LeemenAccount {
         // Clearing it earlier can briefly expose former private-space chats in the still logged-in UI.
         setDisabled(account, true);
         requestServerDelete(account, () -> terminateOtherAppSessions(account, () -> {
-            // The local wipe and current-session logout run back-to-back in the same UI turn, so the
-            // dialogsNeedReload emitted by wipeAllLocalData cannot render an unhidden chat list in between.
-            wipeLocalAccountData(account);
-            if (onComplete != null) onComplete.run();
-            org.telegram.messenger.MessagesController.getInstance(account).performLogout(1);
+            // Preserve the owner's hide-list until performLogout snapshots it for the hidden-account cascade.
+            // The remaining generation cleanup and current-session logout still run in the same UI turn.
+            wipeLocalAccountDataBeforeLogout(account);
+            try {
+                if (onComplete != null) onComplete.run();
+            } finally {
+                org.telegram.messenger.MessagesController.getInstance(account).performLogout(1);
+            }
         }));
     }
 
-    private static void wipeLocalAccountData(int account) {
+    private static void wipeLocalAccountDataBeforeLogout(int account) {
         // Keep every cleanup step independent. A failure in Realtime/sync teardown must never skip the
-        // credential + PIN wipe that follows — this method is the destructive boundary for a deleted generation.
+        // credential wipe that follows. Private-space state is intentionally left intact here: both callers
+        // immediately invoke performLogout(), which must first snapshot the owner's hidden-account edges and
+        // cascade the logout before it performs the authoritative PIN/private-space slot wipe.
         try {
             LeemenRealtime.disconnect(account);
         } catch (Throwable e) {
@@ -285,11 +290,6 @@ public final class LeemenAccount {
             // Full sync teardown (in-memory CRDT cache + debounce/watchdog + persisted state). It also
             // invalidates already-running callbacks so they cannot restore the old PIN after this wipe.
             LeemenSync.clearAccount(account);
-        } catch (Throwable e) {
-            org.telegram.messenger.FileLog.e(e);
-        }
-        try {
-            org.telegram.messenger.SecondSpaceController.getInstance(account).wipeAllLocalData();
         } catch (Throwable e) {
             org.telegram.messenger.FileLog.e(e);
         }
@@ -324,11 +324,11 @@ public final class LeemenAccount {
     }
 
     /**
-     * The backend confirmed that this JWT's master-account generation was deleted elsewhere. Erase the
-     * private-space working copy before Telegram logout so a later, explicit registration cannot push stale
-     * local data into its brand-new master account. This is intentionally the same destructive local half as
-     * {@link #deleteAndLogoutEverywhere(int, Runnable)}, but it does not attempt to revoke sibling sessions:
-     * each surviving Leemen client observes the same server signal and logs itself out.
+     * The backend confirmed that this JWT's master-account generation was deleted elsewhere. Erase its
+     * generation-bound data and immediately enter Telegram logout. The logout snapshots and terminates hidden
+     * accounts before wiping the private-space working copy, so a later explicit registration cannot inherit or
+     * push stale local state. This does not attempt to revoke sibling sessions: each surviving Leemen client
+     * observes the same server signal and logs itself out.
      */
     public static void logoutDeletedGeneration(int account) {
         if (account < 0 || account >= org.telegram.messenger.UserConfig.MAX_ACCOUNT_COUNT) return;
@@ -336,7 +336,7 @@ public final class LeemenAccount {
         // Suppress bind/sync work during the atomic wipe → logout transition. performLogout clears this
         // slot-scoped flag together with the rest of the binding once the Telegram account is deactivated.
         setDisabled(account, true);
-        wipeLocalAccountData(account);
+        wipeLocalAccountDataBeforeLogout(account);
         org.telegram.messenger.MessagesController.getInstance(account).performLogout(1);
     }
 
