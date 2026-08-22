@@ -28,6 +28,7 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.leemen.LeemenAccount;
+import org.telegram.messenger.leemen.LeemenKey;
 import org.telegram.messenger.leemen.LeemenMaxPrivacy;
 import org.telegram.messenger.leemen.LeemenMnemonic;
 import org.telegram.ui.ActionBar.ActionBar;
@@ -271,7 +272,7 @@ public class LeemenPrivacyModeActivity extends BaseFragment implements Notificat
 
     public static void promptForUnwrap(Activity activity, int account) {
         if (activity == null || promptShowing) return;
-        if (LeemenAccount.hasKMaster(account)) return; // key already recovered — nothing to prompt for
+        if (LeemenKey.hasUsableKMaster(account)) return; // key already recovered — nothing to prompt for
         LinearLayout ll = new LinearLayout(activity);
         ll.setOrientation(LinearLayout.VERTICAL);
         ll.setPadding(dp(24), dp(8), dp(24), dp(4));

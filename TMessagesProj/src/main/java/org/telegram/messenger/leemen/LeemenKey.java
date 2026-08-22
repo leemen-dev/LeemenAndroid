@@ -36,13 +36,18 @@ public final class LeemenKey {
     /** Raw 32-byte K_master for an account, or null if not available yet. Caller should zero it after use. */
     public static byte[] getKMaster(int account) {
         String wrapped = LeemenAccount.getWrappedKMaster(account);
-        return wrapped == null ? null : LeemenKeyStore.unprotect(wrapped);
+        byte[] key = wrapped == null ? null : LeemenKeyStore.unprotect(wrapped);
+        if (key != null && key.length != LeemenCrypto.KEY_BYTES) {
+            Arrays.fill(key, (byte) 0);
+            return null;
+        }
+        return key;
     }
 
     /** Ensure this account has a usable K_master. Safe to call repeatedly; no-op once present. */
     public static void ensureKey(int account) {
         if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return;
-        if (LeemenAccount.hasKMaster(account)) return;
+        if (hasUsableKMaster(account)) return;
         // max mode needs the user's secret — prompt once per process; don't re-GET /account/key on every resume.
         if (LeemenAccount.isMaxPrivacy(account) && maxPromptShown.contains(account)) return;
         final String token = LeemenAccount.getToken(account);
@@ -98,7 +103,7 @@ public final class LeemenKey {
             String mode = optStr(keyResponse, "mode", null);
             if ("max".equals(mode)) {
                 if (!acceptMaxKeyResponse(account, token, keyResponse)) return false;
-                if (LeemenAccount.hasKMaster(account)) {
+                if (hasUsableKMaster(account)) {
                     LeemenSync.onRemoteChanged(account);
                 }
                 return true;
@@ -123,13 +128,9 @@ public final class LeemenKey {
                     return true;
                 }
                 boolean stored = storeKMaster(account, k, false);
-                if (!stored) {
-                    // Do not let the legacy fallback short-circuit on a key we now know is stale.
-                    LeemenAccount.dropKMaster(account);
-                }
                 return stored;
             }
-            if (LeemenAccount.hasKMaster(account)) {
+            if (hasUsableKMaster(account)) {
                 LeemenSync.onRemoteChanged(account);
                 return true;
             }
@@ -162,12 +163,36 @@ public final class LeemenKey {
         LeemenAccount.setWrapVersion(account, wrapVersion);
         LeemenMaxPrivacy.cacheAuthBootstrapKey(account, token, response);
         // K_master is only recoverable with the user's secret. Signal the UI once per account generation.
-        if (!LeemenAccount.hasKMaster(account) && maxPromptShown.add(account)) {
+        if (!hasUsableKMaster(account) && maxPromptShown.add(account)) {
             if (BuildVars.LOGS_ENABLED) FileLog.d("Leemen: account key mode=max — prompting for unwrap secret");
             org.telegram.messenger.NotificationCenter.getGlobalInstance()
                     .postNotificationName(org.telegram.messenger.NotificationCenter.leemenMaxKeyNeeded, account);
         }
         return true;
+    }
+
+    /**
+     * True only when the persisted envelope currently decrypts to a valid key. Never retains raw bytes.
+     *
+     * A non-empty preference is not proof that K_master is usable: an account-slot value can outlive the
+     * AndroidKeyStore entry that wrapped it (restore/reinstall), or come from a malformed older local state.
+     * Presence-only checks make {@link #ensureKey(int)} return forever while every sync receives a null key.
+     * Keep an unusable envelope until recovery succeeds: a Keystore/provider failure can be transient, and in
+     * max mode that envelope may be the only device-local copy. A successful fetch/unwrap overwrites it.
+     */
+    public static boolean hasUsableKMaster(int account) {
+        if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) return false;
+        if (!LeemenAccount.hasKMaster(account)) return false;
+        byte[] current = null;
+        try {
+            current = getKMaster(account);
+            if (current == null && BuildVars.LOGS_ENABLED) {
+                FileLog.d("Leemen: unusable local K_master envelope; requesting recovery account " + account);
+            }
+            return current != null;
+        } finally {
+            if (current != null) Arrays.fill(current, (byte) 0);
+        }
     }
 
     private static void wrapNewKey(int account, String token) {

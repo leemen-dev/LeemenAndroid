@@ -349,7 +349,20 @@ public final class LeemenSync {
 
         final byte[] key = LeemenKey.getKMaster(account);
         final String token = LeemenAccount.getToken(account);
-        if (key == null || token == null) { finish(account, generation); return; }
+        if (key == null) {
+            // A stale/non-decryptable local envelope used to strand the fail-closed gate forever: ready()
+            // saw a non-empty preference, but getKMaster() could not recover its bytes. Re-enter the normal
+            // read-only key acquisition path and fetch the same authoritative server K_master. The old local
+            // envelope is retained until successful recovery; storeKMaster() then replaces it and schedules sync.
+            LeemenKey.ensureKey(account);
+            finish(account, generation);
+            return;
+        }
+        if (token == null) {
+            Arrays.fill(key, (byte) 0);
+            finish(account, generation);
+            return;
+        }
 
         final LeemenSyncState st = state(account);
 

@@ -185,7 +185,7 @@ public final class LeemenAccountState {
             String mode = accountObject.get("privacy_mode").getAsString();
             if (!"default".equals(mode) && !"max".equals(mode)) return;
             LeemenAccount.setPrivacyMode(account, mode);
-            if (!LeemenAccount.hasKMaster(account)) {
+            if (!LeemenKey.hasUsableKMaster(account)) {
                 // In max mode this raises the unwrap prompt; in default it restores/bootstrap-wraps K_master.
                 LeemenKey.ensureKey(account);
             }
