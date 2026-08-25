@@ -1577,7 +1577,10 @@ public class ChatAttachAlertLocationLayout extends ChatAttachAlert.AttachAlertLa
                 boolean reset = true;
                 final File file = parentAlert.storyLocationPickerPhotoFile;
                 final boolean isVideo = parentAlert.storyLocationPickerFileIsVideo;
-                if (file != null) {
+                Activity activity = getParentActivity();
+                boolean canReadMediaLocation = Build.VERSION.SDK_INT < 29
+                    || activity != null && activity.checkSelfPermission(Manifest.permission.ACCESS_MEDIA_LOCATION) == PackageManager.PERMISSION_GRANTED;
+                if (file != null && canReadMediaLocation) {
                     try {
                         if (isVideo) {
                             MediaMetadataRetriever mediaMetadataRetriever = new MediaMetadataRetriever();
@@ -1650,8 +1653,11 @@ public class ChatAttachAlertLocationLayout extends ChatAttachAlert.AttachAlertLa
 
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
+        boolean mediaLocationResult = args.length > 0 && args[0] instanceof Integer && (Integer) args[0] == 1;
         if (id == NotificationCenter.locationPermissionGranted) {
-            locationDenied = false;
+            Activity activity = getParentActivity();
+            locationDenied = mediaLocationResult && Build.VERSION.SDK_INT >= 23
+                && (activity == null || activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED);
             askedForLocation = false;
             positionMarker();
             if (adapter != null) {
@@ -1668,8 +1674,13 @@ public class ChatAttachAlertLocationLayout extends ChatAttachAlert.AttachAlertLa
                 }
             }
         } else if (id == NotificationCenter.locationPermissionDenied) {
-            locationDenied = true;
+            Activity activity = getParentActivity();
+            locationDenied = !mediaLocationResult || Build.VERSION.SDK_INT >= 23
+                && (activity == null || activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED);
             askedForLocation = false;
+            if (mediaLocationResult && !locationDenied) {
+                positionMarker();
+            }
             if (adapter != null) {
                 adapter.setMyLocationDenied(locationDenied, askedForLocation);
             }
@@ -1726,7 +1737,8 @@ public class ChatAttachAlertLocationLayout extends ChatAttachAlert.AttachAlertLa
                 if (activity != null) {
                     checkPermission = false;
                     if (activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                        String[] permissions = parentAlert.isStoryLocationPicker && parentAlert.storyLocationPickerPhotoFile != null && Build.VERSION.SDK_INT >= 29 ?
+                        boolean readsMediaLocation = parentAlert.isStoryLocationPicker && parentAlert.storyLocationPickerPhotoFile != null && Build.VERSION.SDK_INT >= 29;
+                        String[] permissions = readsMediaLocation ?
                             new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_MEDIA_LOCATION} :
                             new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION};
                         askedForLocation = true;

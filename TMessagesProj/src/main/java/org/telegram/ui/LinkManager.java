@@ -1218,7 +1218,7 @@ public class LinkManager {
             return true;
         }
         if ("privacy-policy".equalsIgnoreCase(first)) {
-            Browser.openUrl(activity, LocaleController.getString(R.string.PrivacyPolicyUrl));
+            Browser.openUrl(activity, org.telegram.messenger.leemen.LeemenConfig.privacyUrl());
             return true;
         }
 

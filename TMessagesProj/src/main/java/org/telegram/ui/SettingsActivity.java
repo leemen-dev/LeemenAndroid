@@ -1019,7 +1019,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 Browser.openUrl(getParentActivity(), LocaleController.getString(R.string.TelegramFaqUrl));
                 break;
             case 19:
-                Browser.openUrl(getParentActivity(), LocaleController.getString(R.string.PrivacyPolicyUrl));
+                Browser.openUrl(getParentActivity(), org.telegram.messenger.leemen.LeemenConfig.privacyUrl());
                 break;
 
             case 20:

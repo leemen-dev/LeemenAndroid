@@ -328,6 +328,7 @@
     <string name="Regular">Regular</string>
     <string name="FormattedDate">Date</string>
     <string name="ContactsPermissionAlert">**Leemen** needs access to your contacts so that you can connect with your friends across all your devices. Contact synchronization is provided through Telegram\'s cloud service.</string>
+    <string name="LeemenContactsPermissionDisclosure">**Leemen** will access the names and phone numbers in your address book and upload them to Telegram\'s cloud service to find your contacts and synchronize them across your devices. You can turn synchronization off and delete previously uploaded contacts in Settings → Privacy and Security.</string>
     <string name="ContactsPermissionAlertNotNow">Not now</string>
     <string name="ContactsPermissionAlertContinue">Continue</string>
     <string name="NotificationsPermissionAlertTitle">Turn on notifications</string>
@@ -2534,6 +2535,8 @@
     <string name="LeemenDeleteAccountLabel">Delete account</string>
     <string name="LeemenDeleteAccountTitle">Delete account</string>
     <string name="LeemenDeleteAccountConfirmNeutral">This permanently deletes your account and all its data, and signs out every device. This device returns to the start screen. Your Telegram account is not deleted.</string>
+    <string name="LeemenDeleteAccountErrorTitle">Account wasn\'t deleted</string>
+    <string name="LeemenDeleteAccountErrorMessage">Leemen could not confirm deletion on the server. Your account and local data have been kept. Check your connection and try again.</string>
     <string name="LeemenPrivacyPolicy">Privacy Policy</string>
     <string name="LeemenTermsOfService">Terms of Service</string>
     <string name="LeemenDeleteAccountPinPrompt">Enter your passcode to permanently delete your account and all its data. This signs out every device and can\'t be undone.</string>
@@ -4304,6 +4307,7 @@
     <string name="PermissionXiaomiLockscreen">Please allow Leemen to be shown on the lock screen so that calls can work properly.</string>
     <string name="PermissionFSILockscreen">Please allow Leemen to be shown on the lock screen so that calls can work properly.</string>
     <string name="PermissionBackgroundLocation">To share your live location in this chat, Leemen needs access to your location all the time, including while the app is in the background.\n\nWe will access your location only for the duration you choose, and you can stop sharing it any time. We won\'t use your location for any purpose other than sharing it in this chat.</string>
+    <string name="LeemenBackgroundLocationDisclosure">To share your live location in this chat, **Leemen** needs access to your location all the time, including while the app is minimized, the screen is locked, or the app is not in use.\n\nYour location will be sent to Telegram and the participants of the selected chat only for the period you choose. You can stop sharing at any time.</string>
     <string name="PermissionDrawAboveOtherAppsTitle">Picture-in-Picture</string>
     <string name="PermissionDrawAboveOtherAppsGroupCallTitle">Voice Chat Overlay</string>
     <!--charts-->

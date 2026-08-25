@@ -23,6 +23,8 @@
     <string name="SyncContactsInfoOn">Контакты с этого устройства будут импортироваться в Ваш аккаунт.</string>
     <string name="SyncContactsInfoOff">Включите, чтобы добавлять контакты с этого устройства к Вашему аккаунту.</string>
     <string name="SyncContactsAdded">Контакты с этого устройства были добавлены к Вашему аккаунту.</string>
+    <string name="LeemenContactsPermissionDisclosure">**Leemen** получит доступ к именам и номерам телефонов в Вашей адресной книге и загрузит их в облачный сервис Telegram, чтобы находить контакты и синхронизировать их на Ваших устройствах. Синхронизацию можно отключить, а ранее загруженные контакты — удалить в разделе Настройки → Конфиденциальность и безопасность.</string>
+    <string name="LeemenBackgroundLocationDisclosure">Чтобы делиться геопозицией в реальном времени в этом чате, **Leemen** нужен постоянный доступ к Вашему местоположению, в том числе когда приложение свёрнуто, экран заблокирован или приложение не используется.\n\nМестоположение будет передаваться Telegram и участникам выбранного чата только в течение выбранного Вами срока. Вы можете остановить передачу в любой момент.</string>
     <string name="ConfirmCorrectNumber">Правильно ли указан номер?</string>
     <string name="WrongNumberFormat">Некорректный формат</string>
     <string name="ShortNumberInfo">Указанный номер слишком короткий для региона **%1$s**:\n\n**%2$s**\n\nУбедитесь, что правильно указываете номер. Он должен начинаться с кода страны.</string>
@@ -350,6 +352,8 @@
     <string name="LeemenDeleteAccountLabel">Удалить аккаунт</string>
     <string name="LeemenDeleteAccountTitle">Удалить аккаунт</string>
     <string name="LeemenDeleteAccountConfirmNeutral">Это безвозвратно удалит ваш аккаунт и все данные и выйдет из всех устройств. Это устройство вернётся к начальному экрану. Аккаунт Telegram не удаляется.</string>
+    <string name="LeemenDeleteAccountErrorTitle">Аккаунт не удалён</string>
+    <string name="LeemenDeleteAccountErrorMessage">Leemen не смог подтвердить удаление данных на сервере. Аккаунт и локальные данные сохранены. Проверьте соединение и повторите попытку.</string>
     <string name="LeemenPrivacyPolicy">Политика конфиденциальности</string>
     <string name="LeemenTermsOfService">Условия использования</string>
     <string name="LeemenDeleteAccountPinPrompt">Введите код-пароль, чтобы безвозвратно удалить аккаунт и все данные. Это выйдет из всех устройств и необратимо.</string>

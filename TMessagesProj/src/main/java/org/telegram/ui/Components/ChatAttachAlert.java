@@ -2743,7 +2743,11 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
                     }
                     if (Build.VERSION.SDK_INT >= 23 && plainTextEnabled) {
                         if (getContext().checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
-                            AndroidUtilities.findActivity(getContext()).requestPermissions(new String[]{Manifest.permission.READ_CONTACTS}, BasePermissionsActivity.REQUEST_CODE_ATTACH_CONTACT);
+                            AlertsCreator.createContactsPermissionDialog(activity, result -> {
+                                if (result != 0) {
+                                    activity.requestPermissions(new String[]{Manifest.permission.READ_CONTACTS}, BasePermissionsActivity.REQUEST_CODE_ATTACH_CONTACT);
+                                }
+                            }).show();
                             return;
                         }
                     }

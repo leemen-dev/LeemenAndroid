@@ -33,8 +33,8 @@ public final class LeemenConsent {
 
     /** Bump on any substantive change to the Terms OR the Privacy Policy → users re-confirm. Date form is
      *  human-readable, sortable, and 1:1 with the "updated" date published on the hosted documents.
-     *  Current value = the later of Terms (2026-06-18) and Privacy (2026-06-19); one acceptance covers both. */
-    public static final String CURRENT_TERMS_VERSION = "2026-06-19";
+     *  Current value = the later of Terms (2026-06-18) and Privacy (2026-08-21); one acceptance covers both. */
+    public static final String CURRENT_TERMS_VERSION = "2026-08-21";
 
     public static final String TYPE_TERMS = "terms";
     public static final String TYPE_KZ_CROSS_BORDER = "kz_cross_border";

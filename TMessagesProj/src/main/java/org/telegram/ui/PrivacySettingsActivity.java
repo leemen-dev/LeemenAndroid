@@ -819,8 +819,17 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
         progress.setCanCancel(false);
         progress.show();
         // Variant B: server erasure → log out all Leemen clients → this device to a clean first-run.
-        org.telegram.messenger.leemen.LeemenAccount.deleteAndLogoutEverywhere(account, () -> {
+        org.telegram.messenger.leemen.LeemenAccount.deleteAndLogoutEverywhere(account, deleted -> {
             try { progress.dismiss(); } catch (Exception ignore) {}
+            if (!deleted && !activity.isFinishing()) {
+                new AlertDialog.Builder(activity)
+                    .setTitle(LocaleController.getString(R.string.LeemenDeleteAccountErrorTitle))
+                    .setMessage(LocaleController.getString(R.string.LeemenDeleteAccountErrorMessage))
+                    .setPositiveButton(LocaleController.getString(R.string.TryAgain), (dialog, which) ->
+                        runLeemenAccountDeletion(activity, account))
+                    .setNegativeButton(LocaleController.getString(R.string.Cancel), null)
+                    .show();
+            }
         });
     }
 

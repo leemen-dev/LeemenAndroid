@@ -254,26 +254,38 @@ public final class LeemenAccount {
         prefs().edit().putBoolean("disabled_" + account, disabled).apply();
     }
 
+    public interface AccountDeletionCallback {
+        /** Runs on the UI thread. A successful callback is delivered immediately before local logout. */
+        void onResult(boolean deleted);
+    }
+
     /**
-     * Full in-app account deletion (Variant B). Order is load-bearing: server erasure runs while the Leemen
-     * token + Telegram session are still alive, then we log out every OTHER Leemen Telegram client, then this
-     * device's Telegram (→ clean first-run). Does NOT delete the Telegram account. onComplete runs on the UI
-     * thread just before this device logs out.
+     * Full in-app account deletion (Variant B). Order is load-bearing: confirmed server erasure runs while
+     * the Leemen token + Telegram session are still alive, then we log out every OTHER Leemen Telegram client,
+     * then this device's Telegram (→ clean first-run). Does NOT delete the Telegram account. A retryable server
+     * failure leaves the account and local data intact so the UI can report it instead of claiming deletion.
      */
-    public static void deleteAndLogoutEverywhere(int account, Runnable onComplete) {
+    public static void deleteAndLogoutEverywhere(int account, AccountDeletionCallback onComplete) {
         // Keep the local hide-list intact until every remote-session revoke has completed (or timed out).
         // Clearing it earlier can briefly expose former private-space chats in the still logged-in UI.
         setDisabled(account, true);
-        requestServerDelete(account, () -> terminateOtherAppSessions(account, () -> {
-            // Preserve the owner's hide-list until performLogout snapshots it for the hidden-account cascade.
-            // The remaining generation cleanup and current-session logout still run in the same UI turn.
-            wipeLocalAccountDataBeforeLogout(account);
-            try {
-                if (onComplete != null) onComplete.run();
-            } finally {
-                org.telegram.messenger.MessagesController.getInstance(account).performLogout(1);
+        requestServerDelete(account, deleted -> {
+            if (!deleted) {
+                setDisabled(account, false);
+                if (onComplete != null) onComplete.onResult(false);
+                return;
             }
-        }));
+            terminateOtherAppSessions(account, () -> {
+                // Preserve the owner's hide-list until performLogout snapshots it for the hidden-account cascade.
+                // The remaining generation cleanup and current-session logout still run in the same UI turn.
+                wipeLocalAccountDataBeforeLogout(account);
+                try {
+                    if (onComplete != null) onComplete.onResult(true);
+                } finally {
+                    org.telegram.messenger.MessagesController.getInstance(account).performLogout(1);
+                }
+            });
+        });
     }
 
     private static void wipeLocalAccountDataBeforeLogout(int account) {
@@ -447,14 +459,13 @@ public final class LeemenAccount {
     }
 
     /** Server-side account deletion (GDPR right-to-erasure). POST /v1/account/delete with the contract's
-     *  {confirm:"DELETE"} guard; cascades the whole core graph + analytics trail server-side. Local wipe
-     *  proceeds regardless of the outcome (the user asked for their data gone; a transient server failure
-     *  must not keep local PS data alive) — failures are logged. The session JWT stays cryptographically
-     *  valid until TTL, so the caller MUST drop the token right after (deleteAccountAndData does). */
-    public static void requestServerDelete(int account, Runnable onDone) {
+     *  {confirm:"DELETE"} guard; cascades the core account graph + linked analytics trail server-side. */
+    private static void requestServerDelete(int account, AccountDeletionCallback onDone) {
         String token = getToken(account);
         if (token == null) {
-            if (onDone != null) onDone.run();
+            // Without a bearer we cannot prove that the same Telegram identity has no Leemen data from
+            // another device. Keep the local session intact and let the user retry after binding recovers.
+            if (onDone != null) onDone.onResult(false);
             return;
         }
         com.google.gson.JsonObject body = new com.google.gson.JsonObject();
@@ -465,6 +476,14 @@ public final class LeemenAccount {
                 ok = resp != null && code == 200 && resp.has("ok") && resp.get("ok").getAsBoolean();
             } catch (Throwable ignored) {
             }
+            // A response can be lost after the server commits the deletion. Treat the authoritative
+            // deleted-generation responses as idempotent success when the user retries.
+            if (!ok) {
+                ok = code == 401 && ("auth_account_deleted".equals(ec) || "account_deleted".equals(ec));
+            }
+            if (!ok) {
+                ok = code == 404 && "account_not_found".equals(ec);
+            }
             if (org.telegram.messenger.BuildVars.LOGS_ENABLED) {
                 org.telegram.messenger.FileLog.d("Leemen: /account/delete code=" + code + " ok=" + ok + (ec != null ? " err=" + ec : ""));
             }
@@ -473,7 +492,7 @@ public final class LeemenAccount {
             if (ok) {
                 LeemenRealtime.broadcastAccountGenerationInvalidated(account);
             }
-            if (onDone != null) onDone.run();
+            if (onDone != null) onDone.onResult(ok);
         });
     }
 
