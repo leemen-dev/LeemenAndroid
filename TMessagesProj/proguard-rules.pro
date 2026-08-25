@@ -14,6 +14,13 @@
 -keep class org.telegram.messenger.time.* { *; }
 -keep class org.telegram.messenger.video.* { *; }
 -keep class org.telegram.messenger.voip.* { *; }
+
+# Gson reflects the generic field types in the encrypted Leemen blob DTOs. In R8
+# full mode, keeping Signature alone is insufficient unless the model classes are
+# kept too; without it Map<String, PerChat> values are decoded as LinkedTreeMap.
+-keepattributes Signature
+-keep class org.telegram.messenger.leemen.LeemenBlob$* { *; }
+
 -keep class org.telegram.SQLite.** { *; }
 -keep class org.telegram.tgnet.ConnectionsManager { *; }
 -keep class org.telegram.tgnet.NativeByteBuffer { *; }
