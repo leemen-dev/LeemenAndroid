@@ -88,6 +88,7 @@
 
     <queries>
         <package android:name="com.google.android.apps.maps"/>
+        <package android:name="org.telegram.messenger"/>
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="ton"/>
@@ -416,12 +417,6 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="com.google.android.gms.auth.api.phone.SMS_RETRIEVED"/>
-            </intent-filter>
-        </receiver>
-
-        <receiver android:name=".CallReceiver" android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.PHONE_STATE"/>
             </intent-filter>
         </receiver>
 

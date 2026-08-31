@@ -88,7 +88,7 @@ public class NewAccountRedirectActivity extends BaseFragment {
         bg.setColor(Theme.getColor(Theme.key_featuredStickers_addButton));
         bg.setCornerRadius(dp(8));
         button.setBackground(bg);
-        button.setOnClickListener(v -> openOfficialTelegram());
+        button.setOnClickListener(v -> openOfficialTelegram(getParentActivity()));
         content.addView(button, LayoutHelper.createLinear(220, 48, Gravity.CENTER_HORIZONTAL));
 
         root.addView(content, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
@@ -96,8 +96,7 @@ public class NewAccountRedirectActivity extends BaseFragment {
         return root;
     }
 
-    private void openOfficialTelegram() {
-        Context ctx = getParentActivity();
+    static void openOfficialTelegram(Context ctx) {
         if (ctx == null) {
             return;
         }

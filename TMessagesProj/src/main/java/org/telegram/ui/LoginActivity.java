@@ -210,7 +210,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -3463,64 +3462,6 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                         currentDoneType = DONE_TYPE_FLOATING;
                         needShowProgress(0, false);
 
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && AndroidUtilities.isSimAvailable()) {
-                            boolean allowCall = getParentActivity().checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED;
-                            boolean allowCancelCall = getParentActivity().checkSelfPermission(Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED;
-                            boolean allowReadCallLog = Build.VERSION.SDK_INT < Build.VERSION_CODES.P || getParentActivity().checkSelfPermission(Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED;
-                            boolean allowReadPhoneNumbers = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || getParentActivity().checkSelfPermission(Manifest.permission.READ_PHONE_NUMBERS) == PackageManager.PERMISSION_GRANTED;;
-                            if (codeField != null && "888".equals(codeField.getText())) {
-                                allowCall = true;
-                                allowCancelCall = true;
-                                allowReadCallLog = true;
-                                allowReadPhoneNumbers = true;
-                            }
-                            if (checkPermissions) {
-                                permissionsItems.clear();
-                                if (!allowCall) {
-                                    permissionsItems.add(Manifest.permission.READ_PHONE_STATE);
-                                }
-                                if (!allowCancelCall) {
-                                    permissionsItems.add(Manifest.permission.CALL_PHONE);
-                                }
-                                if (!allowReadCallLog) {
-                                    permissionsItems.add(Manifest.permission.READ_CALL_LOG);
-                                }
-                                if (!allowReadPhoneNumbers && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                    permissionsItems.add(Manifest.permission.READ_PHONE_NUMBERS);
-                                }
-                                if (!permissionsItems.isEmpty()) {
-                                    SharedPreferences preferences = MessagesController.getGlobalMainSettings();
-                                    if (preferences.getBoolean("firstlogin", true) || getParentActivity().shouldShowRequestPermissionRationale(Manifest.permission.READ_PHONE_STATE) || getParentActivity().shouldShowRequestPermissionRationale(Manifest.permission.READ_CALL_LOG)) {
-                                        preferences.edit().putBoolean("firstlogin", false).commit();
-                                        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
-
-                                        builder.setPositiveButton(getString("Continue", R.string.Continue), null);
-                                        int resId;
-                                        if (!allowCall && (!allowCancelCall || !allowReadCallLog)) {
-                                            builder.setMessage(getString("AllowReadCallAndLog", R.string.AllowReadCallAndLog));
-                                            resId = R.raw.calls_log;
-                                        } else if (!allowCancelCall || !allowReadCallLog) {
-                                            builder.setMessage(getString("AllowReadCallLog", R.string.AllowReadCallLog));
-                                            resId = R.raw.calls_log;
-                                        } else {
-                                            builder.setMessage(getString("AllowReadCall", R.string.AllowReadCall));
-                                            resId = R.raw.incoming_calls;
-                                        }
-                                        builder.setTopAnimation(resId, 46, false, Theme.getColor(Theme.key_dialogTopBackground));
-                                        permissionsDialog = showDialog(builder.create());
-                                        confirmedNumber = true;
-                                    } else {
-                                        try {
-                                            getParentActivity().requestPermissions(permissionsItems.toArray(new String[0]), 6);
-                                        } catch (Exception e) {
-                                            FileLog.e(e);
-                                        }
-                                    }
-                                    return;
-                                }
-                            }
-                        }
-
                         confirmView.animateProgress(()->{
                             confirmView.dismiss();
                             AndroidUtilities.runOnUIThread(()-> {
@@ -3536,66 +3477,6 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
             if (phoneNumberConfirmView != null) {
                 phoneNumberConfirmView.dismiss();
-            }
-
-            boolean simcardAvailable = AndroidUtilities.isSimAvailable();
-            boolean allowCall = true;
-            boolean allowCancelCall = true;
-            boolean allowReadCallLog = true;
-            boolean allowReadPhoneNumbers = true;
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && simcardAvailable) {
-                allowCall = getParentActivity().checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED;
-                allowCancelCall = getParentActivity().checkSelfPermission(Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED;
-                allowReadCallLog = Build.VERSION.SDK_INT < Build.VERSION_CODES.P || getParentActivity().checkSelfPermission(Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED;
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    allowReadPhoneNumbers = getParentActivity().checkSelfPermission(Manifest.permission.READ_PHONE_NUMBERS) == PackageManager.PERMISSION_GRANTED;
-                }
-                if (checkPermissions) {
-                    permissionsItems.clear();
-                    if (!allowCall) {
-                        permissionsItems.add(Manifest.permission.READ_PHONE_STATE);
-                    }
-                    if (!allowCancelCall) {
-                        permissionsItems.add(Manifest.permission.CALL_PHONE);
-                    }
-                    if (!allowReadCallLog) {
-                        permissionsItems.add(Manifest.permission.READ_CALL_LOG);
-                    }
-                    if (!allowReadPhoneNumbers && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        permissionsItems.add(Manifest.permission.READ_PHONE_NUMBERS);
-                    }
-                    if (!permissionsItems.isEmpty()) {
-                        SharedPreferences preferences = MessagesController.getGlobalMainSettings();
-                        if (preferences.getBoolean("firstlogin", true) || getParentActivity().shouldShowRequestPermissionRationale(Manifest.permission.READ_PHONE_STATE) || getParentActivity().shouldShowRequestPermissionRationale(Manifest.permission.READ_CALL_LOG)) {
-                            preferences.edit().putBoolean("firstlogin", false).commit();
-                            AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
-
-                            builder.setPositiveButton(getString("Continue", R.string.Continue), null);
-                            int resId;
-                            if (!allowCall && (!allowCancelCall || !allowReadCallLog)) {
-                                builder.setMessage(getString("AllowReadCallAndLog", R.string.AllowReadCallAndLog));
-                                resId = R.raw.calls_log;
-                            } else if (!allowCancelCall || !allowReadCallLog) {
-                                builder.setMessage(getString("AllowReadCallLog", R.string.AllowReadCallLog));
-                                resId = R.raw.calls_log;
-                            } else {
-                                builder.setMessage(getString("AllowReadCall", R.string.AllowReadCall));
-                                resId = R.raw.incoming_calls;
-                            }
-                            builder.setTopAnimation(resId, 46, false, Theme.getColor(Theme.key_dialogTopBackground));
-                            permissionsDialog = showDialog(builder.create());
-                            confirmedNumber = true;
-                        } else {
-                            try {
-                                getParentActivity().requestPermissions(permissionsItems.toArray(new String[0]), 6);
-                            } catch (Exception e) {
-                                FileLog.e(e);
-                            }
-                        }
-                        return;
-                    }
-                }
             }
 
             if (countryState == COUNTRY_STATE_EMPTY) {
@@ -3637,12 +3518,10 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             }
 
             TLRPC.TL_codeSettings settings = new TLRPC.TL_codeSettings();
-            settings.allow_flashcall = simcardAvailable && allowCall && allowCancelCall && allowReadCallLog;
-            settings.allow_missed_call = simcardAvailable && allowCall;
-            settings.allow_app_hash = settings.allow_firebase = PushListenerController.GooglePushListenerServiceProvider.INSTANCE.hasServices();
-            if (forceDisableSafetyNet || TextUtils.isEmpty(BuildVars.SAFETYNET_KEY)) {
-                settings.allow_firebase = false;
-            }
+            settings.allow_flashcall = false;
+            settings.allow_missed_call = false;
+            settings.allow_app_hash = PushListenerController.GooglePushListenerServiceProvider.INSTANCE.hasServices();
+            settings.allow_firebase = false;
 
             ArrayList<TLRPC.TL_auth_authorization> loginTokens = AuthTokensHelper.getSavedLogInTokens();
             if (loginTokens != null) {
@@ -3685,26 +3564,6 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             } else {
                 preferences.edit().remove("sms_hash").apply();
             }
-            if (settings.allow_flashcall) {
-                try {
-                    final Set<String> numbers = getUserPhoneNumbers();
-                    if (!numbers.isEmpty()) {
-                        settings.unknown_number = false;
-                        settings.current_number = numbers.stream().anyMatch(number -> PhoneNumberUtils.compare(phone, number));
-                    } else {
-                        settings.unknown_number = true;
-                        if (UserConfig.getActivatedAccountsCount() > 0) {
-                            settings.allow_flashcall = false;
-                        } else {
-                            settings.current_number = false;
-                        }
-                    }
-                } catch (Exception e) {
-                    settings.unknown_number = true;
-                    FileLog.e(e);
-                }
-            }
-
             TLObject req;
             if (activityMode == MODE_CHANGE_PHONE_NUMBER) {
                 TL_account.sendChangePhoneCode changePhoneCode = new TL_account.sendChangePhoneCode();
@@ -4079,45 +3938,6 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         }
     }
 
-    private HashSet<String> getUserPhoneNumbers() {
-        final HashSet<String> numbers = new HashSet<>();
-        try {
-            final TelephonyManager tm = (TelephonyManager) ApplicationLoader.applicationContext.getSystemService(Context.TELEPHONY_SERVICE);
-            final String number = tm.getLine1Number();
-            if (!TextUtils.isEmpty(number)) {
-                numbers.add(number);
-            }
-        } catch (Exception e) {
-            FileLog.e(e);
-        }
-        try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP_MR1) {
-                final SubscriptionManager subscriptionManager = SubscriptionManager.from(getContext());
-                List<SubscriptionInfo> infos = null;
-                if (Build.VERSION.SDK_INT >= 30) {
-                    infos = subscriptionManager.getCompleteActiveSubscriptionInfoList();
-                }
-                if ((infos == null || infos.isEmpty()) && Build.VERSION.SDK_INT >= 28) {
-                    infos = subscriptionManager.getAccessibleSubscriptionInfoList();
-                }
-                if (infos == null || infos.isEmpty()) {
-                    infos = subscriptionManager.getActiveSubscriptionInfoList();
-                }
-                if (infos != null) {
-                    for (int i = 0; i < infos.size(); ++i) {
-                        final String number = infos.get(i).getNumber();
-                        if (!TextUtils.isEmpty(number)) {
-                            numbers.add(number);
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            FileLog.e(e);
-        }
-        return numbers;
-    }
-
     public class LoginActivitySmsView extends SlideView implements NotificationCenter.NotificationCenterDelegate {
         /* package */ RLottieDrawable hintDrawable;
 
@@ -4128,6 +3948,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         private CodeFieldContainer codeFieldContainer;
         private TextView prevTypeTextView;
         private TextView confirmTextView;
+        private TextView thirdPartyCodeWarningTextView;
         private TextView titleTextView;
         private ImageView blackImageView;
         private RLottieImageView blueImageView;
@@ -4338,6 +4159,16 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
                 addView(codeFieldContainer, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, 42, Gravity.CENTER_HORIZONTAL, 0, 32, 0, 0));
             }
+            if (currentType == AUTH_TYPE_MESSAGE && activityMode == MODE_LOGIN) {
+                thirdPartyCodeWarningTextView = new TextView(context);
+                thirdPartyCodeWarningTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+                thirdPartyCodeWarningTextView.setGravity(Gravity.START | Gravity.TOP);
+                thirdPartyCodeWarningTextView.setLineSpacing(AndroidUtilities.dp(2), 1.0f);
+                thirdPartyCodeWarningTextView.setPadding(AndroidUtilities.dp(12), AndroidUtilities.dp(10), AndroidUtilities.dp(12), AndroidUtilities.dp(10));
+                thirdPartyCodeWarningTextView.setText(getString(R.string.ThirdPartyLoginCodeWarning));
+                thirdPartyCodeWarningTextView.setVisibility(GONE);
+                addView(thirdPartyCodeWarningTextView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL | Gravity.TOP, 24, 20, 24, 0));
+            }
             if (currentType == AUTH_TYPE_FLASH_CALL) {
                 codeFieldContainer.setVisibility(GONE);
             }
@@ -4518,6 +4349,15 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                     if (nextPressed || timeText != null && timeText.getVisibility() != View.GONE || isResendingCode) {
                         return;
                     }
+                    if (currentType == AUTH_TYPE_MESSAGE && nextType == 0 && activityMode == MODE_LOGIN) {
+                        new AlertDialog.Builder(context)
+                                .setTitle(getString(R.string.SentAppCodeTitle))
+                                .setMessage(getString(R.string.ThirdPartyLoginCodeWarning))
+                                .setNegativeButton(getString(R.string.Close), null)
+                                .setPositiveButton(getString(R.string.NewAccountRedirectButton), (dialog, which) -> NewAccountRedirectActivity.openOfficialTelegram(context))
+                                .show();
+                        return;
+                    }
                     boolean email = nextType == 0;
                     if (!email) {
                         if (radialProgressView.getTag() != null) {
@@ -4525,25 +4365,6 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                         }
                         resendCode();
                     } else {
-                        TLRPC.TL_auth_reportMissingCode req = new TLRPC.TL_auth_reportMissingCode();
-                        req.phone_number = requestPhone;
-                        req.phone_code_hash = phoneHash;
-                        req.mnc = "";
-                        String networkOperator = null;
-                        try {
-                            TelephonyManager tm = (TelephonyManager) ApplicationLoader.applicationContext.getSystemService(Context.TELEPHONY_SERVICE);
-                            networkOperator = tm.getNetworkOperator();
-                            if (!TextUtils.isEmpty(networkOperator)) {
-                                final String mcc = networkOperator.substring(0, 3);
-                                final String mnc = networkOperator.substring(3);
-//                                req.mcc = mcc;
-                                req.mnc = mnc;
-                            }
-                        } catch (Exception e) {
-                            FileLog.e(e);
-                        }
-                        String finalNetworkOperator = networkOperator;
-                        getConnectionsManager().sendRequest(req, null, ConnectionsManager.RequestFlagWithoutLogin);
                         new AlertDialog.Builder(context)
                                 .setTitle(getString(R.string.RestorePasswordNoEmailTitle))
                                 .setMessage(AndroidUtilities.replaceTags(LocaleController.formatString(R.string.DidNotGetTheCodeInfo, phone)))
@@ -4676,6 +4497,10 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             confirmTextView.setTextColor(Theme.getColor(isInCancelAccountDeletionMode() ? Theme.key_windowBackgroundWhiteBlackText : Theme.key_windowBackgroundWhiteGrayText6));
             confirmTextView.setLinkTextColor(Theme.getColor(Theme.key_chats_actionBackground));
             titleTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+            if (thirdPartyCodeWarningTextView != null) {
+                thirdPartyCodeWarningTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+                thirdPartyCodeWarningTextView.setBackground(Theme.createRoundRectDrawable(AndroidUtilities.dp(8), Theme.getColor(Theme.key_windowBackgroundGray)));
+            }
 
             if (currentType == AUTH_TYPE_MISSED_CALL) {
                 missedCallDescriptionSubtitle.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
@@ -4907,6 +4732,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             time = params.getInt("timeout");
             openTime = (int) (System.currentTimeMillis() / 1000);
             nextType = params.getInt("nextType");
+            if (thirdPartyCodeWarningTextView != null) {
+                thirdPartyCodeWarningTextView.setVisibility(nextType == 0 ? VISIBLE : GONE);
+            }
             pattern = params.getString("pattern");
             prefix = params.getString("prefix");
             length = params.getInt("length");
@@ -9198,6 +9026,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     public ArrayList<ThemeDescription> getThemeDescriptions() {
         return SimpleThemeDescription.createThemeDescriptions(this::updateColors, Theme.key_windowBackgroundWhiteBlackText, Theme.key_windowBackgroundWhiteGrayText6,
                 Theme.key_windowBackgroundWhiteHintText, Theme.key_listSelector, Theme.key_chats_actionBackground, Theme.key_chats_actionIcon,
+                Theme.key_windowBackgroundGray,
                 Theme.key_windowBackgroundWhiteInputField, Theme.key_windowBackgroundWhiteInputFieldActivated, Theme.key_windowBackgroundWhiteValueText,
                 Theme.key_text_RedBold, Theme.key_windowBackgroundWhiteGrayText, Theme.key_checkbox, Theme.key_windowBackgroundWhiteBlueText4,
                 Theme.key_changephoneinfo_image2, Theme.key_chats_actionPressedBackground, Theme.key_text_RedRegular, Theme.key_windowBackgroundWhiteLinkText,

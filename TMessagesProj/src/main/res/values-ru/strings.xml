@@ -38,6 +38,8 @@
     <string name="SentAppCode">Мы отправили код в приложение **Telegram** на другом Вашем устройстве.</string>
     <string name="SentAppCodeWithPhone">Мы отправили код через **Telegram** на другое устройство, где авторизован %1$s.</string>
     <string name="SentAppCodeTitle">Проверьте сообщения в Telegram</string>
+    <string name="ThirdPartyLoginCodeWarning">⚠️ Leemen — сторонний клиент Telegram. В некоторых случаях Telegram не предлагает сторонним приложениям код по SMS или звонку. Если у вас нет доступа к другой активной сессии этого аккаунта, сначала войдите через официальное приложение Telegram, затем вернитесь в Leemen и запросите новый код.</string>
+    <string name="AllowFillNumber">Разрешите Leemen прочитать номер телефона, связанный с SIM-картой, чтобы автоматически заполнить поле входа. Номер будет отправлен Telegram только после нажатия «Продолжить».</string>
     <string name="SentFragmentCode">Получите код для %1$s в разделе Anonymous Numbers платформы Fragment.</string>
     <string name="SentSmsCodeTitle">Введите код</string>
     <string name="OpenFragment">Перейти к Fragment</string>

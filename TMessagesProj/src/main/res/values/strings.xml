@@ -37,6 +37,7 @@
     <string name="SentAppCode">We\'ve sent the code to the **Telegram** app on your other device.</string>
     <string name="SentAppCodeWithPhone">We\'ve sent the code to the **Telegram** app for %1$s on your other device.</string>
     <string name="SentAppCodeTitle">Check your Telegram messages</string>
+    <string name="ThirdPartyLoginCodeWarning">⚠️ Leemen is a third-party Telegram client. In some cases, Telegram does not offer SMS or call login codes to third-party apps. If you cannot access another active session of this account, sign in through the official Telegram app first, then return to Leemen and request a new code.</string>
     <string name="SentFragmentCode">Get the code for %1$s in the Anonymous Numbers section on Fragment.</string>
     <string name="SentSmsCodeTitle">Enter code</string>
     <string name="OpenFragment">Open Fragment</string>
@@ -4250,7 +4251,7 @@
     <string name="AllowReadCall">Please allow Leemen to receive calls so that we can automatically enter your code for you.</string>
     <string name="AllowReadCallAndLog">Please allow Leemen to receive calls and read the call log so that we can automatically enter your code for you.</string>
     <string name="AllowReadCallLog">Please allow Leemen to read the call log so that we can automatically enter your code for you.</string>
-    <string name="AllowFillNumber">Please allow Leemen to receive calls so that we can automatically confirm your phone number.</string>
+    <string name="AllowFillNumber">Allow Leemen to read the phone number associated with your SIM to fill in the sign-in field automatically. The number is sent to Telegram only after you tap Continue.</string>
     <string name="UserRestricted">Sorry, you are not allowed to do this.</string>
     <string name="YouBlockedUser">Sorry, you can\'t add this user or bot to groups because you\'ve blocked them. Please unblock to proceed.</string>
     <string name="AddAdminErrorNotAMember">Sorry, you can\'t add this user as an admin because they are not a member of this group and you are not allowed to add them.</string>
