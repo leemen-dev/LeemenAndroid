@@ -11,6 +11,7 @@ import com.android.billingclient.api.BillingClient;
 import com.android.billingclient.api.BillingClientStateListener;
 import com.android.billingclient.api.BillingFlowParams;
 import com.android.billingclient.api.BillingResult;
+import com.android.billingclient.api.PendingPurchasesParams;
 import com.android.billingclient.api.ProductDetails;
 import com.android.billingclient.api.Purchase;
 import com.android.billingclient.api.PurchasesUpdatedListener;
@@ -126,7 +127,7 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
         if (client == null) {
             client = BillingClient.newBuilder(ApplicationLoader.applicationContext)
                     .setListener(this)
-                    .enablePendingPurchases()
+                    .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
                     .build();
         }
         if (!connected && !connecting) {
@@ -187,7 +188,8 @@ public final class LeemenBilling implements PurchasesUpdatedListener, BillingCli
             QueryProductDetailsParams params = QueryProductDetailsParams.newBuilder()
                     .setProductList(Collections.singletonList(product))
                     .build();
-            client.queryProductDetailsAsync(params, (billingResult, list) -> {
+            client.queryProductDetailsAsync(params, (billingResult, queryResult) -> {
+                List<ProductDetails> list = queryResult.getProductDetailsList();
                 ProductDetails found = null;
                 if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK && list != null) {
                     for (ProductDetails pd : list) {
