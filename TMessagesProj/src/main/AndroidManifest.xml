@@ -287,6 +287,7 @@
         </activity-alias>
         <activity
             android:name="org.telegram.ui.BubbleActivity"
+            android:enableOnBackInvokedCallback="false"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize"
@@ -311,6 +312,7 @@
         </activity>
         <activity
             android:name="org.telegram.ui.ExternalActionActivity"
+            android:enableOnBackInvokedCallback="false"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustPan"
@@ -322,6 +324,7 @@
         </activity>
         <activity
             android:name="org.telegram.ui.ChatsWidgetConfigActivity"
+            android:enableOnBackInvokedCallback="false"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustPan"
@@ -332,6 +335,7 @@
         </activity>
         <activity
             android:name="org.telegram.ui.ContactsWidgetConfigActivity"
+            android:enableOnBackInvokedCallback="false"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustPan"
@@ -361,6 +365,7 @@
         </activity>
         <activity
             android:name="org.telegram.ui.PopupNotificationActivity"
+            android:enableOnBackInvokedCallback="false"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize"
             android:excludeFromRecents="true"
             android:launchMode="singleTask"
